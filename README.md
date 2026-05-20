@@ -1,8 +1,16 @@
 # starter-skin
 
-Minimal Vite + TypeScript skin for [Decent.app](https://github.com/tadelv/reaprime).
-Connects to the gateway's machine and scale snapshot WebSockets and shows live
-state. Useful as a starting point — fork, rename, and grow it into a real skin.
+Minimal SolidJS skin for [Decent.app](https://github.com/tadelv/reaprime).
+Subscribes to the gateway's machine and scale snapshot WebSockets and renders
+live state with fine-grained reactivity. Useful as a starting point — fork,
+rename, and grow it into a real skin.
+
+## Why SolidJS
+
+Snapshots stream at up to ~10 Hz per device (more during a shot). Solid's
+signal model means only the specific text nodes bound to changed fields
+update — no component re-render, no virtual DOM diff, no GC churn. Same
+mental fit for the chart layer when you add real-time graphs.
 
 ## Run
 
@@ -27,7 +35,7 @@ GATEWAY_HOST=192.168.1.42:8080 npm run dev
 ## Build
 
 ```bash
-npm run build      # → dist/
+npm run build      # type-check + bundle → dist/
 npm run preview    # serve the built bundle locally
 ```
 
@@ -39,7 +47,7 @@ the upload flow.
 
 ## What it talks to
 
-- `GET /api/v1/machine/info` — basic machine info (logged to console)
+- `GET /api/v1/machine/info` — basic machine info (logged to console on mount)
 - `PUT /api/v1/scale/tare` — tare on button click
 - `ws://.../ws/v1/machine/snapshot` — machine state stream
 - `ws://.../ws/v1/scale/snapshot` — scale weight stream (status frames + data frames)
@@ -50,9 +58,23 @@ Full API reference: `doc/Api.md` and `doc/Skins.md` in the reaprime repo.
 
 ```
 src/
-  main.ts       # bootstrap, WS reconnect loop, button wiring
-  api.ts        # typed REST client
-  snapshot.ts   # MachineSnapshot, ScaleMessage types + state enums
-  ui.ts         # DOM rendering
+  main.tsx                  # bootstrap: render <App />
+  App.tsx                   # top-level shell, wires WS streams to components
+  streams.ts                # createWsStream() — reconnecting WS as Solid signals
+  api.ts                    # typed REST client
+  snapshot.ts               # MachineSnapshot, ScaleMessage types + state enums
   styles.css
+  components/
+    Machine.tsx             # live machine state card
+    Scale.tsx               # live weight + tare button
+    ConnectionBadge.tsx     # WS status pill in header
+```
+
+## Adding more streams
+
+Subscribe to any gateway WebSocket the same way:
+
+```ts
+const sensor = createWsStream<SensorSnapshot>('/ws/v1/sensors/<id>/snapshot', 'sensor');
+// sensor.latest() and sensor.status() are signals
 ```

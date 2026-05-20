@@ -10,7 +10,7 @@ body {
   color: #eee;
 }
 
-#app {
+main {
   max-width: 720px;
   margin: 0 auto;
 }
@@ -28,18 +28,18 @@ h1 {
   font-weight: 600;
 }
 
-#conn {
+.conn {
   font-size: 0.875rem;
   padding: 0.25rem 0.5rem;
   border-radius: 999px;
   background: #333;
 }
 
-#conn[data-state='open'] {
+.conn[data-state='open'] {
   background: #1f6f3a;
 }
 
-#conn[data-state='closed'] {
+.conn[data-state='closed'] {
   background: #6f1f1f;
 }
 
@@ -57,6 +57,11 @@ h1 {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: #aaa;
+}
+
+.muted {
+  color: #777;
+  margin: 0;
 }
 
 dl {
@@ -86,6 +91,11 @@ button {
   font: inherit;
 }
 
-button:hover {
+button:hover:not(:disabled) {
   background: #333;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }

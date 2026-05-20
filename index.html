@@ -4,37 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Decent.app — Starter Skin</title>
-    <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body>
-    <main id="app">
-      <header>
-        <h1>Decent.app — Starter Skin</h1>
-        <div id="conn" data-state="connecting">connecting…</div>
-      </header>
-
-      <section class="card">
-        <h2>Machine</h2>
-        <dl>
-          <dt>State</dt><dd data-id="state">—</dd>
-          <dt>Substate</dt><dd data-id="substate">—</dd>
-          <dt>Flow</dt><dd data-id="flow">—</dd>
-          <dt>Pressure</dt><dd data-id="pressure">—</dd>
-          <dt>Mix temp</dt><dd data-id="mixTemp">—</dd>
-          <dt>Group temp</dt><dd data-id="groupTemp">—</dd>
-        </dl>
-      </section>
-
-      <section class="card">
-        <h2>Scale</h2>
-        <dl>
-          <dt>Status</dt><dd data-id="scaleStatus">—</dd>
-          <dt>Weight</dt><dd data-id="weight">—</dd>
-          <dt>Battery</dt><dd data-id="battery">—</dd>
-        </dl>
-        <button id="tare" type="button">Tare</button>
-      </section>
-    </main>
-    <script type="module" src="/src/main.ts"></script>
+    <div id="app"></div>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
