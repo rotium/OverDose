@@ -68,7 +68,23 @@ src/
     Machine.tsx             # live machine state card
     Scale.tsx               # live weight + tare button
     ConnectionBadge.tsx     # WS status pill in header
+    ShotChart.tsx           # real-time pressure/flow/weight chart (uPlot)
 ```
+
+## Real-time chart
+
+`ShotChart.tsx` uses [uPlot](https://github.com/leeoniya/uPlot) for the live
+trace. The data path deliberately bypasses Solid's reactivity:
+
+- A pre-allocated typed-array ring buffer (~60 s at 10 Hz, capacity 600)
+  holds pressure / flow / weight.
+- A single `createEffect` listens to the machine snapshot signal and calls
+  `chart.setData(...)` directly on each tick.
+- The chart instance is created once on mount and destroyed on cleanup; no
+  re-render of the surrounding component ever touches it.
+
+To extend (more traces, longer window, different scales), edit the `series`
+and `axes` arrays in `ShotChart.tsx` and bump `BUFFER_SIZE` as needed.
 
 ## Adding more streams
 

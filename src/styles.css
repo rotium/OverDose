@@ -99,3 +99,13 @@ button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+.chart {
+  width: 100%;
+  position: relative;
+}
+
+.u-legend {
+  color: #ccc;
+  font-size: 0.875rem;
+}

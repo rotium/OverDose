@@ -3,6 +3,7 @@ import { api } from './api';
 import { ConnectionBadge } from './components/ConnectionBadge';
 import { Machine } from './components/Machine';
 import { Scale } from './components/Scale';
+import { ShotChart } from './components/ShotChart';
 import type { MachineSnapshot, ScaleMessage } from './snapshot';
 import { createWsStream } from './streams';
 
@@ -27,6 +28,7 @@ export const App: Component = () => {
         <ConnectionBadge status={machine.status} />
       </header>
       <Machine snapshot={machine.latest} />
+      <ShotChart machine={machine.latest} scale={scale.latest} />
       <Scale message={scale.latest} />
     </main>
   );
