@@ -55,3 +55,28 @@ export type ScaleMessage = ScaleSnapshot | ScaleStatusFrame;
 export function isScaleStatusFrame(m: ScaleMessage): m is ScaleStatusFrame {
   return (m as ScaleStatusFrame).status !== undefined;
 }
+
+/**
+ * Real-time shot settings frame from `ws/v1/machine/shotSettings`. The DE1 has
+ * no GET for shotSettings — this stream is the canonical source of truth.
+ * `steamSetting` is an integer power level; we treat 0 as "off" for the UI toggle.
+ */
+export interface ShotSettingsSnapshot {
+  steamSetting: number;
+  targetSteamTemp: number;
+  targetSteamDuration: number;
+  targetHotWaterTemp: number;
+  targetHotWaterVolume: number;
+  targetHotWaterDuration: number;
+  targetShotVolume: number;
+  groupTemp: number;
+}
+
+/**
+ * Real-time water-level frame from `ws/v1/machine/waterLevels`. `currentLevel`
+ * is reported in millimetres of water height in the tank, not a percentage.
+ */
+export interface WaterLevelsSnapshot {
+  currentLevel: number;
+  refillLevel: number;
+}

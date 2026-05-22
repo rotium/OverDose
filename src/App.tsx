@@ -1,35 +1,38 @@
-import { onMount, type Component } from 'solid-js';
+import { type Component } from 'solid-js';
 import { api } from './api';
-import { ConnectionBadge } from './components/ConnectionBadge';
-import { Machine } from './components/Machine';
-import { Scale } from './components/Scale';
-import { ShotChart } from './components/ShotChart';
-import type { MachineSnapshot, ScaleMessage } from './snapshot';
-import { createWsStream } from './streams';
+import { Home, defaultStreams } from './Home';
+import { LocalWorkflowRepository } from './repositories';
+import type { Workflow } from './domain';
+import type { ShotSettingsSnapshot } from './snapshot';
 
-export const App: Component = () => {
-  const machine = createWsStream<MachineSnapshot>(
-    '/ws/v1/machine/snapshot',
-    'machine',
+const workflowRepository = new LocalWorkflowRepository();
+
+const onSleep = () =>
+  api.sleep().catch((e) => console.warn('sleep failed', e));
+
+const onUpdateShotSettings = (settings: ShotSettingsSnapshot) =>
+  api.updateShotSettings(settings).catch((e) =>
+    console.warn('updateShotSettings failed', e),
   );
-  const scale = createWsStream<ScaleMessage>('/ws/v1/scale/snapshot', 'scale');
 
-  onMount(() => {
-    api
-      .machineInfo()
-      .then((info) => console.log('machine info', info))
-      .catch((e) => console.warn('machine info failed', e));
-  });
+const onMenu = () => console.info('menu — TODO: open drawer');
+const onSelectWorkflow = (w: Workflow) =>
+  console.info('selected workflow — TODO: route to runtime', w);
+const onSeeAllShots = () => console.info('see all shots — TODO: route to history');
 
-  return (
-    <main>
-      <header>
-        <h1>Decent.app — Starter Skin</h1>
-        <ConnectionBadge status={machine.status} />
-      </header>
-      <Machine snapshot={machine.latest} />
-      <ShotChart machine={machine.latest} scale={scale.latest} />
-      <Scale message={scale.latest} />
-    </main>
-  );
-};
+export const App: Component = () => (
+  <Home
+    workflowRepository={workflowRepository}
+    machineStream={defaultStreams.machine}
+    scaleStream={defaultStreams.scale}
+    shotSettingsStream={defaultStreams.shotSettings}
+    waterLevelsStream={defaultStreams.waterLevels}
+    fetchLatestShot={api.shotsLatest}
+    fetchShot={api.shotById}
+    onSleep={onSleep}
+    onUpdateShotSettings={onUpdateShotSettings}
+    onMenu={onMenu}
+    onSelectWorkflow={onSelectWorkflow}
+    onSeeAllShots={onSeeAllShots}
+  />
+);
