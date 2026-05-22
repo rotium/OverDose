@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import type { Workflow } from '../domain';
 import type { WorkflowRepository } from '../repositories';
+import type { DisabledReason } from './WorkflowTile';
 import { WorkflowPicker } from './WorkflowPicker';
 
 const wf = (id: string, name = id): Workflow => ({
@@ -60,6 +62,46 @@ describe('WorkflowPicker', () => {
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent(/failed to load/i);
     });
+  });
+
+  it('disables every tile and shows the reason icon when disabledReason() is non-null', async () => {
+    const onSelect = vi.fn();
+    render(() => (
+      <WorkflowPicker
+        repository={repo([wf('a', 'Espresso'), wf('b', 'Cappuccino')])}
+        onSelect={onSelect}
+        disabledReason={() => 'low-water'}
+      />
+    ));
+    await waitFor(() => screen.getByTestId('workflow-tile-a'));
+
+    const tileA = screen.getByTestId('workflow-tile-a') as HTMLButtonElement;
+    const tileB = screen.getByTestId('workflow-tile-b') as HTMLButtonElement;
+    expect(tileA).toBeDisabled();
+    expect(tileB).toBeDisabled();
+    expect(screen.getByTestId('workflow-tile-a-reason')).toBeInTheDocument();
+    expect(screen.getByTestId('workflow-tile-b-reason')).toBeInTheDocument();
+
+    fireEvent.click(tileA);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('reactively re-enables tiles when disabledReason() flips back to null', async () => {
+    const [reason, setReason] = createSignal<DisabledReason | null>('low-water');
+    render(() => (
+      <WorkflowPicker
+        repository={repo([wf('a', 'Espresso')])}
+        onSelect={() => {}}
+        disabledReason={reason}
+      />
+    ));
+    await waitFor(() => screen.getByTestId('workflow-tile-a'));
+    expect(screen.getByTestId('workflow-tile-a')).toBeDisabled();
+    setReason(null);
+    await waitFor(() => {
+      expect(screen.getByTestId('workflow-tile-a')).not.toBeDisabled();
+    });
+    expect(screen.queryByTestId('workflow-tile-a-reason')).not.toBeInTheDocument();
   });
 
   it('refreshes the list via the imperative handle', async () => {

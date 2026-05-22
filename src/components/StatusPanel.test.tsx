@@ -103,13 +103,52 @@ describe('StatusPanel', () => {
       expect(screen.getByTestId('status-scale')).toHaveTextContent('—');
     });
 
-    it('renders water level in mm with a bar', () => {
-      setup({ waterLevels: { currentLevel: 100, refillLevel: 25 } });
+    it('renders water level in mL with a bar against the 65mm tank', () => {
+      // 32.5mm = half of the 65mm tank → 50% bar.
+      // mL = 32.5 * 22 + 32.5^1.52 ≈ 914
+      setup({ waterLevels: { currentLevel: 32.5, refillLevel: 10 } });
       const cell = screen.getByTestId('status-water');
-      expect(cell).toHaveTextContent('100 mm');
+      expect(cell).toHaveTextContent('914 mL');
+      expect(cell).not.toHaveTextContent('mm');
       const fill = cell.querySelector('.bar__fill') as HTMLElement;
       expect(fill).toBeInTheDocument();
       expect(fill.style.width).toBe('50%');
+    });
+
+    it('clamps the bar at 100% when level exceeds the 65mm tank max', () => {
+      setup({ waterLevels: { currentLevel: 80, refillLevel: 10 } });
+      const cell = screen.getByTestId('status-water');
+      const fill = cell.querySelector('.bar__fill') as HTMLElement;
+      expect(fill.style.width).toBe('100%');
+    });
+
+    it('shows no water alert above the warn threshold', () => {
+      setup({ waterLevels: { currentLevel: 10, refillLevel: 5 } });
+      expect(screen.queryByTestId('status-water-alert')).not.toBeInTheDocument();
+      const fill = screen.getByTestId('status-water').querySelector('.bar__fill') as HTMLElement;
+      expect(fill).not.toHaveAttribute('data-severity', 'warn');
+      expect(fill).not.toHaveAttribute('data-severity', 'critical');
+    });
+
+    it('tints the Water row at warn severity but does not add an inline banner', () => {
+      setup({ waterLevels: { currentLevel: 5, refillLevel: 5 } });
+      const cell = screen.getByTestId('status-water');
+      expect(cell).toHaveAttribute('data-severity', 'warn');
+      const fill = cell.querySelector('.bar__fill') as HTMLElement;
+      expect(fill).toHaveAttribute('data-severity', 'warn');
+      expect(screen.queryByTestId('status-water-alert')).not.toBeInTheDocument();
+    });
+
+    it('adds an inline "Refill water tank" banner inside the Water cell at critical', () => {
+      setup({ waterLevels: { currentLevel: 2, refillLevel: 5 } });
+      const cell = screen.getByTestId('status-water');
+      expect(cell).toHaveAttribute('data-severity', 'critical');
+      const fill = cell.querySelector('.bar__fill') as HTMLElement;
+      expect(fill).toHaveAttribute('data-severity', 'critical');
+      const banner = screen.getByTestId('status-water-alert');
+      expect(banner).toHaveTextContent('Refill water tank');
+      // The banner sits inside the same Water cell, not as a separate row.
+      expect(cell.contains(banner)).toBe(true);
     });
   });
 
@@ -155,6 +194,37 @@ describe('StatusPanel', () => {
       expect(screen.getByTestId('status-state')).toHaveTextContent('—');
       setMachine(machineSample({ state: { state: 'heating', substate: 'idle' } }));
       expect(screen.getByTestId('status-state')).toHaveTextContent('heating');
+    });
+
+    // Regression: the inline critical banner used to stick to its first-seen
+    // severity because `sev` was captured as a const inside the function-child
+    // of <Show when={waterLevels()}>. Solid only re-runs that child on the
+    // outer truthy/falsy flip, so updates to the level didn't propagate.
+    it('hides the inline critical banner when the water signal moves back above the block threshold', () => {
+      const { setWaterLevels } = setup({
+        waterLevels: { currentLevel: 2, refillLevel: 5 },
+      });
+      expect(screen.getByTestId('status-water-alert')).toBeInTheDocument();
+      expect(screen.getByTestId('status-water')).toHaveAttribute('data-severity', 'critical');
+
+      setWaterLevels({ currentLevel: 40, refillLevel: 5 });
+
+      expect(screen.queryByTestId('status-water-alert')).not.toBeInTheDocument();
+      expect(screen.getByTestId('status-water')).toHaveAttribute('data-severity', 'normal');
+    });
+
+    it('shows the inline banner only after the level drops to critical (not at warn)', () => {
+      const { setWaterLevels } = setup({
+        waterLevels: { currentLevel: 40, refillLevel: 5 },
+      });
+      expect(screen.queryByTestId('status-water-alert')).not.toBeInTheDocument();
+
+      setWaterLevels({ currentLevel: 5, refillLevel: 5 }); // warn
+      expect(screen.queryByTestId('status-water-alert')).not.toBeInTheDocument();
+      expect(screen.getByTestId('status-water')).toHaveAttribute('data-severity', 'warn');
+
+      setWaterLevels({ currentLevel: 2, refillLevel: 5 }); // critical
+      expect(screen.getByTestId('status-water-alert')).toBeInTheDocument();
     });
   });
 });

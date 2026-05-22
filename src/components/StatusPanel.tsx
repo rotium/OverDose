@@ -7,22 +7,24 @@ import {
   type ShotSettingsSnapshot,
   type WaterLevelsSnapshot,
 } from '../snapshot';
+import { mmToMl, waterPct, waterSeverity } from '../water';
+import {
+  PowerIcon,
+  ScaleIcon,
+  SteamIcon,
+  ThermometerIcon,
+  WaterDropIcon,
+} from './icons';
 
-/**
- * Visualization-only cap for the water-level bar. Reaprime reports `currentLevel`
- * in mm (not %), and the tank max varies by machine — we hard-code a soft cap so
- * the bar has a stable visual scale. Refine when we expose a per-machine setting.
- */
-const WATER_BAR_MAX_MM = 200;
+const WATER_ALERT_TEXT = {
+  critical: 'Refill water tank',
+};
 
 const fmtTemp = (t: number | null | undefined, digits = 1) =>
   t == null ? '—' : `${t.toFixed(digits)} °C`;
 
 const fmtWeight = (w: number | null | undefined) =>
   w == null ? '—' : `${w.toFixed(1)} g`;
-
-const waterPct = (mm: number) =>
-  Math.max(0, Math.min(1, mm / WATER_BAR_MAX_MM));
 
 const dataFrame = (msg: ScaleMessage | null): ScaleSnapshot | null =>
   msg && !isScaleStatusFrame(msg) ? msg : null;
@@ -53,19 +55,28 @@ export const StatusPanel: Component<StatusPanelProps> = (p) => {
       <h2>Status</h2>
 
       <dl class="status__grid">
-        <dt>State</dt>
+        <dt>
+          <PowerIcon size={16} />
+          <span>State</span>
+        </dt>
         <dd data-testid="status-state">
           <Show when={p.machine()} fallback="—">
             {(s) => <>{s().state.state}</>}
           </Show>
         </dd>
 
-        <dt>Group</dt>
+        <dt>
+          <ThermometerIcon size={16} />
+          <span>Group</span>
+        </dt>
         <dd data-testid="status-group-temp">
           {fmtTemp(p.machine()?.groupTemperature)}
         </dd>
 
-        <dt>Steam</dt>
+        <dt>
+          <SteamIcon size={16} />
+          <span>Steam</span>
+        </dt>
         <dd class="status__row">
           <span data-testid="status-steam-temp">
             {fmtTemp(p.machine()?.steamTemperature, 0)}
@@ -83,24 +94,51 @@ export const StatusPanel: Component<StatusPanelProps> = (p) => {
           </button>
         </dd>
 
-        <dt>Water</dt>
-        <dd data-testid="status-water">
+        <dt data-severity={p.waterLevels() ? waterSeverity(p.waterLevels()!.currentLevel) : 'normal'}>
+          <WaterDropIcon size={16} />
+          <span>Water</span>
+        </dt>
+        <dd
+          data-testid="status-water"
+          data-severity={p.waterLevels() ? waterSeverity(p.waterLevels()!.currentLevel) : 'normal'}
+        >
           <Show when={p.waterLevels()} fallback={<span class="muted">—</span>}>
-            {(w) => (
-              <span class="status__row">
-                <span>{w().currentLevel.toFixed(0)} mm</span>
-                <span class="bar" aria-hidden="true">
-                  <span
-                    class="bar__fill"
-                    style={{ width: `${waterPct(w().currentLevel) * 100}%` }}
-                  />
+            {(w) => {
+              // Getter, not const — Solid only re-runs this function-child
+              // when the outer Show's truthy/falsy flips, so capturing the
+              // severity value once would stick at its first-seen state
+              // (bug: banner stayed visible after refilling past critical).
+              const sev = () => waterSeverity(w().currentLevel);
+              return (
+                <span class="status__row status__row--wrap">
+                  <span>{Math.round(mmToMl(w().currentLevel))} mL</span>
+                  <span class="bar" aria-hidden="true">
+                    <span
+                      class="bar__fill"
+                      data-severity={sev()}
+                      style={{ width: `${waterPct(w().currentLevel) * 100}%` }}
+                    />
+                  </span>
+                  <Show when={sev() === 'critical'}>
+                    <span
+                      class="status__water-banner"
+                      role="status"
+                      data-testid="status-water-alert"
+                    >
+                      <WaterDropIcon size={14} />
+                      <span>{WATER_ALERT_TEXT.critical}</span>
+                    </span>
+                  </Show>
                 </span>
-              </span>
-            )}
+              );
+            }}
           </Show>
         </dd>
 
-        <dt>Scale</dt>
+        <dt>
+          <ScaleIcon size={16} />
+          <span>Scale</span>
+        </dt>
         <dd data-testid="status-scale">
           {fmtWeight(scaleData()?.weight)}
           <Show when={scaleData()?.batteryLevel != null}>

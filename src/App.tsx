@@ -10,6 +10,9 @@ const workflowRepository = new LocalWorkflowRepository();
 const onSleep = () =>
   api.sleep().catch((e) => console.warn('sleep failed', e));
 
+const onWake = () =>
+  api.requestState('idle').catch((e) => console.warn('wake failed', e));
+
 const onUpdateShotSettings = (settings: ShotSettingsSnapshot) =>
   api.updateShotSettings(settings).catch((e) =>
     console.warn('updateShotSettings failed', e),
@@ -30,6 +33,7 @@ export const App: Component = () => (
     fetchLatestShot={api.shotsLatest}
     fetchShot={api.shotById}
     onSleep={onSleep}
+    onWake={onWake}
     onUpdateShotSettings={onUpdateShotSettings}
     onMenu={onMenu}
     onSelectWorkflow={onSelectWorkflow}

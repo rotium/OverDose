@@ -10,7 +10,7 @@ import {
 } from 'solid-js';
 import type { Workflow } from '../domain';
 import type { WorkflowRepository } from '../repositories';
-import { WorkflowTile } from './WorkflowTile';
+import { WorkflowTile, type DisabledReason } from './WorkflowTile';
 
 /**
  * Workflow picker grid. Loads workflows from the injected repository and
@@ -22,10 +22,16 @@ import { WorkflowTile } from './WorkflowTile';
  *
  * `refresh` is exposed for callers that mutate the library (e.g. after the
  * user creates a Workflow in the editor) and want the picker to re-pull.
+ *
+ * `disabledReason` (accessor, optional) gates the whole grid — when it returns
+ * a non-null value all tiles render disabled with the matching reason icon
+ * (e.g. low-water blocking). Driven by the parent so the rule (which signal,
+ * which threshold) lives there, not here.
  */
 export interface WorkflowPickerProps {
   repository: WorkflowRepository;
   onSelect: (workflow: Workflow) => void;
+  disabledReason?: Accessor<DisabledReason | null>;
 }
 
 export interface WorkflowPickerHandle {
@@ -61,7 +67,17 @@ export const WorkflowPicker: Component<
           >
             <div class="picker__grid" data-testid="picker-grid">
               <For each={workflows()}>
-                {(w) => <WorkflowTile workflow={w} onSelect={p.onSelect} />}
+                {(w) => {
+                  const reason = () => p.disabledReason?.() ?? null;
+                  return (
+                    <WorkflowTile
+                      workflow={w}
+                      onSelect={p.onSelect}
+                      disabled={reason() !== null}
+                      disabledReason={reason() ?? undefined}
+                    />
+                  );
+                }}
               </For>
             </div>
           </Show>

@@ -3,7 +3,9 @@ import { api } from './api';
 import { Header } from './components/Header';
 import { LastShotCard } from './components/LastShotCard';
 import { StatusPanel } from './components/StatusPanel';
+import { WaterAlertBanner } from './components/WaterAlertBanner';
 import { WorkflowPicker } from './components/WorkflowPicker';
+import type { DisabledReason } from './components/WorkflowTile';
 import type { Workflow } from './domain';
 import type { WorkflowRepository } from './repositories';
 import type {
@@ -13,6 +15,7 @@ import type {
   WaterLevelsSnapshot,
 } from './snapshot';
 import { createWsStream, type WsStream } from './streams';
+import { isWaterBlocked, waterSeverity, type WaterSeverity } from './water';
 
 /**
  * Home — the entry screen. Composes the live data streams + the injected
@@ -35,6 +38,8 @@ export interface HomeProps {
   fetchShot: (id: string) => ReturnType<typeof api.shotById>;
   /** Action handlers (defaulted to api.* in App.tsx). */
   onSleep: () => void;
+  /** Wake the machine from sleeping state — typically `requestState('idle')`. */
+  onWake: () => void;
   onUpdateShotSettings: (settings: ShotSettingsSnapshot) => void;
   onMenu: () => void;
   onSelectWorkflow: (w: Workflow) => void;
@@ -53,19 +58,46 @@ export const Home: Component<HomeProps> = (p) => {
     p.onUpdateShotSettings({ ...current, steamSetting: next ? 1 : 0 });
   };
 
+  // Single source of truth for the water-alert UI. Before any frame arrives
+  // we say 'normal' — a missing snapshot shouldn't pretend the tank is empty.
+  const severity = (): WaterSeverity => {
+    const w = waterLevels.latest();
+    return w ? waterSeverity(w.currentLevel) : 'normal';
+  };
+
+  // Mirrors streamline.js: button shows "Sleep" (moon) when awake, "Awake"
+  // (sun) when sleeping; clicking toggles between machine states.
+  const isSleeping = (): boolean =>
+    machine.latest()?.state.state === 'sleeping';
+
+  const handleToggleSleep = () => {
+    if (isSleeping()) p.onWake();
+    else p.onSleep();
+  };
+
+  // Block tiles (with droplet icon) only at the critical threshold.
+  const disabledReason = (): DisabledReason | null => {
+    const w = waterLevels.latest();
+    if (!w) return null;
+    return isWaterBlocked(w.currentLevel) ? 'low-water' : null;
+  };
+
   return (
     <div class="home">
       <Header
         machineStatus={machine.status}
         scaleStatus={scale.status}
+        waterSeverity={severity}
+        isSleeping={isSleeping}
         onMenu={p.onMenu}
-        onSleep={p.onSleep}
+        onToggleSleep={handleToggleSleep}
       />
       <main class="home__main">
         <div class="home__picker">
           <WorkflowPicker
             repository={p.workflowRepository}
             onSelect={p.onSelectWorkflow}
+            disabledReason={disabledReason}
           />
         </div>
         <aside class="home__sidebar">
@@ -83,6 +115,7 @@ export const Home: Component<HomeProps> = (p) => {
           />
         </aside>
       </main>
+      <WaterAlertBanner severity={severity} />
     </div>
   );
 };

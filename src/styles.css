@@ -11,6 +11,9 @@
   --accent: #3b82f6;
   --good: #1f6f3a;
   --bad: #6f1f1f;
+  --warn: #a86a00;
+  --warn-fg: #f5b65b;
+  --bad-fg: #ff8a8a;
 }
 
 * {
@@ -104,6 +107,29 @@ html {
   background: var(--bad);
 }
 
+.alert-pill {
+  font-size: 0.8125rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 600;
+}
+
+.alert-pill[data-severity='warn'] {
+  background: var(--warn);
+  color: #fff;
+}
+
+.alert-pill[data-severity='critical'] {
+  background: var(--bad);
+  color: #fff;
+}
+
 .icon-btn {
   background: var(--bg-elev);
   color: var(--fg);
@@ -117,6 +143,27 @@ html {
 
 .icon-btn:hover {
   background: #2a2a2a;
+}
+
+.icon-btn--labeled {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  /* Fully fixed width (not min-width) so the label can swap
+     (e.g. Sleep ↔ Awake) without the button — or the buttons to its left —
+     reflowing. 6.5rem comfortably fits both labels + icon + padding. */
+  width: 6.5rem;
+  min-width: 6.5rem;
+  flex-shrink: 0;
+}
+
+.icon-btn--labeled > span {
+  /* Pin the label width too, in case the rendered text width of "Sleep"
+     and "Awake" differs and the icon would otherwise slide. */
+  display: inline-block;
+  text-align: left;
+  min-width: 3rem;
 }
 
 /* ─── Card primitive ──────────────────────────────────────────────── */
@@ -148,6 +195,9 @@ html {
 
 .status__grid dt {
   color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .status__grid dd {
@@ -196,6 +246,53 @@ html {
   background: var(--accent);
 }
 
+.bar__fill[data-severity='warn'] {
+  background: var(--warn);
+}
+
+.bar__fill[data-severity='critical'] {
+  background: var(--bad);
+}
+
+/* Severity tint on the Water row's label + value cells — replaces the old
+   "dedicated alert row below water" pattern. Whole row reads as the alert. */
+.status__grid dt[data-severity='warn'],
+.status__grid dd[data-severity='warn'] {
+  color: var(--warn-fg);
+}
+
+.status__grid dt[data-severity='critical'],
+.status__grid dd[data-severity='critical'] {
+  color: var(--bad-fg);
+  font-weight: 600;
+}
+
+/* Variant of .status__row that wraps — used by the Water row so the critical
+   mini-banner can sit to the right of the bar without forcing a horizontal
+   overflow in the narrow status sidebar. */
+.status__row--wrap {
+  flex-wrap: wrap;
+  row-gap: 0.35rem;
+}
+
+/* Inline mini-banner shown only at critical, immediately to the right of the
+   water bar inside the same Water row — emphatic but stays *near* the value. */
+.status__water-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  background: rgba(111, 31, 31, 0.32);
+  color: var(--bad-fg);
+  border: 1px solid var(--bad);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .muted {
   color: var(--muted-2);
   margin: 0;
@@ -228,6 +325,27 @@ html {
 .tile:hover {
   border-color: var(--border-strong);
   background: #222;
+}
+
+.tile--disabled,
+.tile--disabled:hover {
+  cursor: not-allowed;
+  opacity: 0.5;
+  background: var(--bg-elev);
+  border-color: var(--border);
+}
+
+.tile__reason {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  color: var(--bad-fg);
+  display: inline-flex;
+  pointer-events: none;
+}
+
+.tile {
+  position: relative;
 }
 
 .tile__icon {
@@ -278,4 +396,25 @@ html {
 .mini-chart {
   width: 100%;
   height: 80px;
+}
+
+/* ─── Water alert banner (bottom of Home) ─────────────────────────── */
+
+.water-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  border-top: 1px solid var(--border);
+}
+
+.water-banner[data-severity='warn'] {
+  background: rgba(168, 106, 0, 0.22);
+  color: var(--warn-fg);
+}
+
+.water-banner[data-severity='critical'] {
+  background: rgba(111, 31, 31, 0.32);
+  color: var(--bad-fg);
 }

@@ -62,6 +62,7 @@ interface Stubs {
 const buildHome = (overrides: Partial<{
   stubs: Stubs;
   onSleep: () => void;
+  onWake: () => void;
   onMenu: () => void;
   onUpdate: (s: ShotSettingsSnapshot) => void;
   onSelect: (w: Workflow) => void;
@@ -85,6 +86,7 @@ const buildHome = (overrides: Partial<{
       fetchLatestShot={() => Promise.resolve(summary)}
       fetchShot={() => Promise.resolve(fullRecord)}
       onSleep={overrides.onSleep ?? vi.fn()}
+      onWake={overrides.onWake ?? vi.fn()}
       onUpdateShotSettings={overrides.onUpdate ?? vi.fn()}
       onMenu={overrides.onMenu ?? vi.fn()}
       onSelectWorkflow={overrides.onSelect ?? vi.fn()}
@@ -107,11 +109,38 @@ describe('Home', () => {
     await waitFor(() => screen.getByTestId('shot-mini-chart-stub'));
   });
 
-  it('Sleep button invokes onSleep', () => {
+  it('Sleep button invokes onSleep when machine is awake', () => {
     const onSleep = vi.fn();
-    render(() => buildHome({ onSleep }));
+    const onWake = vi.fn();
+    render(() => buildHome({ onSleep, onWake }));
     fireEvent.click(screen.getByRole('button', { name: 'Sleep' }));
     expect(onSleep).toHaveBeenCalledTimes(1);
+    expect(onWake).not.toHaveBeenCalled();
+  });
+
+  it('Sleep button flips to "Wake machine" and invokes onWake when machine state is sleeping', () => {
+    const onSleep = vi.fn();
+    const onWake = vi.fn();
+    const sleepingSnap: MachineSnapshot = {
+      timestamp: '2026-05-22T08:00:00Z',
+      state: { state: 'sleeping', substate: 'idle' },
+      flow: 0,
+      pressure: 0,
+      targetFlow: 0,
+      targetPressure: 0,
+      mixTemperature: 25,
+      groupTemperature: 25,
+      targetMixTemperature: 0,
+      targetGroupTemperature: 0,
+      profileFrame: 0,
+      steamTemperature: 25,
+    };
+    render(() =>
+      buildHome({ stubs: { machineSnap: sleepingSnap }, onSleep, onWake }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Wake machine' }));
+    expect(onWake).toHaveBeenCalledTimes(1);
+    expect(onSleep).not.toHaveBeenCalled();
   });
 
   it('steam toggle composes the current settings with steamSetting flipped', () => {
@@ -140,5 +169,85 @@ describe('Home', () => {
     await waitFor(() => screen.getByTestId('workflow-tile-seed-espresso'));
     fireEvent.click(screen.getByTestId('workflow-tile-seed-espresso'));
     expect(onSelect).toHaveBeenCalledWith(sampleWorkflow);
+  });
+
+  it('disables Workflow tiles with a droplet icon when water level is at/under the block threshold', async () => {
+    const onSelect = vi.fn();
+    render(() =>
+      buildHome({
+        stubs: { water: { currentLevel: 2, refillLevel: 5 } },
+        onSelect,
+      }),
+    );
+    await waitFor(() => screen.getByTestId('workflow-tile-seed-espresso'));
+    const tile = screen.getByTestId('workflow-tile-seed-espresso') as HTMLButtonElement;
+    expect(tile).toBeDisabled();
+    expect(screen.getByTestId('workflow-tile-seed-espresso-reason')).toBeInTheDocument();
+    fireEvent.click(tile);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('leaves Workflow tiles enabled when water is just above the block threshold (warn-only)', async () => {
+    render(() =>
+      buildHome({ stubs: { water: { currentLevel: 4, refillLevel: 5 } } }),
+    );
+    await waitFor(() => screen.getByTestId('workflow-tile-seed-espresso'));
+    expect(screen.getByTestId('workflow-tile-seed-espresso')).not.toBeDisabled();
+    expect(
+      screen.queryByTestId('workflow-tile-seed-espresso-reason'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('at warn level: header pill + tinted Water row + bottom banner; no inline critical banner', async () => {
+    render(() =>
+      buildHome({ stubs: { water: { currentLevel: 4, refillLevel: 5 } } }),
+    );
+    await waitFor(() => screen.getByTestId('workflow-tile-seed-espresso'));
+    expect(screen.getByTestId('header-water-pill')).toHaveAttribute(
+      'data-severity',
+      'warn',
+    );
+    expect(screen.getByTestId('status-water')).toHaveAttribute(
+      'data-severity',
+      'warn',
+    );
+    expect(screen.getByTestId('water-alert-banner')).toHaveAttribute(
+      'data-severity',
+      'warn',
+    );
+    expect(screen.queryByTestId('status-water-alert')).not.toBeInTheDocument();
+  });
+
+  it('at critical: pill + tinted row + inline banner inside Water cell + bottom banner', async () => {
+    render(() =>
+      buildHome({ stubs: { water: { currentLevel: 2, refillLevel: 5 } } }),
+    );
+    await waitFor(() => screen.getByTestId('workflow-tile-seed-espresso'));
+    expect(screen.getByTestId('header-water-pill')).toHaveAttribute(
+      'data-severity',
+      'critical',
+    );
+    const waterCell = screen.getByTestId('status-water');
+    expect(waterCell).toHaveAttribute('data-severity', 'critical');
+    const inline = screen.getByTestId('status-water-alert');
+    expect(waterCell.contains(inline)).toBe(true);
+    expect(screen.getByTestId('water-alert-banner')).toHaveAttribute(
+      'data-severity',
+      'critical',
+    );
+  });
+
+  it('hides all alert indications when water is healthy', async () => {
+    render(() =>
+      buildHome({ stubs: { water: { currentLevel: 40, refillLevel: 5 } } }),
+    );
+    await waitFor(() => screen.getByTestId('workflow-tile-seed-espresso'));
+    expect(screen.queryByTestId('header-water-pill')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('water-alert-banner')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('status-water-alert')).not.toBeInTheDocument();
+    expect(screen.getByTestId('status-water')).toHaveAttribute(
+      'data-severity',
+      'normal',
+    );
   });
 });
