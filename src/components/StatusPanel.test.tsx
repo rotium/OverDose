@@ -91,7 +91,7 @@ describe('StatusPanel', () => {
 
     it('renders scale weight and battery from a data frame', () => {
       setup({
-        scale: { timestamp: 't', weight: 18.42, batteryLevel: 87 },
+        scale: { timestamp: 't', weight: 18.42, weightFlow: 0, batteryLevel: 87 },
       });
       const cell = screen.getByTestId('status-scale');
       expect(cell).toHaveTextContent('18.4 g');

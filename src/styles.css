@@ -395,7 +395,384 @@ html {
 
 .mini-chart {
   width: 100%;
-  height: 80px;
+  height: 100px;
+}
+
+.live-shot-chart {
+  width: 100%;
+  flex: 1;
+  min-height: 240px;
+}
+
+/* ─── Home host (inert wrapper during a brew) ─────────────────────── */
+
+/* The host doesn't constrain layout — it exists solely to receive the
+   `inert` attribute while the live drawer is up. When inert, the whole
+   Home subtree becomes non-interactive (clicks, focus, screen-reader)
+   AND we dim it visually so the user sees the cause. */
+.home-host[inert] {
+  opacity: 0.4;
+  filter: brightness(0.7);
+  transition: opacity 240ms ease, filter 240ms ease;
+}
+
+.home-host:not([inert]) {
+  transition: opacity 240ms ease, filter 240ms ease;
+}
+
+/* ─── Live brew drawer (bottom sheet) ─────────────────────────────── */
+
+.live-brew-drawer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 92vh;
+  background: var(--bg);
+  border-top: 1px solid var(--border-strong);
+  border-radius: 14px 14px 0 0;
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.55);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(0);
+  transition: transform 280ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.live-brew-drawer[data-state='open'] {
+  animation: live-brew-slide-up 280ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.live-brew-drawer[data-state='closing'] {
+  transform: translateY(100%);
+}
+
+@keyframes live-brew-slide-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+/* ─── Live brew view (espresso) ───────────────────────────────────── */
+
+.live-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem 1.25rem;
+}
+
+.live-view__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.live-view__title {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+/* Title row: profile name + current step name, side-by-side so users see
+   "what's brewing" and "which frame of the profile is active" at once. */
+.live-view__title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* Profile name is the focal title — bumped up, brighter, and uppercased
+   so it reads as the "what's brewing" line at a glance. */
+.live-view__profile {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--fg);
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.live-view__step-sep {
+  color: var(--muted-2);
+  font-size: 1.1rem;
+}
+
+.live-view__step {
+  font-size: 1rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Subtitle row: operation name on the left, brew-status stepper on the
+   right of the same line — they share the secondary-info row. */
+.live-view__subtitle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--muted);
+  flex-wrap: wrap;
+}
+
+.live-view__operation {
+  text-transform: capitalize;
+}
+
+.live-view__subtitle-sep {
+  color: var(--muted-2);
+}
+
+/* Big-number elapsed timer on the right of the header. Tabular nums so the
+   width doesn't jitter as digits change. */
+.live-view__timer {
+  display: flex;
+  align-items: baseline;
+  gap: 0.2rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+  line-height: 1;
+}
+
+.live-view__timer-num {
+  font-size: 2.5rem;
+  font-weight: 700;
+}
+
+.live-view__timer-unit {
+  font-size: 1.1rem;
+  color: var(--muted);
+}
+
+/* Inline current-state badge — replaces the old multi-step progressbar.
+   Bold + accent for the active phases; muted-green for the final "Done"
+   state so the user gets a visual cue when the shot wraps up. */
+.live-view__state {
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.02em;
+}
+
+.live-view__state[data-substate='pouringDone'] {
+  color: var(--good);
+}
+
+/* Chart legend — colored swatches mapping series to names. */
+.live-view__legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  /* Reset the <button> defaults — legend items use button semantics for
+     click + aria-pressed, but visually they stay as plain inline items. */
+  background: none;
+  border: none;
+  padding: 0.15rem 0.3rem;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: opacity 120ms ease, background 120ms ease;
+}
+
+.legend-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.legend-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.legend-item--hidden {
+  opacity: 0.4;
+}
+
+.legend-item--hidden .legend-label,
+.legend-item--hidden .legend-suffix {
+  text-decoration: line-through;
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.legend-swatch--dashed {
+  background: linear-gradient(
+    to right,
+    currentColor 0 4px,
+    transparent 4px 8px,
+    currentColor 8px 12px,
+    transparent 12px 14px
+  );
+}
+
+.legend-label {
+  color: var(--muted);
+}
+
+.legend-suffix {
+  color: var(--muted-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.legend-item--note {
+  color: var(--muted-2);
+  margin-left: auto;
+}
+
+.live-view__chart {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.live-view__readouts {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr) auto;
+  /* Top-align so the LABEL row + VALUE row line up across all columns even
+     when YIELD adds a progress bar below its value. Bar dangles below the
+     value without pushing the label/value up. */
+  align-items: start;
+  gap: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.readout__label {
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.readout__value {
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.readout__progress {
+  margin-top: 0.4rem;
+  height: 6px;
+  background: #2a2a2a;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.readout__progress-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.15s linear;
+}
+
+.readout__progress[data-severity='near'] .readout__progress-fill {
+  background: var(--warn);
+}
+
+.readout__progress[data-severity='over'] .readout__progress-fill {
+  background: var(--bad);
+}
+
+/* The STOP button doubles as the shot-completion progress indicator. The
+   button background is a darker red base; a brighter-red fill grows
+   left-to-right as we approach whichever auto-stop trigger is leading
+   (weight or time). Press anytime to stop manually regardless of fill. */
+.live-view__stop {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #4a1414;
+  color: #fff;
+  border: 1px solid var(--bad);
+  border-radius: 8px;
+  padding: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  font: inherit;
+  width: 9rem;
+  height: 64px;
+  align-self: center;
+}
+
+.live-view__stop:hover {
+  filter: brightness(1.1);
+}
+
+/* The fill — bright red over the darker base. Width set inline by the
+   component. Transition is short so it tracks the data without lagging,
+   but smooth enough to not feel jumpy at 10 Hz. */
+.live-view__stop-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  background: var(--bad);
+  transition: width 200ms linear;
+}
+
+/* When the fill crosses target, tint the button border to flag overshoot. */
+.live-view__stop[data-severity='near'] .live-view__stop-fill {
+  background: linear-gradient(90deg, var(--bad), #b21f1f);
+}
+
+.live-view__stop[data-severity='over'] {
+  border-color: #ff5252;
+}
+
+.live-view__stop[data-severity='over'] .live-view__stop-fill {
+  background: #ff5252;
+}
+
+.live-view__stop-content {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 1.1rem;
+}
+
+/* Trigger icon as a corner badge — out of the way of the STOP label, but
+   still on-button so users associate "what stops it" with the button itself.
+   Positioned absolute relative to the button (NOT the inner content span)
+   so the offsets actually land at the button's corner.
+   Subtle opacity so it reads as annotation, not a peer to the main label. */
+.live-view__stop-trigger {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+/* Larger STOP glyph so it carries the button's visual weight. */
+.live-view__stop-glyph {
+  font-size: 1.4rem;
+  line-height: 1;
 }
 
 /* ─── Water alert banner (bottom of Home) ─────────────────────────── */

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 
 // Stub the chart: jsdom has no canvas, and the chart's rendering is not what
 // these tests cover. Stats, error states, and dispatch are the contract here.
@@ -57,7 +58,7 @@ describe('LastShotCard', () => {
     expect(screen.getByTestId('last-shot-stats')).toHaveTextContent('18.0g → 36.0g');
   });
 
-  it('renders peak pressure + duration once the full record arrives', async () => {
+  it('renders duration once the full record arrives (peak pressure intentionally dropped)', async () => {
     render(() => (
       <LastShotCard
         fetchSummary={() => Promise.resolve(summary())}
@@ -66,9 +67,9 @@ describe('LastShotCard', () => {
       />
     ));
     await waitFor(() => {
-      expect(screen.getByTestId('last-shot-stats')).toHaveTextContent(/bar peak/);
+      expect(screen.getByTestId('last-shot-stats')).toHaveTextContent(/29s/);
     });
-    expect(screen.getByTestId('last-shot-stats')).toHaveTextContent(/29s/);
+    expect(screen.getByTestId('last-shot-stats')).not.toHaveTextContent(/bar peak/);
   });
 
   it('shows an error state when no shot is available', async () => {
@@ -98,6 +99,41 @@ describe('LastShotCard', () => {
     expect(onSeeAll).toHaveBeenCalledTimes(1);
   });
 
+  it('uses the profile title as the headline when present', async () => {
+    render(() => (
+      <LastShotCard
+        fetchSummary={() =>
+          Promise.resolve(
+            summary({
+              workflow: {
+                name: 'Cappuccino',
+                profile: { title: 'Gentle and Sweet' },
+              },
+            }),
+          )
+        }
+        fetchFull={() => new Promise(() => {})}
+        onSeeAll={() => {}}
+      />
+    ));
+    await waitFor(() => screen.getByText('Gentle and Sweet'));
+    // Workflow name no longer leads the card.
+    expect(screen.queryByText('Cappuccino')).not.toBeInTheDocument();
+  });
+
+  it('falls back to the workflow name when no profile title is present', async () => {
+    render(() => (
+      <LastShotCard
+        fetchSummary={() =>
+          Promise.resolve(summary({ workflow: { name: 'Cappuccino' } }))
+        }
+        fetchFull={() => new Promise(() => {})}
+        onSeeAll={() => {}}
+      />
+    ));
+    await waitFor(() => screen.getByText('Cappuccino'));
+  });
+
   it('falls back to "Shot" when no workflow name is present', async () => {
     render(() => (
       <LastShotCard
@@ -107,6 +143,139 @@ describe('LastShotCard', () => {
       />
     ));
     await waitFor(() => expect(screen.getByText('Shot')).toBeInTheDocument());
+  });
+
+  it('refetches summary + full record when refreshKey changes (auto-refresh on brew complete)', async () => {
+    const fetchSummary = vi
+      .fn<() => Promise<GatewayShotSummary>>()
+      .mockResolvedValueOnce(summary({ id: 'old', workflow: { name: 'Old shot' } }))
+      .mockResolvedValueOnce(summary({ id: 'new', workflow: { name: 'New shot' } }));
+    const fetchFull = vi
+      .fn<(id: string) => Promise<GatewayShotRecord>>()
+      .mockImplementation((id) =>
+        Promise.resolve(fullRecord({ id, workflow: { name: id } })),
+      );
+
+    const [tick, setTick] = createSignal(1);
+    render(() => (
+      <LastShotCard
+        fetchSummary={fetchSummary}
+        fetchFull={fetchFull}
+        onSeeAll={() => {}}
+        refreshKey={tick}
+      />
+    ));
+
+    await waitFor(() => expect(screen.getByText('Old shot')).toBeInTheDocument());
+    expect(fetchSummary).toHaveBeenCalledTimes(1);
+    expect(fetchFull).toHaveBeenCalledWith('old');
+
+    setTick(2);
+
+    await waitFor(() => expect(screen.getByText('New shot')).toBeInTheDocument());
+    expect(fetchSummary).toHaveBeenCalledTimes(2);
+    expect(fetchFull).toHaveBeenCalledWith('new');
+  });
+
+  it('updates the relative-time label as time passes (no page reload needed)', async () => {
+    vi.useFakeTimers();
+    try {
+      const t0 = new Date('2026-05-23T10:00:00Z').getTime();
+      vi.setSystemTime(t0);
+
+      render(() => (
+        <LastShotCard
+          fetchSummary={() =>
+            Promise.resolve(
+              summary({
+                timestamp: new Date(t0 - 5_000).toISOString(), // 5s ago
+              }),
+            )
+          }
+          fetchFull={() => new Promise(() => {})}
+          onSeeAll={() => {}}
+        />
+      ));
+      // Flush microtasks for the resource resolution without firing the
+      // setInterval (advanceTimersByTime(0) doesn't progress time).
+      await vi.advanceTimersByTimeAsync(0);
+      expect(screen.getByText(/just now/i)).toBeInTheDocument();
+
+      // 2 minutes pass. Step time forward enough for the 30 s tick to fire.
+      vi.setSystemTime(t0 + 2 * 60_000);
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(screen.queryByText(/just now/i)).not.toBeInTheDocument();
+      expect(screen.getByText(/min ago/i)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  describe('optimisticShot hand-off', () => {
+    it('renders the optimistic record immediately while /shots/latest is still loading', async () => {
+      // fetchSummary never resolves so the gateway view never "catches up".
+      const optimistic: GatewayShotRecord = {
+        id: 'optimistic-1',
+        timestamp: '2026-05-22T08:00:00.000Z',
+        workflow: { name: 'Optimistic shot' },
+        annotations: { actualDoseWeight: 18, actualYield: 36 },
+        measurements: fullRecord().measurements,
+      };
+      render(() => (
+        <LastShotCard
+          fetchSummary={() => new Promise(() => {})}
+          fetchFull={() => new Promise(() => {})}
+          onSeeAll={() => {}}
+          optimisticShot={() => optimistic}
+        />
+      ));
+      await waitFor(() =>
+        expect(screen.getByText('Optimistic shot')).toBeInTheDocument(),
+      );
+      expect(screen.getByTestId('last-shot-stats')).toHaveTextContent('18.0g → 36.0g');
+    });
+
+    it('switches to the gateway version once /shots/latest returns a timestamp ≥ the optimistic one', async () => {
+      const optimisticTs = '2026-05-22T08:00:00.000Z';
+      const optimistic: GatewayShotRecord = {
+        id: 'optimistic-1',
+        timestamp: optimisticTs,
+        workflow: { name: 'Optimistic shot' },
+        annotations: { actualDoseWeight: 18, actualYield: 36 },
+        measurements: fullRecord().measurements,
+      };
+
+      const [opt, setOpt] = createSignal<GatewayShotRecord | null>(optimistic);
+      render(() => (
+        <LastShotCard
+          fetchSummary={() =>
+            Promise.resolve(
+              summary({
+                id: 'persisted-1',
+                timestamp: '2026-05-22T08:00:05.000Z', // 5s later — gateway caught up
+                workflow: { name: 'Gateway shot' },
+              }),
+            )
+          }
+          fetchFull={() =>
+            Promise.resolve(
+              fullRecord({ id: 'persisted-1', workflow: { name: 'Gateway shot' } }),
+            )
+          }
+          onSeeAll={() => {}}
+          optimisticShot={opt}
+        />
+      ));
+
+      // Once the summary's timestamp >= the optimistic's, the gateway name shows.
+      await waitFor(() =>
+        expect(screen.getByText('Gateway shot')).toBeInTheDocument(),
+      );
+
+      // Parent can now clear the optimistic — UI should remain on gateway.
+      setOpt(null);
+      expect(screen.getByText('Gateway shot')).toBeInTheDocument();
+    });
   });
 
   it('renders an em-dash when annotations are missing', async () => {

@@ -237,6 +237,89 @@ describe('Home', () => {
     );
   });
 
+  it('refetches the last shot when machine state transitions out of `espresso`', async () => {
+    // Drives a controllable machine signal so we can flip the state and verify
+    // LastShotCard's fetchSummary fires a second time.
+    const machineSig = createSignal<MachineSnapshot | null>(null);
+    const [machine, setMachine] = machineSig;
+    const machineStream: WsStream<MachineSnapshot> = {
+      latest: machine,
+      status: createSignal<'open'>('open')[0],
+    };
+
+    const fetchLatestShot = vi
+      .fn<() => Promise<typeof summary>>()
+      .mockResolvedValueOnce({ ...summary, workflow: { name: 'Before brew' } })
+      .mockResolvedValueOnce({ ...summary, workflow: { name: 'After brew' } });
+
+    render(() => (
+      <Home
+        workflowRepository={fakeRepo}
+        machineStream={() => machineStream}
+        scaleStream={() => ({
+          latest: createSignal<ScaleMessage | null>(null)[0],
+          status: createSignal<'open'>('open')[0],
+        })}
+        shotSettingsStream={() => ({
+          latest: createSignal<ShotSettingsSnapshot | null>(null)[0],
+          status: createSignal<'open'>('open')[0],
+        })}
+        waterLevelsStream={() => ({
+          latest: createSignal<WaterLevelsSnapshot | null>(null)[0],
+          status: createSignal<'open'>('open')[0],
+        })}
+        fetchLatestShot={fetchLatestShot}
+        fetchShot={() => Promise.resolve(fullRecord)}
+        onSleep={vi.fn()}
+        onWake={vi.fn()}
+        onUpdateShotSettings={vi.fn()}
+        onMenu={vi.fn()}
+        onSelectWorkflow={vi.fn()}
+        onSeeAllShots={vi.fn()}
+      />
+    ));
+
+    await waitFor(() => expect(screen.getByText('Before brew')).toBeInTheDocument());
+    expect(fetchLatestShot).toHaveBeenCalledTimes(1);
+
+    // Brew starts.
+    setMachine({
+      timestamp: '2026-05-22T08:00:00Z',
+      state: { state: 'espresso', substate: 'pouring' },
+      flow: 2,
+      pressure: 9,
+      targetFlow: 2,
+      targetPressure: 9,
+      mixTemperature: 92,
+      groupTemperature: 93,
+      targetMixTemperature: 92,
+      targetGroupTemperature: 93,
+      profileFrame: 1,
+      steamTemperature: 145,
+    });
+    // No refetch while still brewing.
+    expect(fetchLatestShot).toHaveBeenCalledTimes(1);
+
+    // Brew completes — state leaves espresso.
+    setMachine({
+      timestamp: '2026-05-22T08:00:30Z',
+      state: { state: 'idle', substate: 'idle' },
+      flow: 0,
+      pressure: 0,
+      targetFlow: 0,
+      targetPressure: 0,
+      mixTemperature: 92,
+      groupTemperature: 93,
+      targetMixTemperature: 92,
+      targetGroupTemperature: 93,
+      profileFrame: 0,
+      steamTemperature: 145,
+    });
+
+    await waitFor(() => expect(screen.getByText('After brew')).toBeInTheDocument());
+    expect(fetchLatestShot).toHaveBeenCalledTimes(2);
+  });
+
   it('hides all alert indications when water is healthy', async () => {
     render(() =>
       buildHome({ stubs: { water: { currentLevel: 40, refillLevel: 5 } } }),

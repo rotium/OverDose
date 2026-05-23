@@ -1,5 +1,5 @@
-import { type Component } from 'solid-js';
-import { api } from './api';
+import { createEffect, createSignal, type Accessor, type Component } from 'solid-js';
+import { api, type GatewayShotRecord } from './api';
 import { Header } from './components/Header';
 import { LastShotCard } from './components/LastShotCard';
 import { StatusPanel } from './components/StatusPanel';
@@ -44,6 +44,12 @@ export interface HomeProps {
   onMenu: () => void;
   onSelectWorkflow: (w: Workflow) => void;
   onSeeAllShots: () => void;
+  /**
+   * Optimistic in-memory shot for the LastShotCard hand-off (populated by
+   * App.tsx from the LiveShot accumulator the instant a brew freezes).
+   * Optional so Home tests don't need to wire up the live-shot stack.
+   */
+  optimisticShot?: Accessor<GatewayShotRecord | null>;
 }
 
 export const Home: Component<HomeProps> = (p) => {
@@ -74,6 +80,37 @@ export const Home: Component<HomeProps> = (p) => {
     if (isSleeping()) p.onWake();
     else p.onSleep();
   };
+
+  // Tick that increments every time we detect a brew just ended. The gateway
+  // doesn't emit a shot-complete event, so we derive it from snapshot stream
+  // transitions. We trigger on two signals — whichever arrives first wins:
+  //   1. `state` leaves `espresso` (the canonical end-of-shot transition)
+  //   2. `substate` enters `pouringDone` (often arrives a couple frames before
+  //      the state flip, depending on how the gateway closes out the shot)
+  // Starts at 1 (truthy) so the card's initial mount-fetch still runs.
+  const [shotCompletedTick, setShotCompletedTick] = createSignal(1);
+  let prevState: string | undefined;
+  let prevSubstate: string | undefined;
+  createEffect(() => {
+    const snap = machine.latest();
+    const curState = snap?.state.state;
+    const curSubstate = snap?.state.substate;
+
+    const stateLeftEspresso =
+      prevState === 'espresso' && curState !== undefined && curState !== 'espresso';
+    const enteredPouringDone =
+      prevSubstate !== 'pouringDone' && curSubstate === 'pouringDone';
+
+    if (stateLeftEspresso || enteredPouringDone) {
+      console.info(
+        '[Home] brew complete — refetching last shot',
+        { prevState, curState, prevSubstate, curSubstate },
+      );
+      setShotCompletedTick((n) => n + 1);
+    }
+    prevState = curState;
+    prevSubstate = curSubstate;
+  });
 
   // Block tiles (with droplet icon) only at the critical threshold.
   const disabledReason = (): DisabledReason | null => {
@@ -112,6 +149,8 @@ export const Home: Component<HomeProps> = (p) => {
             fetchSummary={p.fetchLatestShot}
             fetchFull={p.fetchShot}
             onSeeAll={p.onSeeAllShots}
+            refreshKey={shotCompletedTick}
+            optimisticShot={p.optimisticShot}
           />
         </aside>
       </main>

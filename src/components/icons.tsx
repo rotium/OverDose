@@ -113,6 +113,14 @@ export const SteamIcon: Component<IconProps> = (p) => {
   );
 };
 
+/** Clock — used as the "time-based auto-stop" hint on the STOP button. */
+export const ClockIcon: Component<IconProps> = (p) => (
+  <svg {...strokedSvgProps(p)}>
+    <circle cx="12" cy="12" r="9" />
+    <polyline points="12,7 12,12 15.5,14" />
+  </svg>
+);
+
 /** Crescent moon — Sleep button when machine is awake. */
 export const MoonIcon: Component<IconProps> = (p) => (
   <svg {...strokedSvgProps(p)}>

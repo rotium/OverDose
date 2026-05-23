@@ -26,16 +26,12 @@ export interface MachineInfo {
 export interface GatewayShotSummary {
   id: string;
   timestamp: string;
-  workflow?: {
-    name?: string;
-    description?: string;
-    context?: {
-      coffeeName?: string;
-      grinderModel?: string;
-      grinderSetting?: number;
-      dose?: number;
-    };
-  };
+  /**
+   * Full workflow envelope captured at shot start. Same shape as the live
+   * `/workflow` payload — reaprime persists this verbatim with each shot
+   * so the historical record carries profile, context, and recipe name.
+   */
+  workflow?: WorkflowSnapshot;
   annotations?: {
     actualDoseWeight?: number | null;
     actualYield?: number | null;
@@ -51,12 +47,53 @@ export interface GatewayShotMeasurement {
     mixTemperature: number;
     groupTemperature: number;
   };
-  scale?: { weight: number };
+  scale?: { weight: number; weightFlow?: number };
   volume?: number | null;
 }
 
 export interface GatewayShotRecord extends GatewayShotSummary {
   measurements: GatewayShotMeasurement[];
+}
+
+/**
+ * Workflow context as the gateway returns it from `GET /api/v1/workflow`.
+ * Mirrors reaprime's `WorkflowContext`; we type only what the live brew UI
+ * actually reads. `targetYield` is the value `ShotSequencer` watches to
+ * auto-stop the shot — for our progress bar, it's the canonical source.
+ */
+export interface WorkflowContextSnapshot {
+  coffeeName?: string;
+  grinderModel?: string;
+  grinderSetting?: number;
+  targetDoseWeight?: number;
+  /** Final-stop weight in grams. 0 (or missing) means no auto-stop. */
+  targetYield?: number;
+}
+
+/**
+ * Profile step — name for the live view, plus seconds so we can compute the
+ * profile's natural-end time (sum across steps) as the time-based auto-stop
+ * trigger for the STOP-button progress fill.
+ */
+export interface ProfileStepSnapshot {
+  name: string;
+  /** Step duration in seconds. Summed across steps to estimate the
+   *  profile's natural end-of-shot time. May be absent on older payloads. */
+  seconds?: number;
+}
+
+/** Profile envelope from the current workflow. */
+export interface ProfileSnapshot {
+  title: string;
+  steps?: ProfileStepSnapshot[];
+}
+
+/** Gateway's current workflow envelope. */
+export interface WorkflowSnapshot {
+  name?: string;
+  description?: string;
+  context?: WorkflowContextSnapshot;
+  profile?: ProfileSnapshot;
 }
 
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
@@ -100,4 +137,11 @@ export const api = {
   /** Full shot record including measurements (for the mini chart). */
   shotById: (id: string) =>
     fetchJson<GatewayShotRecord>(`/api/v1/shots/${encodeURIComponent(id)}`),
+
+  /**
+   * Current workflow context — used by the live brew drawer to read the
+   * weight target (`context.targetYield`) so it can render a progress bar.
+   * Snapshotted once when the drawer opens; the WS streams don't expose it.
+   */
+  workflow: () => fetchJson<WorkflowSnapshot>('/api/v1/workflow'),
 };

@@ -43,6 +43,13 @@ export interface MachineSnapshot {
 export interface ScaleSnapshot {
   timestamp: string;
   weight: number;
+  /**
+   * Scale-derived flow in g/s (rate of mass accumulation in the cup),
+   * smoothed by reaprime's `FlowCalculator` over a ~600 ms window. Distinct
+   * from `MachineSnapshot.flow` (mL/s, sensed at the group head) — see
+   * `weight flow` in the live brew chart.
+   */
+  weightFlow: number;
   batteryLevel: number;
 }
 
