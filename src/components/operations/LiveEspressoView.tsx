@@ -2,10 +2,10 @@ import { For, Show, createMemo, createSignal, type Component } from 'solid-js';
 import type { ProfileSnapshot } from '../../api';
 import type { LiveShotAccumulator, LiveShotReadouts } from '../../liveShot';
 import {
-  DEFAULT_TRACE_VISIBILITY,
   type TraceKey,
   type TraceVisibility,
 } from '../../prefs';
+import { useUserPrefs } from '../../UserPrefsContext';
 import type { MachineSubstate } from '../../snapshot';
 import { TRACE_COLOR } from '../chartTraces';
 import { ClockIcon, ScaleIcon } from '../icons';
@@ -137,11 +137,12 @@ const LEGEND: Array<{
 ];
 
 export const LiveEspressoView: Component<LiveEspressoViewProps> = (p) => {
-  // Per-shot visibility — toggled by clicking legend items, reset implicitly
-  // each time this view mounts (i.e. each new brew). If we ever want
-  // persistence across brews, lift this into a UserPrefsContext.
+  const prefs = useUserPrefs();
+  // Per-shot visibility — seeded from the user's saved defaults so legend
+  // toggles within a shot don't persist to the next, but the starting state
+  // matches what the user configured in Settings.
   const [visibility, setVisibility] = createSignal<TraceVisibility>(
-    DEFAULT_TRACE_VISIBILITY,
+    prefs.traceVisibility(),
   );
   const toggleTrace = (key: TraceKey): void => {
     setVisibility({ ...visibility(), [key]: !visibility()[key] });
@@ -282,6 +283,7 @@ export const LiveEspressoView: Component<LiveEspressoViewProps> = (p) => {
           frameCount={p.acc.frameCount}
           profile={p.acc.currentProfile}
           visibility={visibility}
+          smoothing={prefs.chartSmoothing()}
         />
       </div>
 

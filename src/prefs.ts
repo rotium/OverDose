@@ -54,3 +54,11 @@ export const DEFAULT_TRACE_VISIBILITY: TraceVisibility = {
   mixTemp: true,
   targets: true,
 };
+
+/**
+ * Display unit for the water-tank level. Reaprime streams `currentLevel` in
+ * mm; the skin defaults to converting to mL for the user-facing readout.
+ * `both` shows mL with a small mm secondary.
+ */
+export type WaterUnit = 'mL' | 'mm' | 'both';
+export const DEFAULT_WATER_UNIT: WaterUnit = 'mL';

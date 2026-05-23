@@ -15,6 +15,7 @@ import type {
   WaterLevelsSnapshot,
 } from './snapshot';
 import { createWsStream, type WsStream } from './streams';
+import { useUserPrefs } from './UserPrefsContext';
 import { isWaterBlocked, waterSeverity, type WaterSeverity } from './water';
 
 /**
@@ -64,11 +65,15 @@ export const Home: Component<HomeProps> = (p) => {
     p.onUpdateShotSettings({ ...current, steamSetting: next ? 1 : 0 });
   };
 
+  const prefs = useUserPrefs();
+
   // Single source of truth for the water-alert UI. Before any frame arrives
   // we say 'normal' — a missing snapshot shouldn't pretend the tank is empty.
   const severity = (): WaterSeverity => {
     const w = waterLevels.latest();
-    return w ? waterSeverity(w.currentLevel) : 'normal';
+    return w
+      ? waterSeverity(w.currentLevel, prefs.waterWarnMm(), prefs.waterBlockMm())
+      : 'normal';
   };
 
   // Mirrors streamline.js: button shows "Sleep" (moon) when awake, "Awake"
@@ -116,7 +121,9 @@ export const Home: Component<HomeProps> = (p) => {
   const disabledReason = (): DisabledReason | null => {
     const w = waterLevels.latest();
     if (!w) return null;
-    return isWaterBlocked(w.currentLevel) ? 'low-water' : null;
+    return isWaterBlocked(w.currentLevel, prefs.waterBlockMm())
+      ? 'low-water'
+      : null;
   };
 
   return (

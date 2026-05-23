@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { StatusPanel } from './StatusPanel';
+import { WithPrefs } from '../test/prefs';
 import type {
   MachineSnapshot,
   ScaleMessage,
@@ -56,13 +57,15 @@ const setup = (init: Inputs = {}) => {
   );
   const onSteamToggle = init.onSteamToggle ?? vi.fn();
   render(() => (
-    <StatusPanel
-      machine={machine}
-      scale={scale}
-      shotSettings={shotSettings}
-      waterLevels={waterLevels}
-      onSteamToggle={onSteamToggle}
-    />
+    <WithPrefs>
+      <StatusPanel
+        machine={machine}
+        scale={scale}
+        shotSettings={shotSettings}
+        waterLevels={waterLevels}
+        onSteamToggle={onSteamToggle}
+      />
+    </WithPrefs>
   ));
   return {
     setMachine,

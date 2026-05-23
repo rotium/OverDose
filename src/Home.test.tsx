@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import { render as solidRender, screen, fireEvent, waitFor } from '@solidjs/testing-library';
+import { createSignal, type JSX } from 'solid-js';
+import { WithPrefs } from './test/prefs';
+
+// Same auto-wrap pattern used in LiveEspressoView.test — Home reads prefs.
+const render = (factory: () => JSX.Element) =>
+  solidRender(() => <WithPrefs>{factory()}</WithPrefs>);
 
 // Chart is not the subject under test here.
 vi.mock('./components/ShotMiniChart', () => ({

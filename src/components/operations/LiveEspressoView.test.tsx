@@ -1,8 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen, fireEvent } from '@solidjs/testing-library';
-import { createRoot } from 'solid-js';
+import { render as solidRender, screen, fireEvent } from '@solidjs/testing-library';
+import { createRoot, type JSX } from 'solid-js';
 import { LiveEspressoView } from './LiveEspressoView';
 import { createLiveShotAccumulator, type LiveShotFrame } from '../../liveShot';
+import { WithPrefs } from '../../test/prefs';
+
+// Auto-wrap every render call with a UserPrefsProvider — LiveEspressoView
+// reads from the prefs context now, but the tests don't care about pref
+// values, so we wrap once at the helper level instead of editing each call.
+const render = (factory: () => JSX.Element) =>
+  solidRender(() => <WithPrefs>{factory()}</WithPrefs>);
 
 // Stub the streaming chart: jsdom has no canvas and the chart's correctness
 // is uPlot's, not ours. We surface the frameCount prop value as a data

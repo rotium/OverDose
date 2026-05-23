@@ -1,0 +1,128 @@
+import {
+  createContext,
+  createEffect,
+  createSignal,
+  useContext,
+  type Accessor,
+  type Component,
+  type JSX,
+} from 'solid-js';
+import {
+  DEFAULT_CHART_SMOOTHING,
+  DEFAULT_TRACE_VISIBILITY,
+  DEFAULT_WATER_UNIT,
+  type ChartSmoothing,
+  type TraceVisibility,
+  type WaterUnit,
+} from './prefs';
+import { WATER_BLOCK_MM, WATER_WARN_MM } from './water';
+
+const STORAGE_KEY = 'starter-skin.prefs.v1';
+
+/**
+ * Shape persisted to localStorage. All fields optional so a future field
+ * addition is forward-compatible with stored blobs from older versions —
+ * missing keys fall back to defaults.
+ */
+interface PersistedPrefs {
+  waterUnit?: WaterUnit;
+  waterWarnMm?: number;
+  waterBlockMm?: number;
+  chartSmoothing?: ChartSmoothing;
+  traceVisibility?: TraceVisibility;
+}
+
+export interface UserPrefsContextValue {
+  waterUnit: Accessor<WaterUnit>;
+  setWaterUnit: (u: WaterUnit) => void;
+  waterWarnMm: Accessor<number>;
+  setWaterWarnMm: (mm: number) => void;
+  waterBlockMm: Accessor<number>;
+  setWaterBlockMm: (mm: number) => void;
+  chartSmoothing: Accessor<ChartSmoothing>;
+  setChartSmoothing: (s: ChartSmoothing) => void;
+  traceVisibility: Accessor<TraceVisibility>;
+  setTraceVisibility: (v: TraceVisibility) => void;
+  /** Update a single trace flag without rebuilding the whole object inline. */
+  setTraceVisible: (k: keyof TraceVisibility, v: boolean) => void;
+}
+
+const Ctx = createContext<UserPrefsContextValue>();
+
+const readPersisted = (storage: Storage): PersistedPrefs => {
+  const raw = storage.getItem(STORAGE_KEY);
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as PersistedPrefs;
+    return typeof parsed === 'object' && parsed !== null ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+export interface UserPrefsProviderProps {
+  /** Injectable for tests; defaults to `globalThis.localStorage`. */
+  storage?: Storage;
+  children?: JSX.Element;
+}
+
+export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
+  const storage = p.storage ?? globalThis.localStorage;
+  const initial = readPersisted(storage);
+
+  const [waterUnit, setWaterUnit] = createSignal<WaterUnit>(
+    initial.waterUnit ?? DEFAULT_WATER_UNIT,
+  );
+  const [waterWarnMm, setWaterWarnMm] = createSignal<number>(
+    initial.waterWarnMm ?? WATER_WARN_MM,
+  );
+  const [waterBlockMm, setWaterBlockMm] = createSignal<number>(
+    initial.waterBlockMm ?? WATER_BLOCK_MM,
+  );
+  const [chartSmoothing, setChartSmoothing] = createSignal<ChartSmoothing>(
+    initial.chartSmoothing ?? DEFAULT_CHART_SMOOTHING,
+  );
+  const [traceVisibility, setTraceVisibility] = createSignal<TraceVisibility>(
+    initial.traceVisibility ?? DEFAULT_TRACE_VISIBILITY,
+  );
+
+  const setTraceVisible = (k: keyof TraceVisibility, v: boolean) =>
+    setTraceVisibility({ ...traceVisibility(), [k]: v });
+
+  // Persist on any change. The first run is a no-op write of the same content
+  // we just hydrated — harmless and avoids a special-case "skip first" guard.
+  createEffect(() => {
+    const shape: PersistedPrefs = {
+      waterUnit: waterUnit(),
+      waterWarnMm: waterWarnMm(),
+      waterBlockMm: waterBlockMm(),
+      chartSmoothing: chartSmoothing(),
+      traceVisibility: traceVisibility(),
+    };
+    storage.setItem(STORAGE_KEY, JSON.stringify(shape));
+  });
+
+  const value: UserPrefsContextValue = {
+    waterUnit,
+    setWaterUnit,
+    waterWarnMm,
+    setWaterWarnMm,
+    waterBlockMm,
+    setWaterBlockMm,
+    chartSmoothing,
+    setChartSmoothing,
+    traceVisibility,
+    setTraceVisibility,
+    setTraceVisible,
+  };
+
+  return <Ctx.Provider value={value}>{p.children}</Ctx.Provider>;
+};
+
+export function useUserPrefs(): UserPrefsContextValue {
+  const ctx = useContext(Ctx);
+  if (!ctx) {
+    throw new Error('useUserPrefs must be used inside <UserPrefsProvider>');
+  }
+  return ctx;
+}

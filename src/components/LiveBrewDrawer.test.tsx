@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { LiveBrewDrawer } from './LiveBrewDrawer';
 import { LiveShotProvider } from '../LiveShotContext';
+import { WithPrefs } from '../test/prefs';
 import type { MachineSnapshot, ScaleMessage } from '../snapshot';
 import type { WorkflowSnapshot } from '../api';
 import type { WsStatus, WsStream } from '../streams';
@@ -42,14 +43,16 @@ const setupDrawer = (initial?: {
   const onStop = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
 
   render(() => (
-    <LiveShotProvider
-      machineStream={machineStream}
-      scaleStream={scaleStream}
-      fetchWorkflow={fetchWorkflow}
-      onStop={onStop}
-    >
-      <LiveBrewDrawer />
-    </LiveShotProvider>
+    <WithPrefs>
+      <LiveShotProvider
+        machineStream={machineStream}
+        scaleStream={scaleStream}
+        fetchWorkflow={fetchWorkflow}
+        onStop={onStop}
+      >
+        <LiveBrewDrawer />
+      </LiveShotProvider>
+    </WithPrefs>
   ));
 
   return { setMachine, onStop };

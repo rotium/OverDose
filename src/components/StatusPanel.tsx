@@ -7,7 +7,9 @@ import {
   type ShotSettingsSnapshot,
   type WaterLevelsSnapshot,
 } from '../snapshot';
+import { useUserPrefs } from '../UserPrefsContext';
 import { mmToMl, waterPct, waterSeverity } from '../water';
+import type { WaterUnit } from '../prefs';
 import {
   PowerIcon,
   ScaleIcon,
@@ -29,6 +31,19 @@ const fmtWeight = (w: number | null | undefined) =>
 const dataFrame = (msg: ScaleMessage | null): ScaleSnapshot | null =>
   msg && !isScaleStatusFrame(msg) ? msg : null;
 
+const formatWaterLevel = (mm: number, unit: WaterUnit): string => {
+  const mlPart = `${Math.round(mmToMl(mm))} mL`;
+  const mmPart = `${mm.toFixed(0)} mm`;
+  switch (unit) {
+    case 'mL':
+      return mlPart;
+    case 'mm':
+      return mmPart;
+    case 'both':
+      return `${mlPart} · ${mmPart}`;
+  }
+};
+
 /**
  * StatusPanel — right-column dashboard for the Home screen. Renders machine
  * state, group/steam temps, water level, scale, and a steam on/off toggle.
@@ -47,8 +62,11 @@ export interface StatusPanelProps {
 }
 
 export const StatusPanel: Component<StatusPanelProps> = (p) => {
+  const prefs = useUserPrefs();
   const steamOn = () => (p.shotSettings()?.steamSetting ?? 0) > 0;
   const scaleData = () => dataFrame(p.scale());
+  const sev = (mm: number) =>
+    waterSeverity(mm, prefs.waterWarnMm(), prefs.waterBlockMm());
 
   return (
     <section class="card status">
@@ -94,13 +112,13 @@ export const StatusPanel: Component<StatusPanelProps> = (p) => {
           </button>
         </dd>
 
-        <dt data-severity={p.waterLevels() ? waterSeverity(p.waterLevels()!.currentLevel) : 'normal'}>
+        <dt data-severity={p.waterLevels() ? sev(p.waterLevels()!.currentLevel) : 'normal'}>
           <WaterDropIcon size={16} />
           <span>Water</span>
         </dt>
         <dd
           data-testid="status-water"
-          data-severity={p.waterLevels() ? waterSeverity(p.waterLevels()!.currentLevel) : 'normal'}
+          data-severity={p.waterLevels() ? sev(p.waterLevels()!.currentLevel) : 'normal'}
         >
           <Show when={p.waterLevels()} fallback={<span class="muted">—</span>}>
             {(w) => {
@@ -108,18 +126,18 @@ export const StatusPanel: Component<StatusPanelProps> = (p) => {
               // when the outer Show's truthy/falsy flips, so capturing the
               // severity value once would stick at its first-seen state
               // (bug: banner stayed visible after refilling past critical).
-              const sev = () => waterSeverity(w().currentLevel);
+              const rowSev = () => sev(w().currentLevel);
               return (
                 <span class="status__row status__row--wrap">
-                  <span>{Math.round(mmToMl(w().currentLevel))} mL</span>
+                  <span>{formatWaterLevel(w().currentLevel, prefs.waterUnit())}</span>
                   <span class="bar" aria-hidden="true">
                     <span
                       class="bar__fill"
-                      data-severity={sev()}
+                      data-severity={rowSev()}
                       style={{ width: `${waterPct(w().currentLevel) * 100}%` }}
                     />
                   </span>
-                  <Show when={sev() === 'critical'}>
+                  <Show when={rowSev() === 'critical'}>
                     <span
                       class="status__water-banner"
                       role="status"

@@ -1,10 +1,12 @@
-import { createEffect, createSignal, type Component } from 'solid-js';
+import { Show, createEffect, createSignal, type Component } from 'solid-js';
 import { api, type GatewayShotRecord } from './api';
 import { Home, defaultStreams } from './Home';
 import { LiveBrewDrawer } from './components/LiveBrewDrawer';
+import { Settings } from './components/settings/Settings';
 import { LiveShotProvider, useLiveShot } from './LiveShotContext';
 import { frozenToGatewayShotRecord } from './liveShotAdapter';
 import { LocalWorkflowRepository } from './repositories';
+import { UserPrefsProvider } from './UserPrefsContext';
 import type { Workflow } from './domain';
 import type {
   MachineSnapshot,
@@ -32,7 +34,6 @@ const onUpdateShotSettings = (settings: ShotSettingsSnapshot) =>
     console.warn('updateShotSettings failed', e),
   );
 
-const onMenu = () => console.info('menu — TODO: open drawer');
 const onSelectWorkflow = (w: Workflow) =>
   console.info('selected workflow — TODO: route to runtime', w);
 const onSeeAllShots = () => console.info('see all shots — TODO: route to history');
@@ -54,6 +55,12 @@ interface AppStreams {
 
 const AppBody: Component<{ streams: AppStreams }> = (p) => {
   const live = useLiveShot();
+  // Settings overlay is a single-screen swap today (no router). The header's
+  // menu button opens it; back / × close it. A future menu drawer would
+  // wrap this in a richer navigator.
+  const [settingsOpen, setSettingsOpen] = createSignal(false);
+  const onMenu = () => setSettingsOpen(true);
+  const onCloseSettings = () => setSettingsOpen(false);
   // Frozen-shot hand-off to LastShotCard. The signal is *sticky*: it's set
   // once on each freeze and persists until the next brew overwrites it.
   //
@@ -88,24 +95,31 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
 
   return (
     <>
-      <div class="home-host" inert={homeInert()} data-testid="home-host">
-        <Home
-          workflowRepository={workflowRepository}
-          machineStream={() => p.streams.machine}
-          scaleStream={() => p.streams.scale}
-          shotSettingsStream={() => p.streams.shotSettings}
-          waterLevelsStream={() => p.streams.waterLevels}
-          fetchLatestShot={api.shotsLatest}
-          fetchShot={api.shotById}
-          onSleep={onSleep}
-          onWake={onWake}
-          onUpdateShotSettings={onUpdateShotSettings}
-          onMenu={onMenu}
-          onSelectWorkflow={onSelectWorkflow}
-          onSeeAllShots={onSeeAllShots}
-          optimisticShot={optimisticShot}
-        />
-      </div>
+      <Show
+        when={!settingsOpen()}
+        fallback={
+          <Settings onBack={onCloseSettings} onClose={onCloseSettings} />
+        }
+      >
+        <div class="home-host" inert={homeInert()} data-testid="home-host">
+          <Home
+            workflowRepository={workflowRepository}
+            machineStream={() => p.streams.machine}
+            scaleStream={() => p.streams.scale}
+            shotSettingsStream={() => p.streams.shotSettings}
+            waterLevelsStream={() => p.streams.waterLevels}
+            fetchLatestShot={api.shotsLatest}
+            fetchShot={api.shotById}
+            onSleep={onSleep}
+            onWake={onWake}
+            onUpdateShotSettings={onUpdateShotSettings}
+            onMenu={onMenu}
+            onSelectWorkflow={onSelectWorkflow}
+            onSeeAllShots={onSeeAllShots}
+            optimisticShot={optimisticShot}
+          />
+        </div>
+      </Show>
       <LiveBrewDrawer />
     </>
   );
@@ -120,13 +134,15 @@ export const App: Component = () => {
   };
 
   return (
-    <LiveShotProvider
-      machineStream={streams.machine}
-      scaleStream={streams.scale}
-      fetchWorkflow={api.workflow}
-      onStop={onStop}
-    >
-      <AppBody streams={streams} />
-    </LiveShotProvider>
+    <UserPrefsProvider>
+      <LiveShotProvider
+        machineStream={streams.machine}
+        scaleStream={streams.scale}
+        fetchWorkflow={api.workflow}
+        onStop={onStop}
+      >
+        <AppBody streams={streams} />
+      </LiveShotProvider>
+    </UserPrefsProvider>
   );
 };
