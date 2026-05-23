@@ -1,25 +1,15 @@
 /**
- * Operations: atomic actions the machine system performs (machine-driven).
- * Closed set, predefined in code. User cannot extend.
+ * Step types: the machine actions that make up a Beverage's step sequence.
+ * Closed set, predefined in code — the user composes Beverages by picking
+ * from these but cannot add new types.
  *
- * Scale-driven actions count as machine Operations because the scale
- * integrates with the machine system (auto-tare, stop-at-weight, etc.).
+ * Bean / Profile / Grinder + setting / Dose weight are NOT step types —
+ * they're per-Recipe metadata (see `recipe.ts`). The pre-brew prep work
+ * (weighing dose, grinding) is derived from those Recipe fields at run
+ * time, not declared as Beverage steps.
+ *
+ * `auto-purge` is NOT a step type — it's a SteamConfig field (see
+ * `steps.ts`).
  */
-export const OPERATION_TYPES = ['brew', 'steam', 'water', 'flush', 'weight'] as const;
-export type OperationType = (typeof OPERATION_TYPES)[number];
-
-/**
- * Prep activities: user-driven setup steps. Closed set, predefined.
- * Not Operations — these are things the user does, not the machine.
- */
-export const PREP_TYPES = ['bean-selection', 'profile-selection', 'grind'] as const;
-export type PrepType = (typeof PREP_TYPES)[number];
-
-/** Step types: union of Operations + Prep activities. */
-export type StepType = OperationType | PrepType;
-export const ALL_STEP_TYPES = [...OPERATION_TYPES, ...PREP_TYPES] as const;
-
-export const isOperationType = (t: StepType): t is OperationType =>
-  (OPERATION_TYPES as readonly string[]).includes(t);
-export const isPrepType = (t: StepType): t is PrepType =>
-  (PREP_TYPES as readonly string[]).includes(t);
+export const STEP_TYPES = ['brew', 'steam', 'water', 'flush'] as const;
+export type StepType = (typeof STEP_TYPES)[number];

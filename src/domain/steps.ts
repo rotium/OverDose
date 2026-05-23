@@ -1,12 +1,12 @@
-import type { OperationType, PrepType, StepType } from './operations';
+import type { StepType } from './operations';
 
 /**
- * Per-Step configuration. Each Step type has its own shape — see
+ * Per-Step configuration. Each step type has its own shape — see
  * [[starter-skin-vocabulary]]. All fields are optional at every layer
  * (Beverage default, Recipe override, run-time override) so unset values
  * cascade through the resolution chain.
  *
- * `auto purge` is *not* a Step on its own — it's a SteamConfig field
+ * `auto purge` is *not* a step on its own — it's a SteamConfig field
  * (`autoPurgeTimeSec`) because it's only meaningful after steaming and its
  * delay is a personal preference at the beverage level. Missing/0 means
  * manual purge.
@@ -28,19 +28,6 @@ export interface WaterConfig {
 export interface FlushConfig {
   durationSec?: number;
 }
-export interface WeightConfig {
-  targetGrams?: number;
-}
-export interface BeanSelectionConfig {
-  beanId?: string;
-}
-export interface ProfileSelectionConfig {
-  profileId?: string;
-}
-export interface GrindConfig {
-  grinderId?: string;
-  grinderSetting?: number;
-}
 
 /**
  * Type-level map from StepType → config shape. Used by Recipe overrides
@@ -53,10 +40,6 @@ export interface StepConfigByType {
   steam: SteamConfig;
   water: WaterConfig;
   flush: FlushConfig;
-  weight: WeightConfig;
-  'bean-selection': BeanSelectionConfig;
-  'profile-selection': ProfileSelectionConfig;
-  grind: GrindConfig;
 }
 
 /** Union of every step's config shape — useful for storage typing. */
@@ -70,12 +53,6 @@ export type Step =
   | { type: 'brew'; config: BrewConfig }
   | { type: 'steam'; config: SteamConfig }
   | { type: 'water'; config: WaterConfig }
-  | { type: 'flush'; config: FlushConfig }
-  | { type: 'weight'; config: WeightConfig }
-  | { type: 'bean-selection'; config: BeanSelectionConfig }
-  | { type: 'profile-selection'; config: ProfileSelectionConfig }
-  | { type: 'grind'; config: GrindConfig };
+  | { type: 'flush'; config: FlushConfig };
 
 export type StepOfType<T extends StepType> = Extract<Step, { type: T }>;
-export type OperationStep = StepOfType<OperationType>;
-export type PrepStep = StepOfType<PrepType>;

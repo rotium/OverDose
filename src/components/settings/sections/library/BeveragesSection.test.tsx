@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { render, screen, waitFor } from '@solidjs/testing-library';
+import { render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
 import { BeveragesSection } from './BeveragesSection';
 import { WithRepositories } from '../../../../test/repositories';
 import {
@@ -15,8 +15,8 @@ const seedBeverage = (id: string, name: string, hidden = false): Beverage => ({
   name,
   hidden,
   steps: [
-    beverageStep('bean-selection', {}),
     beverageStep('brew', { targetYieldGrams: 36 }),
+    beverageStep('steam', { durationSec: 30 }),
   ],
 });
 
@@ -74,5 +74,60 @@ describe('BeveragesSection', () => {
     await waitFor(() =>
       expect(screen.getByTestId('beverage-row-one-step')).toHaveTextContent('1 step'),
     );
+  });
+
+  describe('list ↔ side-sheet editor', () => {
+    it('clicking a row opens the side-sheet editor over the list', async () => {
+      await setupWith([seedBeverage('a', 'Espresso')]);
+      await waitFor(() => screen.getByTestId('beverage-row-a'));
+      fireEvent.click(screen.getByTestId('beverage-row-a'));
+      await waitFor(() => screen.getByTestId('beverage-editor'));
+      // Sheet + backdrop appear; list stays in the DOM behind the backdrop.
+      expect(screen.getByTestId('side-sheet')).toHaveAttribute('data-state', 'open');
+      expect(screen.getByTestId('side-sheet-backdrop')).toBeInTheDocument();
+      expect(screen.getByTestId('beverages-list')).toBeInTheDocument();
+    });
+
+    it('sheet close (X) dismisses the editor with a slide-out, then unmounts', async () => {
+      await setupWith([seedBeverage('a', 'Espresso')]);
+      await waitFor(() => screen.getByTestId('beverage-row-a'));
+      fireEvent.click(screen.getByTestId('beverage-row-a'));
+      await waitFor(() => screen.getByTestId('beverage-editor'));
+
+      fireEvent.click(screen.getByTestId('side-sheet-close'));
+      // Slide-out state is flipped immediately.
+      expect(screen.getByTestId('side-sheet')).toHaveAttribute('data-state', 'closing');
+      // Then the sheet unmounts after the animation completes.
+      await waitFor(
+        () => expect(screen.queryByTestId('beverage-editor')).not.toBeInTheDocument(),
+        { timeout: 600 },
+      );
+    });
+
+    it('clicking the backdrop dismisses the sheet', async () => {
+      await setupWith([seedBeverage('a', 'Espresso')]);
+      await waitFor(() => screen.getByTestId('beverage-row-a'));
+      fireEvent.click(screen.getByTestId('beverage-row-a'));
+      await waitFor(() => screen.getByTestId('beverage-editor'));
+
+      fireEvent.click(screen.getByTestId('side-sheet-backdrop'));
+      await waitFor(
+        () => expect(screen.queryByTestId('beverage-editor')).not.toBeInTheDocument(),
+        { timeout: 600 },
+      );
+    });
+
+    it('Escape key dismisses the sheet', async () => {
+      await setupWith([seedBeverage('a', 'Espresso')]);
+      await waitFor(() => screen.getByTestId('beverage-row-a'));
+      fireEvent.click(screen.getByTestId('beverage-row-a'));
+      await waitFor(() => screen.getByTestId('beverage-editor'));
+
+      fireEvent.keyDown(window, { key: 'Escape' });
+      await waitFor(
+        () => expect(screen.queryByTestId('beverage-editor')).not.toBeInTheDocument(),
+        { timeout: 600 },
+      );
+    });
   });
 });

@@ -4,22 +4,18 @@ import type { Beverage } from '../domain';
 /**
  * Seed Beverages shipped on first run. IDs are stable so a re-seed never
  * collides with user data. Per-step ids are also stable so seed Recipes
- * can reference them by id from a separate file.
+ * can reference them by id from a separate file (none do today, but the
+ * shape is preserved for future use).
  *
- * Each Beverage carries the structural sequence + Beverage-level defaults
- * (target weights, yields, durations). Seed Recipes that reference these
- * Beverages start with no overrides — users add overrides as they tune
- * specific bean/batch values.
+ * Steps are only the machine actions the gateway runs (brew / steam /
+ * water / flush). Bean / Profile / Grinder / Dose are Recipe-level and
+ * not part of these definitions.
  */
 export const SEED_BEVERAGES: Beverage[] = [
   {
     id: 'seed-bev-espresso',
     name: 'Espresso',
     steps: [
-      beverageStep('bean-selection', {}, 'seed-bev-espresso-bean'),
-      beverageStep('profile-selection', {}, 'seed-bev-espresso-profile'),
-      beverageStep('grind', {}, 'seed-bev-espresso-grind'),
-      beverageStep('weight', { targetGrams: 18 }, 'seed-bev-espresso-weight'),
       beverageStep(
         'brew',
         { targetYieldGrams: 36, stopAtWeight: true },
@@ -31,10 +27,6 @@ export const SEED_BEVERAGES: Beverage[] = [
     id: 'seed-bev-cappuccino',
     name: 'Cappuccino',
     steps: [
-      beverageStep('bean-selection', {}, 'seed-bev-cappuccino-bean'),
-      beverageStep('profile-selection', {}, 'seed-bev-cappuccino-profile'),
-      beverageStep('grind', {}, 'seed-bev-cappuccino-grind'),
-      beverageStep('weight', { targetGrams: 18 }, 'seed-bev-cappuccino-weight'),
       beverageStep(
         'brew',
         { targetYieldGrams: 36, stopAtWeight: true },
@@ -52,10 +44,6 @@ export const SEED_BEVERAGES: Beverage[] = [
     id: 'seed-bev-americano',
     name: 'Americano',
     steps: [
-      beverageStep('bean-selection', {}, 'seed-bev-americano-bean'),
-      beverageStep('profile-selection', {}, 'seed-bev-americano-profile'),
-      beverageStep('grind', {}, 'seed-bev-americano-grind'),
-      beverageStep('weight', { targetGrams: 18 }, 'seed-bev-americano-weight'),
       beverageStep(
         'brew',
         { targetYieldGrams: 36, stopAtWeight: true },
@@ -68,10 +56,6 @@ export const SEED_BEVERAGES: Beverage[] = [
     id: 'seed-bev-flat-white',
     name: 'Flat White',
     steps: [
-      beverageStep('bean-selection', {}, 'seed-bev-flat-white-bean'),
-      beverageStep('profile-selection', {}, 'seed-bev-flat-white-profile'),
-      beverageStep('grind', {}, 'seed-bev-flat-white-grind'),
-      beverageStep('weight', { targetGrams: 18 }, 'seed-bev-flat-white-weight'),
       beverageStep(
         'brew',
         { targetYieldGrams: 40, stopAtWeight: true },
@@ -89,10 +73,6 @@ export const SEED_BEVERAGES: Beverage[] = [
     id: 'seed-bev-latte',
     name: 'Latte',
     steps: [
-      beverageStep('bean-selection', {}, 'seed-bev-latte-bean'),
-      beverageStep('profile-selection', {}, 'seed-bev-latte-profile'),
-      beverageStep('grind', {}, 'seed-bev-latte-grind'),
-      beverageStep('weight', { targetGrams: 18 }, 'seed-bev-latte-weight'),
       beverageStep(
         'brew',
         { targetYieldGrams: 36, stopAtWeight: true },

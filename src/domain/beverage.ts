@@ -11,10 +11,11 @@ import type { StepType } from './operations';
 export type BeverageStep = Step & { id: string };
 
 /**
- * A Beverage: "how I brew this drink" — a sequence of steps plus
- * Beverage-level default config per step. Carries my personal preferences
- * for the beverage as a whole (purge timing, flush durations, etc.); the
- * per-bean/per-batch values live on Recipes that reference this Beverage.
+ * A Beverage: "how I brew this drink" — an ordered sequence of machine
+ * steps (brew / steam / water / flush) plus Beverage-level default config
+ * per step. Carries personal preferences for the beverage as a whole
+ * (purge timing, default yields). The per-bean/per-batch values live on
+ * Recipes that reference this Beverage.
  *
  * `hidden` marks a Beverage as a private clone created by detaching a
  * single Recipe from its parent (see [[starter-skin-vocabulary]]). The

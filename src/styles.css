@@ -958,7 +958,11 @@ html {
   display: grid;
   grid-template-columns: 160px 1fr;
   gap: 1.5rem;
-  align-items: start;
+  align-items: stretch;
+  /* Fill the parent (.settings__content) so the right column has a real
+     height — a side sheet positioned within it can then stretch to the
+     same height instead of being bounded by its own short content. */
+  min-height: 100%;
 }
 
 .settings-subnav__nav {
@@ -967,8 +971,18 @@ html {
   gap: 0.25rem;
   border-right: 1px solid var(--border);
   padding-right: 0.5rem;
+  /* `start` keeps the buttons at the top of the stretched column —
+     otherwise they'd center along its full height. */
+  align-self: start;
   position: sticky;
   top: 0;
+}
+
+.settings-subnav__content {
+  min-width: 0;
+  /* Stretching the grid item alone isn't enough — the section inside
+     needs the height to propagate. */
+  height: 100%;
 }
 
 .settings-subnav__tab {
@@ -992,10 +1006,6 @@ html {
   color: var(--fg);
   border-left-color: var(--accent);
   background: rgba(59, 130, 246, 0.08);
-}
-
-.settings-subnav__content {
-  min-width: 0;
 }
 
 /* Variant: stack the label above the control instead of side-by-side. Used
@@ -1039,4 +1049,221 @@ html {
   font-size: 0.85rem;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+}
+
+/* Clickable row variant — wraps the row contents in a borderless button so
+   the whole row is the tap target (consistent with tile pattern). */
+.library-list__row--clickable {
+  padding: 0;
+}
+
+.library-list__button {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.library-list__button:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* ─── Side sheet (Beverage editor host) ───────────────────────────── */
+
+/* Anchor for the absolutely-positioned sheet + backdrop. The section
+   itself uses normal flow above; sheet overlays its bounds. */
+.beverages-section {
+  position: relative;
+  min-height: 100%;
+}
+
+.side-sheet__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 10;
+  animation: backdrop-fade-in 200ms ease forwards;
+}
+
+.side-sheet__backdrop[data-state='closing'] {
+  animation: backdrop-fade-out 280ms ease forwards;
+}
+
+@keyframes backdrop-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes backdrop-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.side-sheet {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(70%, 720px);
+  background: var(--bg-elev);
+  border-left: 1px solid var(--border-strong);
+  box-shadow: -16px 0 50px rgba(0, 0, 0, 0.55);
+  z-index: 11;
+  overflow: auto;
+  animation: sheet-slide-in 280ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+
+.side-sheet[data-state='closing'] {
+  animation: sheet-slide-out 280ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+
+@keyframes sheet-slide-in {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+@keyframes sheet-slide-out {
+  from { transform: translateX(0); }
+  to   { transform: translateX(100%); }
+}
+
+.side-sheet__close {
+  position: sticky;
+  top: 0.5rem;
+  float: right;
+  margin: 0.5rem 0.5rem 0 0;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  width: 2rem;
+  height: 2rem;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 12;
+}
+
+.side-sheet__close:hover {
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.side-sheet__body {
+  padding: 1rem 1.25rem 1.25rem;
+}
+
+/* ─── Beverage editor ─────────────────────────────────────────────── */
+
+.beverage-editor__title {
+  margin: 0 0 0.5rem;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.beverage-editor__name {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  font: inherit;
+}
+
+.beverage-editor__delete-confirm,
+.beverage-editor__delete-blocked {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.beverage-editor__delete-blocked ul {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: var(--fg);
+}
+
+.beverage-editor__button-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* Generic button primitives used by the editor. Match icon-btn visuals
+   so the editor looks consistent with header buttons. */
+.btn {
+  background: var(--bg-elev);
+  color: var(--fg);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 0.4rem 0.85rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: #2a2a2a;
+}
+
+.btn--danger {
+  border-color: rgba(255, 100, 100, 0.5);
+  color: var(--bad-fg);
+}
+
+.btn--danger:hover {
+  background: rgba(255, 100, 100, 0.1);
+}
+
+/* Compact variant of the icon button — used for step reorder/remove
+   controls where the standard 2.5rem min-width would crowd the row. */
+.icon-btn--compact {
+  min-width: 1.75rem;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.95rem;
+}
+
+.icon-btn--compact:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.beverage-editor__step-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.beverage-editor__step-reorder {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.beverage-editor__add-step-btn {
+  margin-top: 0.5rem;
+}
+
+.beverage-editor__step-picker {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.6rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.beverage-editor__step-picker-cancel {
+  margin-left: auto;
 }
