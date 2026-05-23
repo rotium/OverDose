@@ -5,9 +5,9 @@ import { LiveBrewDrawer } from './components/LiveBrewDrawer';
 import { Settings } from './components/settings/Settings';
 import { LiveShotProvider, useLiveShot } from './LiveShotContext';
 import { frozenToGatewayShotRecord } from './liveShotAdapter';
-import { LocalWorkflowRepository } from './repositories';
+import { LocalRecipeRepository } from './repositories';
 import { UserPrefsProvider } from './UserPrefsContext';
-import type { Workflow } from './domain';
+import type { Recipe } from './domain';
 import type {
   MachineSnapshot,
   ScaleMessage,
@@ -16,7 +16,7 @@ import type {
 } from './snapshot';
 import type { WsStream } from './streams';
 
-const workflowRepository = new LocalWorkflowRepository();
+const recipeRepository = new LocalRecipeRepository();
 
 const onSleep = () =>
   api.sleep().catch((e) => console.warn('sleep failed', e));
@@ -34,8 +34,8 @@ const onUpdateShotSettings = (settings: ShotSettingsSnapshot) =>
     console.warn('updateShotSettings failed', e),
   );
 
-const onSelectWorkflow = (w: Workflow) =>
-  console.info('selected workflow — TODO: route to runtime', w);
+const onSelectRecipe = (r: Recipe) =>
+  console.info('selected recipe — TODO: route to runtime', r);
 const onSeeAllShots = () => console.info('see all shots — TODO: route to history');
 
 /**
@@ -103,7 +103,7 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
       >
         <div class="home-host" inert={homeInert()} data-testid="home-host">
           <Home
-            workflowRepository={workflowRepository}
+            recipeRepository={recipeRepository}
             machineStream={() => p.streams.machine}
             scaleStream={() => p.streams.scale}
             shotSettingsStream={() => p.streams.shotSettings}
@@ -114,7 +114,7 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
             onWake={onWake}
             onUpdateShotSettings={onUpdateShotSettings}
             onMenu={onMenu}
-            onSelectWorkflow={onSelectWorkflow}
+            onSelectRecipe={onSelectRecipe}
             onSeeAllShots={onSeeAllShots}
             optimisticShot={optimisticShot}
           />

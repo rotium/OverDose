@@ -1,5 +1,5 @@
 // Water-tank domain helpers — shared by the Home StatusPanel (visual) and the
-// WorkflowPicker (operational blocking). Reaprime reports `currentLevel` in mm.
+// RecipePicker (operational blocking). Reaprime reports `currentLevel` in mm.
 
 // DE1 tank: full at ~65mm.
 export const WATER_TANK_MAX_MM = 65;

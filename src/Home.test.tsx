@@ -13,8 +13,8 @@ vi.mock('./components/ShotMiniChart', () => ({
 }));
 
 import { Home } from './Home';
-import type { Workflow } from './domain';
-import type { WorkflowRepository } from './repositories';
+import type { Recipe } from './domain';
+import type { RecipeRepository } from './repositories';
 import type {
   MachineSnapshot,
   ScaleMessage,
@@ -24,17 +24,18 @@ import type {
 import type { WsStream } from './streams';
 import type { GatewayShotRecord, GatewayShotSummary } from './api';
 
-const sampleWorkflow: Workflow = {
+const sampleRecipe: Recipe = {
   id: 'seed-espresso',
   name: 'Espresso',
-  pipeline: { id: 'p', name: 'p', steps: [] },
+  beverageId: 'seed-bev-espresso',
+  overrides: {},
 };
 
-const fakeRepo: WorkflowRepository = {
-  list: async () => [sampleWorkflow],
-  get: async () => sampleWorkflow,
-  create: async (w) => w,
-  update: async (w) => w,
+const fakeRepo: RecipeRepository = {
+  list: async () => [sampleRecipe],
+  get: async () => sampleRecipe,
+  create: async (r: Recipe) => r,
+  update: async (r: Recipe) => r,
   delete: async () => {},
 };
 
@@ -70,7 +71,7 @@ const buildHome = (overrides: Partial<{
   onWake: () => void;
   onMenu: () => void;
   onUpdate: (s: ShotSettingsSnapshot) => void;
-  onSelect: (w: Workflow) => void;
+  onSelect: (r: Recipe) => void;
   onSeeAll: () => void;
 }> = {}) => {
   const stubs = overrides.stubs ?? {};
@@ -83,7 +84,7 @@ const buildHome = (overrides: Partial<{
 
   return (
     <Home
-      workflowRepository={fakeRepo}
+      recipeRepository={fakeRepo}
       machineStream={() => mkStream<MachineSnapshot>(stubs.machineSnap ?? null)}
       scaleStream={() => mkStream<ScaleMessage>(stubs.scaleMsg ?? null)}
       shotSettingsStream={() => mkStream<ShotSettingsSnapshot>(stubs.settings ?? null)}
@@ -94,19 +95,19 @@ const buildHome = (overrides: Partial<{
       onWake={overrides.onWake ?? vi.fn()}
       onUpdateShotSettings={overrides.onUpdate ?? vi.fn()}
       onMenu={overrides.onMenu ?? vi.fn()}
-      onSelectWorkflow={overrides.onSelect ?? vi.fn()}
+      onSelectRecipe={overrides.onSelect ?? vi.fn()}
       onSeeAllShots={overrides.onSeeAll ?? vi.fn()}
     />
   );
 };
 
 describe('Home', () => {
-  it('composes Header, WorkflowPicker, StatusPanel, and LastShotCard', async () => {
+  it('composes Header, RecipePicker, StatusPanel, and LastShotCard', async () => {
     render(() => buildHome());
     // Header
     expect(screen.getByText('Decent.app')).toBeInTheDocument();
     // Picker
-    await waitFor(() => screen.getByTestId('workflow-tile-seed-espresso'));
+    await waitFor(() => screen.getByTestId('recipe-tile-seed-espresso'));
     // StatusPanel
     expect(screen.getByTestId('status-state')).toBeInTheDocument();
     // LastShotCard (chart is stubbed, so the stub element appearing proves
@@ -168,15 +169,15 @@ describe('Home', () => {
     expect(onUpdate).not.toHaveBeenCalled();
   });
 
-  it('tapping a Workflow tile calls onSelectWorkflow', async () => {
+  it('tapping a Recipe tile calls onSelectRecipe', async () => {
     const onSelect = vi.fn();
     render(() => buildHome({ onSelect }));
-    await waitFor(() => screen.getByTestId('workflow-tile-seed-espresso'));
-    fireEvent.click(screen.getByTestId('workflow-tile-seed-espresso'));
-    expect(onSelect).toHaveBeenCalledWith(sampleWorkflow);
+    await waitFor(() => screen.getByTestId('recipe-tile-seed-espresso'));
+    fireEvent.click(screen.getByTestId('recipe-tile-seed-espresso'));
+    expect(onSelect).toHaveBeenCalledWith(sampleRecipe);
   });
 
-  it('disables Workflow tiles with a droplet icon when water level is at/under the block threshold', async () => {
+  it('disables Recipe tiles with a droplet icon when water level is at/under the block threshold', async () => {
     const onSelect = vi.fn();
     render(() =>
       buildHome({
@@ -184,22 +185,22 @@ describe('Home', () => {
         onSelect,
       }),
     );
-    await waitFor(() => screen.getByTestId('workflow-tile-seed-espresso'));
-    const tile = screen.getByTestId('workflow-tile-seed-espresso') as HTMLButtonElement;
+    await waitFor(() => screen.getByTestId('recipe-tile-seed-espresso'));
+    const tile = screen.getByTestId('recipe-tile-seed-espresso') as HTMLButtonElement;
     expect(tile).toBeDisabled();
-    expect(screen.getByTestId('workflow-tile-seed-espresso-reason')).toBeInTheDocument();
+    expect(screen.getByTestId('recipe-tile-seed-espresso-reason')).toBeInTheDocument();
     fireEvent.click(tile);
     expect(onSelect).not.toHaveBeenCalled();
   });
 
-  it('leaves Workflow tiles enabled when water is just above the block threshold (warn-only)', async () => {
+  it('leaves Recipe tiles enabled when water is just above the block threshold (warn-only)', async () => {
     render(() =>
       buildHome({ stubs: { water: { currentLevel: 4, refillLevel: 5 } } }),
     );
-    await waitFor(() => screen.getByTestId('workflow-tile-seed-espresso'));
-    expect(screen.getByTestId('workflow-tile-seed-espresso')).not.toBeDisabled();
+    await waitFor(() => screen.getByTestId('recipe-tile-seed-espresso'));
+    expect(screen.getByTestId('recipe-tile-seed-espresso')).not.toBeDisabled();
     expect(
-      screen.queryByTestId('workflow-tile-seed-espresso-reason'),
+      screen.queryByTestId('recipe-tile-seed-espresso-reason'),
     ).not.toBeInTheDocument();
   });
 
@@ -207,7 +208,7 @@ describe('Home', () => {
     render(() =>
       buildHome({ stubs: { water: { currentLevel: 4, refillLevel: 5 } } }),
     );
-    await waitFor(() => screen.getByTestId('workflow-tile-seed-espresso'));
+    await waitFor(() => screen.getByTestId('recipe-tile-seed-espresso'));
     expect(screen.getByTestId('header-water-pill')).toHaveAttribute(
       'data-severity',
       'warn',
@@ -227,7 +228,7 @@ describe('Home', () => {
     render(() =>
       buildHome({ stubs: { water: { currentLevel: 2, refillLevel: 5 } } }),
     );
-    await waitFor(() => screen.getByTestId('workflow-tile-seed-espresso'));
+    await waitFor(() => screen.getByTestId('recipe-tile-seed-espresso'));
     expect(screen.getByTestId('header-water-pill')).toHaveAttribute(
       'data-severity',
       'critical',
@@ -259,7 +260,7 @@ describe('Home', () => {
 
     render(() => (
       <Home
-        workflowRepository={fakeRepo}
+        recipeRepository={fakeRepo}
         machineStream={() => machineStream}
         scaleStream={() => ({
           latest: createSignal<ScaleMessage | null>(null)[0],
@@ -279,7 +280,7 @@ describe('Home', () => {
         onWake={vi.fn()}
         onUpdateShotSettings={vi.fn()}
         onMenu={vi.fn()}
-        onSelectWorkflow={vi.fn()}
+        onSelectRecipe={vi.fn()}
         onSeeAllShots={vi.fn()}
       />
     ));
@@ -329,7 +330,7 @@ describe('Home', () => {
     render(() =>
       buildHome({ stubs: { water: { currentLevel: 40, refillLevel: 5 } } }),
     );
-    await waitFor(() => screen.getByTestId('workflow-tile-seed-espresso'));
+    await waitFor(() => screen.getByTestId('recipe-tile-seed-espresso'));
     expect(screen.queryByTestId('header-water-pill')).not.toBeInTheDocument();
     expect(screen.queryByTestId('water-alert-banner')).not.toBeInTheDocument();
     expect(screen.queryByTestId('status-water-alert')).not.toBeInTheDocument();

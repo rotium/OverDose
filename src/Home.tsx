@@ -4,10 +4,10 @@ import { Header } from './components/Header';
 import { LastShotCard } from './components/LastShotCard';
 import { StatusPanel } from './components/StatusPanel';
 import { WaterAlertBanner } from './components/WaterAlertBanner';
-import { WorkflowPicker } from './components/WorkflowPicker';
-import type { DisabledReason } from './components/WorkflowTile';
-import type { Workflow } from './domain';
-import type { WorkflowRepository } from './repositories';
+import { RecipePicker } from './components/RecipePicker';
+import type { DisabledReason } from './components/RecipeTile';
+import type { Recipe } from './domain';
+import type { RecipeRepository } from './repositories';
 import type {
   MachineSnapshot,
   ScaleMessage,
@@ -28,7 +28,7 @@ import { isWaterBlocked, waterSeverity, type WaterSeverity } from './water';
  * composer and lets tests drive it without a network.
  */
 export interface HomeProps {
-  workflowRepository: WorkflowRepository;
+  recipeRepository: RecipeRepository;
   /** Stream factories — defaulted to the real reaprime WS endpoints in App.tsx. */
   machineStream: () => WsStream<MachineSnapshot>;
   scaleStream: () => WsStream<ScaleMessage>;
@@ -43,7 +43,7 @@ export interface HomeProps {
   onWake: () => void;
   onUpdateShotSettings: (settings: ShotSettingsSnapshot) => void;
   onMenu: () => void;
-  onSelectWorkflow: (w: Workflow) => void;
+  onSelectRecipe: (r: Recipe) => void;
   onSeeAllShots: () => void;
   /**
    * Optimistic in-memory shot for the LastShotCard hand-off (populated by
@@ -138,9 +138,9 @@ export const Home: Component<HomeProps> = (p) => {
       />
       <main class="home__main">
         <div class="home__picker">
-          <WorkflowPicker
-            repository={p.workflowRepository}
-            onSelect={p.onSelectWorkflow}
+          <RecipePicker
+            repository={p.recipeRepository}
+            onSelect={p.onSelectRecipe}
             disabledReason={disabledReason}
           />
         </div>

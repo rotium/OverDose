@@ -5,8 +5,7 @@ import {
   isOperationType,
   isPrepType,
 } from './operations';
-import { step } from './pipeline';
-import type { Step } from './steps';
+import { beverageStep, type BeverageStep } from './beverage';
 
 describe('Operation / Prep classification', () => {
   it('classifies machine actions as Operations', () => {
@@ -26,16 +25,31 @@ describe('Operation / Prep classification', () => {
   });
 });
 
-describe('step() builder', () => {
-  it('produces a correctly-typed Step', () => {
-    const brew: Step = step('brew', { durationSec: 30, targetYieldGrams: 36 });
+describe('beverageStep() builder', () => {
+  it('produces a correctly-typed step with an id', () => {
+    const brew: BeverageStep = beverageStep('brew', {
+      durationSec: 30,
+      targetYieldGrams: 36,
+    });
     expect(brew.type).toBe('brew');
     expect(brew.config).toEqual({ durationSec: 30, targetYieldGrams: 36 });
+    expect(typeof brew.id).toBe('string');
+    expect(brew.id.length).toBeGreaterThan(0);
   });
 
-  it('produces prep Steps too', () => {
-    const grind: Step = step('grind', { grinderId: 'niche-zero', grinderSetting: 17 });
+  it('produces prep steps with ids too', () => {
+    const grind: BeverageStep = beverageStep('grind', {
+      grinderId: 'niche-zero',
+      grinderSetting: 17,
+    });
     expect(grind.type).toBe('grind');
-    expect(grind.config.grinderSetting).toBe(17);
+    if (grind.type === 'grind') {
+      expect(grind.config.grinderSetting).toBe(17);
+    }
+  });
+
+  it('honours an explicitly-passed id (for seed data stability)', () => {
+    const s = beverageStep('weight', { targetGrams: 18 }, 'seed-step-weight');
+    expect(s.id).toBe('seed-step-weight');
   });
 });
