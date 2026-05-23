@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen, fireEvent } from '@solidjs/testing-library';
+import { render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
 import { Settings } from './Settings';
 import { UserPrefsProvider, useUserPrefs } from '../../UserPrefsContext';
 import { MemoryStorage } from '../../test/memoryStorage';
+import { WithRepositories } from '../../test/repositories';
 import type { UserPrefsContextValue } from '../../UserPrefsContext';
 
 interface Harness {
@@ -23,7 +24,9 @@ const setup = (): Harness => {
 
   render(() => (
     <UserPrefsProvider storage={new MemoryStorage()}>
-      <PrefsBridge />
+      <WithRepositories>
+        <PrefsBridge />
+      </WithRepositories>
     </UserPrefsProvider>
   ));
 
@@ -77,6 +80,18 @@ describe('Settings', () => {
         'aria-selected',
         'true',
       );
+    });
+
+    it('switches to Library when clicked and lands on Beverages subsection', async () => {
+      setup();
+      fireEvent.click(screen.getByRole('tab', { name: 'Library' }));
+      expect(screen.getByRole('tab', { name: 'Library' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+      // Library's default subsection is Beverages — the list renders from
+      // the seeded LocalBeverageRepository in WithRepositories.
+      await waitFor(() => screen.getByTestId('beverages-list'));
     });
   });
 

@@ -5,7 +5,8 @@ import { LiveBrewDrawer } from './components/LiveBrewDrawer';
 import { Settings } from './components/settings/Settings';
 import { LiveShotProvider, useLiveShot } from './LiveShotContext';
 import { frozenToGatewayShotRecord } from './liveShotAdapter';
-import { LocalRecipeRepository } from './repositories';
+import { LocalBeverageRepository, LocalRecipeRepository } from './repositories';
+import { RepositoriesProvider } from './RepositoriesContext';
 import { UserPrefsProvider } from './UserPrefsContext';
 import type { Recipe } from './domain';
 import type {
@@ -16,6 +17,7 @@ import type {
 } from './snapshot';
 import type { WsStream } from './streams';
 
+const beverageRepository = new LocalBeverageRepository();
 const recipeRepository = new LocalRecipeRepository();
 
 const onSleep = () =>
@@ -135,14 +137,19 @@ export const App: Component = () => {
 
   return (
     <UserPrefsProvider>
-      <LiveShotProvider
-        machineStream={streams.machine}
-        scaleStream={streams.scale}
-        fetchWorkflow={api.workflow}
-        onStop={onStop}
+      <RepositoriesProvider
+        beverages={beverageRepository}
+        recipes={recipeRepository}
       >
-        <AppBody streams={streams} />
-      </LiveShotProvider>
+        <LiveShotProvider
+          machineStream={streams.machine}
+          scaleStream={streams.scale}
+          fetchWorkflow={api.workflow}
+          onStop={onStop}
+        >
+          <AppBody streams={streams} />
+        </LiveShotProvider>
+      </RepositoriesProvider>
     </UserPrefsProvider>
   );
 };

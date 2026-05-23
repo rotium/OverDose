@@ -1,6 +1,7 @@
 import { Match, Switch, createSignal, type Component } from 'solid-js';
 import { AppTab } from './AppTab';
 import { GatewayTab } from './GatewayTab';
+import { LibraryTab } from './LibraryTab';
 import { MachineTab } from './MachineTab';
 
 /**
@@ -22,12 +23,13 @@ export interface SettingsProps {
   onClose: () => void;
 }
 
-type Tab = 'app' | 'gateway' | 'machine';
+type Tab = 'app' | 'gateway' | 'machine' | 'library';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'app', label: 'App' },
   { id: 'gateway', label: 'Gateway' },
   { id: 'machine', label: 'Machine' },
+  { id: 'library', label: 'Library' },
 ];
 
 export const Settings: Component<SettingsProps> = (p) => {
@@ -80,6 +82,9 @@ export const Settings: Component<SettingsProps> = (p) => {
           </Match>
           <Match when={tab() === 'machine'}>
             <MachineTab />
+          </Match>
+          <Match when={tab() === 'library'}>
+            <LibraryTab />
           </Match>
         </Switch>
       </div>
