@@ -1,33 +1,29 @@
 import type { StepType } from './operations';
 
 /**
- * Per-Step configuration. Each step type has its own shape — see
- * [[starter-skin-vocabulary]]. All fields are optional at every layer
- * (Beverage default, Recipe override, run-time override) so unset values
- * cascade through the resolution chain.
+ * Per-Step configuration.
  *
- * `auto purge` is *not* a step on its own — it's a SteamConfig field
- * (`autoPurgeTimeSec`) because it's only meaningful after steaming and its
- * delay is a personal preference at the beverage level. Missing/0 means
- * manual purge.
+ * At the **Beverage level** today, only the steam step has any tunable
+ * parameters — its post-steam purge behaviour. Brew / Water / Flush carry
+ * no Beverage-level fields (their durations and yields are driven by
+ * Recipe metadata + Profile + run-time defaults, not Beverage shared
+ * preferences). Recipe and run-time override layers may extend these in
+ * the future; the types stay nominal so the resolution chain can layer
+ * additional fields without breaking call-sites.
+ *
+ * `autoPurgeTimeSec`:
+ *   - `undefined` (or 0) → **Manual purge**: the user presses the purge
+ *     button on the machine after steaming.
+ *   - `> 0` → **Auto purge**: the machine flushes the group head this
+ *     many seconds after steam ends.
  */
-export interface BrewConfig {
-  durationSec?: number;
-  targetYieldGrams?: number;
-  stopAtWeight?: boolean;
-}
+export interface BrewConfig {}
 export interface SteamConfig {
-  durationSec?: number;
-  smartSteam?: boolean;
   /** Auto-purge delay in seconds after steam. Missing/0 = manual purge. */
   autoPurgeTimeSec?: number;
 }
-export interface WaterConfig {
-  volumeMl?: number;
-}
-export interface FlushConfig {
-  durationSec?: number;
-}
+export interface WaterConfig {}
+export interface FlushConfig {}
 
 /**
  * Type-level map from StepType → config shape. Used by Recipe overrides

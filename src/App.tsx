@@ -2,6 +2,7 @@ import { Show, createEffect, createSignal, type Component } from 'solid-js';
 import { api, type GatewayShotRecord } from './api';
 import { Home, defaultStreams } from './Home';
 import { LiveBrewDrawer } from './components/LiveBrewDrawer';
+import { RecipeBrewScreen } from './components/RecipeBrewScreen';
 import { Settings } from './components/settings/Settings';
 import { LiveShotProvider, useLiveShot } from './LiveShotContext';
 import { frozenToGatewayShotRecord } from './liveShotAdapter';
@@ -36,8 +37,6 @@ const onUpdateShotSettings = (settings: ShotSettingsSnapshot) =>
     console.warn('updateShotSettings failed', e),
   );
 
-const onSelectRecipe = (r: Recipe) =>
-  console.info('selected recipe — TODO: route to runtime', r);
 const onSeeAllShots = () => console.info('see all shots — TODO: route to history');
 
 /**
@@ -63,6 +62,15 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
   const [settingsOpen, setSettingsOpen] = createSignal(false);
   const onMenu = () => setSettingsOpen(true);
   const onCloseSettings = () => setSettingsOpen(false);
+
+  // Recipe-brew runtime: another single-screen swap. Tile-tap on Home sets
+  // the id; back-arrow or Done clears it. Coexists with settings via the
+  // same precedence stack (settings > brew > home).
+  const [activeBrewRecipeId, setActiveBrewRecipeId] = createSignal<string | null>(
+    null,
+  );
+  const onSelectRecipe = (r: Recipe) => setActiveBrewRecipeId(r.id);
+  const onExitBrew = () => setActiveBrewRecipeId(null);
   // Frozen-shot hand-off to LastShotCard. The signal is *sticky*: it's set
   // once on each freeze and persists until the next brew overwrites it.
   //
@@ -103,24 +111,36 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
           <Settings onBack={onCloseSettings} onClose={onCloseSettings} />
         }
       >
-        <div class="home-host" inert={homeInert()} data-testid="home-host">
-          <Home
-            recipeRepository={recipeRepository}
-            machineStream={() => p.streams.machine}
-            scaleStream={() => p.streams.scale}
-            shotSettingsStream={() => p.streams.shotSettings}
-            waterLevelsStream={() => p.streams.waterLevels}
-            fetchLatestShot={api.shotsLatest}
-            fetchShot={api.shotById}
-            onSleep={onSleep}
-            onWake={onWake}
-            onUpdateShotSettings={onUpdateShotSettings}
-            onMenu={onMenu}
-            onSelectRecipe={onSelectRecipe}
-            onSeeAllShots={onSeeAllShots}
-            optimisticShot={optimisticShot}
-          />
-        </div>
+        <Show
+          when={activeBrewRecipeId() === null}
+          fallback={
+            <RecipeBrewScreen
+              recipeId={activeBrewRecipeId()!}
+              onExit={onExitBrew}
+              machineStream={() => p.streams.machine}
+              requestState={api.requestState}
+            />
+          }
+        >
+          <div class="home-host" inert={homeInert()} data-testid="home-host">
+            <Home
+              recipeRepository={recipeRepository}
+              machineStream={() => p.streams.machine}
+              scaleStream={() => p.streams.scale}
+              shotSettingsStream={() => p.streams.shotSettings}
+              waterLevelsStream={() => p.streams.waterLevels}
+              fetchLatestShot={api.shotsLatest}
+              fetchShot={api.shotById}
+              onSleep={onSleep}
+              onWake={onWake}
+              onUpdateShotSettings={onUpdateShotSettings}
+              onMenu={onMenu}
+              onSelectRecipe={onSelectRecipe}
+              onSeeAllShots={onSeeAllShots}
+              optimisticShot={optimisticShot}
+            />
+          </div>
+        </Show>
       </Show>
       <LiveBrewDrawer />
     </>

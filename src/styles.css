@@ -1086,6 +1086,30 @@ html {
   min-height: 100%;
 }
 
+.beverages-section__add-btn {
+  align-self: flex-start;
+  margin: 0.4rem 0 0.6rem;
+}
+
+.beverages-section__add-form {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.4rem 0 0.6rem;
+  flex-wrap: wrap;
+}
+
+.beverages-section__add-input {
+  flex: 1 1 14rem;
+  min-width: 10rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 0.95rem;
+}
+
 .side-sheet__backdrop {
   position: absolute;
   inset: 0;
@@ -1198,6 +1222,20 @@ html {
   gap: 0.5rem;
 }
 
+.beverage-editor__cascade-ack {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.9rem;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 /* Generic button primitives used by the editor. Match icon-btn visuals
    so the editor looks consistent with header buttons. */
 .btn {
@@ -1238,9 +1276,119 @@ html {
 
 .beverage-editor__step-row {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto minmax(5rem, max-content) 1fr auto;
   align-items: center;
   gap: 0.6rem;
+}
+
+.beverage-editor__step-name {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.beverage-editor__step-config {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.step-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--fg-muted, #888);
+}
+
+.step-field__label {
+  white-space: nowrap;
+}
+
+.step-field__unit {
+  white-space: nowrap;
+  opacity: 0.75;
+}
+
+.step-field__input {
+  width: 4.5rem;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 0.85rem;
+  text-align: right;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.step-field__input::-webkit-outer-spin-button,
+.step-field__input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.step-field__input::placeholder {
+  color: var(--fg-muted, #888);
+  opacity: 0.6;
+}
+
+.step-purge {
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.step-purge__option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 0.5rem;
+  row-gap: 0.2rem;
+  align-items: baseline;
+  cursor: pointer;
+}
+
+.step-purge__option input[type='radio'] {
+  grid-column: 1;
+  align-self: center;
+  margin: 0;
+}
+
+.step-purge__heading {
+  grid-column: 2;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.9rem;
+}
+
+.step-purge__title {
+  font-weight: 500;
+  color: var(--fg);
+}
+
+.step-purge__help {
+  grid-column: 2;
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--fg-muted, #888);
+  line-height: 1.35;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .beverage-editor__step-reorder {
@@ -1267,3 +1415,435 @@ html {
 .beverage-editor__step-picker-cancel {
   margin-left: auto;
 }
+
+/* ─── Recipe editor ───────────────────────────────────────────────── */
+
+.recipe-editor__beverage-select {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  min-width: 12rem;
+}
+
+.recipe-editor__field-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1.4rem;
+  align-items: center;
+}
+
+.recipe-editor__field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.95rem;
+  color: var(--fg);
+}
+
+.recipe-editor__field-label {
+  white-space: nowrap;
+  color: var(--fg-muted, #888);
+  font-size: 0.85rem;
+}
+
+.recipe-editor__stubs {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.recipe-editor__stubs li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0.35rem 0.6rem;
+  background: var(--bg);
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  color: var(--fg-muted, #888);
+}
+
+.recipe-editor__stub-label {
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.recipe-editor__stub-note {
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
+.beverages-section__sequence {
+  text-align: right;
+  font-variant-numeric: normal;
+  letter-spacing: 0.01em;
+  line-height: 1.3;
+  max-width: 60%;
+}
+
+.recipes-section__meta {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
+  line-height: 1.3;
+  max-width: 60%;
+}
+
+.recipes-section__beverage {
+  color: var(--fg);
+  font-size: 0.85rem;
+}
+
+.recipes-section__sequence {
+  font-size: 0.78rem;
+  color: var(--muted);
+  letter-spacing: 0.01em;
+}
+
+.recipe-editor__beverage-sequence {
+  margin: 0.4rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  letter-spacing: 0.01em;
+}
+
+/* ─── Recipe brew screen ──────────────────────────────────────────── */
+
+.brew-screen {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.brew-screen__header {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.brew-screen__back {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.brew-screen__title {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.65rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.brew-screen__recipe-name {
+  color: var(--fg);
+}
+
+.brew-screen__beverage-name {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 0.95rem;
+}
+
+.brew-screen__loading {
+  padding: 2rem;
+}
+
+.brew-screen__body {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem 2rem;
+}
+
+/* Step bar */
+
+.step-bar {
+  list-style: none;
+  margin: 0;
+  padding: 0.9rem 1.25rem;
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elev);
+}
+
+.step-bar__item {
+  display: flex;
+  flex: 1 1 0;
+  position: relative;
+}
+
+.step-bar__item + .step-bar__item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 1rem;
+  height: 1px;
+  background: var(--border-strong);
+  transform: translateY(-50%);
+}
+
+.step-bar__button {
+  flex: 1 1 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.step-bar__button:disabled {
+  cursor: default;
+}
+
+.step-bar__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  font-size: 0.75rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.step-bar__label {
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.step-bar__item[data-variant='done'] .step-bar__button {
+  background: rgba(31, 111, 58, 0.18);
+  border-color: var(--good);
+  color: var(--muted);
+}
+.step-bar__item[data-variant='done'] .step-bar__icon {
+  background: var(--good);
+  border-color: var(--good);
+  color: #fff;
+}
+
+.step-bar__item[data-variant='current'] .step-bar__button {
+  background: rgba(59, 130, 246, 0.18);
+  border-color: var(--accent);
+  color: var(--fg);
+}
+.step-bar__item[data-variant='current'] .step-bar__icon {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.step-bar__item[data-variant='future'] .step-bar__button {
+  background: transparent;
+  border-color: var(--border-strong);
+  color: var(--muted);
+}
+.step-bar__item[data-variant='future'] .step-bar__button:hover {
+  border-color: var(--accent);
+  color: var(--fg);
+}
+
+.step-bar__item[data-variant='skipped'] .step-bar__button {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--border-strong);
+  color: var(--muted-2);
+}
+.step-bar__item[data-variant='skipped'] .step-bar__icon {
+  background: var(--bg);
+  color: var(--muted-2);
+}
+
+/* Prep / post-brew — full-bleed page content, no card chrome.
+   The screen IS the surface, so this just lays out the heading, the
+   featured profile/purge block, the stat readouts, and a big primary
+   action at the bottom. */
+
+.prep {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.prep__heading {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.prep__eyebrow {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.prep__title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.prep__body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  flex: 1;
+}
+
+.prep__profile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.9rem 1.1rem;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  border-radius: 8px;
+}
+
+.prep__profile-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.prep__profile-value {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--fg);
+  line-height: 1.25;
+}
+
+.prep__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.prep__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.75rem 0.95rem;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.prep__stat-label {
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.prep__stat-value {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--fg);
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  line-height: 1.1;
+}
+
+.prep__stat-unit {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.prep__stat-value em {
+  color: var(--muted-2);
+  font-style: italic;
+  font-weight: 400;
+}
+
+.prep__no-params {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+.prep__action {
+  display: flex;
+  justify-content: center;
+  padding-top: 0.5rem;
+}
+
+.prep__action--row {
+  gap: 0.75rem;
+}
+
+.prep-card__steam {
+  margin: 0;
+}
+
+.prep__start {
+  font-size: 1.05rem;
+  font-weight: 600;
+  padding: 0.85rem 2.25rem;
+  min-width: 260px;
+  border-radius: 10px;
+}
+
+.prep__secondary {
+  font-size: 1rem;
+  padding: 0.85rem 1.6rem;
+  border-radius: 10px;
+  min-width: 160px;
+}
+
+.prep__running {
+  color: var(--muted);
+  font-style: italic;
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.btn--primary:hover {
+  background: #4f8ff5;
+  border-color: #4f8ff5;
+}
+

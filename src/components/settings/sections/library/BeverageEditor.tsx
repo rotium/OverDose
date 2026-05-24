@@ -11,26 +11,21 @@ import {
 import {
   STEP_TYPES,
   beverageStep,
+  formatStepType,
   type Beverage,
+  type BeverageStep,
   type Recipe,
   type StepType,
 } from '../../../../domain';
 import { useRepositories } from '../../../../RepositoriesContext';
-
-/**
- * Display label for a step type — `bean-selection` → `Bean selection`,
- * `brew` → `Brew`. Used in both the editor's step list and the
- * Add-step picker.
- */
-const stepTypeLabel = (t: StepType): string => {
-  const spaced = t.replace(/-/g, ' ');
-  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
-};
+import { StepConfigFields } from './StepConfigFields';
 
 export interface BeverageEditorProps {
   beverageId: string;
   /** Called after a successful delete; the sheet wrapper closes itself. */
   onClose: () => void;
+  /** Debounce override for tests. Production code leaves this undefined. */
+  debounceMs?: number;
 }
 
 /**
@@ -53,8 +48,9 @@ export interface BeverageEditorProps {
  * Delete flow:
  *   - Always confirms first (inline panel, no native dialog)
  *   - If any Recipe references this Beverage, the confirm panel lists the
- *     blockers and offers Cancel only. User must delete or reassign those
- *     Recipes first (cascade is out of scope).
+ *     blockers and shows an opt-in "Also delete these N Recipes" checkbox.
+ *     The Delete button is disabled until the checkbox is ticked; clicking
+ *     it cascades — every referencing Recipe is deleted before the Beverage.
  */
 export const BeverageEditor: Component<BeverageEditorProps> = (p) => {
   const repos = useRepositories();
@@ -64,6 +60,7 @@ export const BeverageEditor: Component<BeverageEditorProps> = (p) => {
   );
   const [recipes] = createResource<Recipe[]>(() => repos.recipes.list());
   const [confirmingDelete, setConfirmingDelete] = createSignal(false);
+  const [cascadeAcknowledged, setCascadeAcknowledged] = createSignal(false);
   const [showStepPicker, setShowStepPicker] = createSignal(false);
 
   const referencingRecipes = createMemo<Recipe[]>(() =>
@@ -107,10 +104,30 @@ export const BeverageEditor: Component<BeverageEditorProps> = (p) => {
     void saveBeverage({ ...b, steps: [...b.steps, beverageStep(type, {})] });
   };
 
+  const patchStepConfig = (id: string, nextConfig: BeverageStep['config']) => {
+    const b = beverage();
+    if (!b) return;
+    const steps = b.steps.map((s) =>
+      s.id === id ? ({ ...s, config: nextConfig } as BeverageStep) : s,
+    );
+    void saveBeverage({ ...b, steps });
+  };
+
   const handleDelete = async () => {
-    if (referencingRecipes().length > 0) return; // UI blocks; defensive
+    const blockers = referencingRecipes();
+    if (blockers.length > 0) {
+      // Cascade path: only proceed when the user has explicitly opted in
+      // via the checkbox. UI also disables the button — defensive guard.
+      if (!cascadeAcknowledged()) return;
+      await Promise.all(blockers.map((r) => repos.recipes.delete(r.id)));
+    }
     await repos.beverages.delete(p.beverageId);
     p.onClose();
+  };
+
+  const dismissDeletePanel = () => {
+    setConfirmingDelete(false);
+    setCascadeAcknowledged(false);
   };
 
   const usageHint = (): string => {
@@ -186,9 +203,16 @@ export const BeverageEditor: Component<BeverageEditorProps> = (p) => {
                               ↓
                             </button>
                           </div>
-                          <span class="library-list__name">
-                            {i() + 1}. {stepTypeLabel(s.type)}
+                          <span class="beverage-editor__step-name">
+                            {i() + 1}. {formatStepType(s.type)}
                           </span>
+                          <div class="beverage-editor__step-config">
+                            <StepConfigFields
+                              step={s}
+                              onCommit={(cfg) => patchStepConfig(s.id, cfg)}
+                              debounceMs={p.debounceMs}
+                            />
+                          </div>
                           <button
                             type="button"
                             class="icon-btn icon-btn--compact"
@@ -231,7 +255,7 @@ export const BeverageEditor: Component<BeverageEditorProps> = (p) => {
                           data-testid={`add-step-${t}`}
                           onClick={() => addStep(t)}
                         >
-                          {stepTypeLabel(t)}
+                          {formatStepType(t)}
                         </button>
                       )}
                     </For>
@@ -244,9 +268,6 @@ export const BeverageEditor: Component<BeverageEditorProps> = (p) => {
                     </button>
                   </div>
                 </Show>
-                <p class="settings-help">
-                  Per-step config editor coming next.
-                </p>
               </section>
 
               <section class="settings-section">
@@ -272,10 +293,10 @@ export const BeverageEditor: Component<BeverageEditorProps> = (p) => {
                         data-testid="delete-blocked"
                       >
                         <p>
-                          Can't delete — {referencingRecipes().length}{' '}
+                          Delete "{b().name}"?{' '}
                           {referencingRecipes().length === 1
-                            ? 'Recipe uses'
-                            : 'Recipes use'}{' '}
+                            ? '1 Recipe uses'
+                            : `${referencingRecipes().length} Recipes use`}{' '}
                           this Beverage:
                         </p>
                         <ul>
@@ -283,17 +304,40 @@ export const BeverageEditor: Component<BeverageEditorProps> = (p) => {
                             {(r) => <li>{r.name}</li>}
                           </For>
                         </ul>
-                        <p class="settings-help">
-                          Delete or reassign{' '}
-                          {referencingRecipes().length === 1 ? 'it' : 'them'} first.
-                        </p>
-                        <button
-                          type="button"
-                          class="btn"
-                          onClick={() => setConfirmingDelete(false)}
-                        >
-                          Cancel
-                        </button>
+                        <label class="beverage-editor__cascade-ack">
+                          <input
+                            type="checkbox"
+                            data-testid="cascade-ack-checkbox"
+                            checked={cascadeAcknowledged()}
+                            onChange={(e) =>
+                              setCascadeAcknowledged(e.currentTarget.checked)
+                            }
+                          />
+                          <span>
+                            Also delete{' '}
+                            {referencingRecipes().length === 1
+                              ? 'this Recipe'
+                              : `these ${referencingRecipes().length} Recipes`}
+                          </span>
+                        </label>
+                        <div class="beverage-editor__button-row">
+                          <button
+                            type="button"
+                            class="btn btn--danger"
+                            data-testid="confirm-cascade-delete-button"
+                            disabled={!cascadeAcknowledged()}
+                            onClick={handleDelete}
+                          >
+                            Delete
+                          </button>
+                          <button
+                            type="button"
+                            class="btn"
+                            onClick={dismissDeletePanel}
+                          >
+                            Cancel
+                          </button>
+                        </div>
                       </div>
                     }
                   >
@@ -314,7 +358,7 @@ export const BeverageEditor: Component<BeverageEditorProps> = (p) => {
                         <button
                           type="button"
                           class="btn"
-                          onClick={() => setConfirmingDelete(false)}
+                          onClick={dismissDeletePanel}
                         >
                           Cancel
                         </button>

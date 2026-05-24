@@ -8,7 +8,7 @@ import { MemoryStorage } from '../test/memoryStorage';
 const sampleBeverage = (id: string, over: Partial<Beverage> = {}): Beverage => ({
   id,
   name: `Beverage ${id}`,
-  steps: [beverageStep('brew', { durationSec: 30 })],
+  steps: [beverageStep('brew', {})],
   ...over,
 });
 

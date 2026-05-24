@@ -13,3 +13,13 @@
  */
 export const STEP_TYPES = ['brew', 'steam', 'water', 'flush'] as const;
 export type StepType = (typeof STEP_TYPES)[number];
+
+/**
+ * Display label for a step type. Capitalises the first letter and turns
+ * any hyphens into spaces. Used in the Beverage editor row, the step
+ * picker, and the list-row sequence hints.
+ */
+export const formatStepType = (t: StepType): string => {
+  const spaced = t.replace(/-/g, ' ');
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+};

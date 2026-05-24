@@ -9,6 +9,7 @@ import {
   onMount,
   type Component,
 } from 'solid-js';
+import { formatStepType } from '../../../../domain';
 import { useRepositories } from '../../../../RepositoriesContext';
 import { BeverageEditor } from './BeverageEditor';
 
@@ -36,6 +37,9 @@ export const BeveragesSection: Component = () => {
   const [beverages, { refetch }] = createResource(() =>
     repos.beverages.listVisible(),
   );
+  const [creating, setCreating] = createSignal(false);
+  const [draftName, setDraftName] = createSignal('');
+  let nameInputRef: HTMLInputElement | undefined;
   let exitTimer: number | undefined;
 
   const openEditor = (id: string) => {
@@ -45,6 +49,30 @@ export const BeveragesSection: Component = () => {
     }
     setAnimatingOut(false);
     setSelectedId(id);
+  };
+
+  const openCreate = () => {
+    setDraftName('');
+    setCreating(true);
+    // Defer focus until after the input mounts.
+    queueMicrotask(() => nameInputRef?.focus());
+  };
+
+  const cancelCreate = () => {
+    setCreating(false);
+    setDraftName('');
+  };
+
+  const submitCreate = async (e?: Event) => {
+    e?.preventDefault();
+    const name = draftName().trim();
+    if (!name) return;
+    const id = crypto.randomUUID();
+    await repos.beverages.create({ id, name, steps: [] });
+    setCreating(false);
+    setDraftName('');
+    await refetch();
+    openEditor(id);
   };
 
   const closeEditor = () => {
@@ -86,6 +114,59 @@ export const BeveragesSection: Component = () => {
             values that all Recipes for this Beverage inherit.
           </p>
 
+          <Show
+            when={creating()}
+            fallback={
+              <button
+                type="button"
+                class="btn beverages-section__add-btn"
+                data-testid="open-new-beverage"
+                onClick={openCreate}
+              >
+                + New Beverage
+              </button>
+            }
+          >
+            <form
+              class="beverages-section__add-form"
+              data-testid="new-beverage-form"
+              onSubmit={submitCreate}
+            >
+              <input
+                ref={(el) => (nameInputRef = el)}
+                type="text"
+                class="beverages-section__add-input"
+                placeholder="Beverage name"
+                aria-label="New beverage name"
+                data-testid="new-beverage-name"
+                value={draftName()}
+                onInput={(e) => setDraftName(e.currentTarget.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    cancelCreate();
+                  }
+                }}
+              />
+              <button
+                type="submit"
+                class="btn"
+                data-testid="confirm-new-beverage"
+                disabled={draftName().trim().length === 0}
+              >
+                Create
+              </button>
+              <button
+                type="button"
+                class="btn"
+                data-testid="cancel-new-beverage"
+                onClick={cancelCreate}
+              >
+                Cancel
+              </button>
+            </form>
+          </Show>
+
           <Switch>
             <Match when={beverages.loading}>
               <p class="muted">loading beverages…</p>
@@ -111,9 +192,13 @@ export const BeveragesSection: Component = () => {
                           onClick={() => openEditor(b.id)}
                         >
                           <span class="library-list__name">{b.name}</span>
-                          <span class="library-list__meta">
-                            {b.steps.length} step
-                            {b.steps.length === 1 ? '' : 's'}
+                          <span
+                            class="library-list__meta beverages-section__sequence"
+                            data-testid={`beverage-row-${b.id}-sequence`}
+                          >
+                            {b.steps.length === 0
+                              ? '(no steps yet)'
+                              : b.steps.map((s) => formatStepType(s.type)).join(' → ')}
                           </span>
                         </button>
                       </li>

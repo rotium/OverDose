@@ -9,20 +9,16 @@ describe('STEP_TYPES', () => {
 });
 
 describe('beverageStep() builder', () => {
-  it('produces a correctly-typed step with an id', () => {
-    const brew: BeverageStep = beverageStep('brew', {
-      durationSec: 30,
-      targetYieldGrams: 36,
-    });
+  it('produces brew steps with an empty Beverage-level config', () => {
+    const brew: BeverageStep = beverageStep('brew', {});
     expect(brew.type).toBe('brew');
-    expect(brew.config).toEqual({ durationSec: 30, targetYieldGrams: 36 });
+    expect(brew.config).toEqual({});
     expect(typeof brew.id).toBe('string');
     expect(brew.id.length).toBeGreaterThan(0);
   });
 
   it('produces steam steps with auto-purge config', () => {
     const steam: BeverageStep = beverageStep('steam', {
-      durationSec: 30,
       autoPurgeTimeSec: 5,
     });
     expect(steam.type).toBe('steam');
@@ -32,7 +28,7 @@ describe('beverageStep() builder', () => {
   });
 
   it('honours an explicitly-passed id (for seed data stability)', () => {
-    const s = beverageStep('brew', { targetYieldGrams: 36 }, 'seed-step-brew');
+    const s = beverageStep('brew', {}, 'seed-step-brew');
     expect(s.id).toBe('seed-step-brew');
   });
 });

@@ -15,8 +15,8 @@ const seedBeverage = (id: string, name: string, hidden = false): Beverage => ({
   name,
   hidden,
   steps: [
-    beverageStep('brew', { targetYieldGrams: 36 }),
-    beverageStep('steam', { durationSec: 30 }),
+    beverageStep('brew', {}),
+    beverageStep('steam', { autoPurgeTimeSec: 5 }),
   ],
 });
 
@@ -37,7 +37,7 @@ const setupWith = async (beverages: Beverage[]) => {
 };
 
 describe('BeveragesSection', () => {
-  it('renders one row per visible beverage with name + step count', async () => {
+  it('renders one row per visible beverage with name + step sequence hint', async () => {
     await setupWith([
       seedBeverage('a', 'Espresso'),
       seedBeverage('b', 'Cappuccino'),
@@ -45,8 +45,10 @@ describe('BeveragesSection', () => {
     await waitFor(() => screen.getByTestId('beverages-list'));
     expect(screen.getByTestId('beverage-row-a')).toHaveTextContent('Espresso');
     expect(screen.getByTestId('beverage-row-b')).toHaveTextContent('Cappuccino');
-    // Both seeds have 2 steps.
-    expect(screen.getByTestId('beverage-row-a')).toHaveTextContent('2 steps');
+    // Both seeds use [brew, steam].
+    expect(screen.getByTestId('beverage-row-a-sequence')).toHaveTextContent(
+      'Brew → Steam',
+    );
   });
 
   it('hides beverages with hidden: true (uses listVisible)', async () => {
@@ -63,17 +65,95 @@ describe('BeveragesSection', () => {
     await waitFor(() => screen.getByText(/no beverages yet/i));
   });
 
-  it('singularises "step" when a beverage has exactly one step', async () => {
+  it('renders the single step type when a beverage has exactly one step', async () => {
     await setupWith([
       {
         id: 'one-step',
         name: 'Hot water',
-        steps: [beverageStep('water', { volumeMl: 200 })],
+        steps: [beverageStep('water', {})],
       },
     ]);
     await waitFor(() =>
-      expect(screen.getByTestId('beverage-row-one-step')).toHaveTextContent('1 step'),
+      expect(
+        screen.getByTestId('beverage-row-one-step-sequence'),
+      ).toHaveTextContent(/^Water$/),
     );
+  });
+
+  it('shows "(no steps yet)" when the beverage is empty', async () => {
+    await setupWith([
+      { id: 'empty', name: 'Blank', steps: [] },
+    ]);
+    await waitFor(() =>
+      expect(
+        screen.getByTestId('beverage-row-empty-sequence'),
+      ).toHaveTextContent(/no steps yet/i),
+    );
+  });
+
+  describe('create new beverage', () => {
+    it('reveals an inline name form when the + button is clicked', async () => {
+      await setupWith([]);
+      await waitFor(() => screen.getByTestId('open-new-beverage'));
+
+      // Form is not visible until the button is clicked.
+      expect(screen.queryByTestId('new-beverage-form')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('open-new-beverage'));
+      expect(screen.getByTestId('new-beverage-form')).toBeInTheDocument();
+      // + New button is hidden while the form is open.
+      expect(screen.queryByTestId('open-new-beverage')).not.toBeInTheDocument();
+    });
+
+    it('Create button is disabled until the name has non-whitespace content', async () => {
+      await setupWith([]);
+      fireEvent.click(await waitFor(() => screen.getByTestId('open-new-beverage')));
+
+      const submit = screen.getByTestId('confirm-new-beverage') as HTMLButtonElement;
+      expect(submit.disabled).toBe(true);
+
+      const input = screen.getByTestId('new-beverage-name') as HTMLInputElement;
+      input.value = '   ';
+      fireEvent.input(input);
+      expect(submit.disabled).toBe(true);
+
+      input.value = 'Macchiato';
+      fireEvent.input(input);
+      expect(submit.disabled).toBe(false);
+    });
+
+    it('submitting persists the new beverage and opens the editor on it', async () => {
+      await setupWith([]);
+      fireEvent.click(await waitFor(() => screen.getByTestId('open-new-beverage')));
+
+      const input = screen.getByTestId('new-beverage-name') as HTMLInputElement;
+      input.value = 'Macchiato';
+      fireEvent.input(input);
+      fireEvent.click(screen.getByTestId('confirm-new-beverage'));
+
+      // Editor side-sheet opens for the new beverage.
+      await waitFor(() => screen.getByTestId('beverage-editor'));
+      expect(
+        (screen.getByTestId('beverage-name-input') as HTMLInputElement).value,
+      ).toBe('Macchiato');
+
+      // Form is closed again after submit.
+      expect(screen.queryByTestId('new-beverage-form')).not.toBeInTheDocument();
+    });
+
+    it('Cancel collapses the form without creating anything', async () => {
+      await setupWith([]);
+      fireEvent.click(await waitFor(() => screen.getByTestId('open-new-beverage')));
+
+      const input = screen.getByTestId('new-beverage-name') as HTMLInputElement;
+      input.value = 'Discarded';
+      fireEvent.input(input);
+      fireEvent.click(screen.getByTestId('cancel-new-beverage'));
+
+      expect(screen.queryByTestId('new-beverage-form')).not.toBeInTheDocument();
+      // Empty-state still shows; nothing was created.
+      expect(screen.getByText(/no beverages yet/i)).toBeInTheDocument();
+    });
   });
 
   describe('list ↔ side-sheet editor', () => {

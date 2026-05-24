@@ -32,9 +32,9 @@ const sampleBeverage = (over: Partial<Beverage> = {}): Beverage => ({
   id: 'bev-1',
   name: 'Cappuccino',
   steps: [
-    beverageStep('brew', { targetYieldGrams: 36 }, 'step-brew'),
+    beverageStep('brew', {}, 'step-brew'),
     beverageStep('flush', {}, 'step-flush'),
-    beverageStep('steam', { durationSec: 30 }, 'step-steam'),
+    beverageStep('steam', { autoPurgeTimeSec: 5 }, 'step-steam'),
   ],
   ...over,
 });
@@ -44,7 +44,11 @@ const renderEditor = (opts: SeedOpts, beverageId = 'bev-1') => {
   const onClose = vi.fn();
   render(() => (
     <WithRepositories beverages={repos.beverages} recipes={repos.recipes}>
-      <BeverageEditor beverageId={beverageId} onClose={onClose} />
+      <BeverageEditor
+        beverageId={beverageId}
+        onClose={onClose}
+        debounceMs={0}
+      />
     </WithRepositories>
   ));
   return { repos, onClose };
@@ -310,8 +314,125 @@ describe('BeverageEditor', () => {
     });
   });
 
-  describe('delete — blocked by Recipes', () => {
-    it('shows the blocking Recipes and offers only Cancel', async () => {
+  describe('per-step config', () => {
+    it('only the steam step renders the purge-mode controls', async () => {
+      renderEditor({ beverages: [sampleBeverage()] });
+      await waitFor(() => screen.getByTestId('beverage-steps-list'));
+
+      expect(
+        screen.getByTestId('step-step-steam-purge-mode'),
+      ).toBeInTheDocument();
+      // Brew, water, flush rows have no fieldset.
+      expect(
+        screen.queryByTestId('step-step-brew-purge-mode'),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId('step-step-flush-purge-mode'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('seeds Auto Purge selection from an existing autoPurgeTimeSec > 0', async () => {
+      renderEditor({ beverages: [sampleBeverage()] });
+      const auto = (await waitFor(() =>
+        screen.getByTestId('step-step-steam-purge-auto'),
+      )) as HTMLInputElement;
+      const manual = screen.getByTestId(
+        'step-step-steam-purge-manual',
+      ) as HTMLInputElement;
+      const time = screen.getByTestId(
+        'step-step-steam-purge-time',
+      ) as HTMLInputElement;
+
+      expect(auto.checked).toBe(true);
+      expect(manual.checked).toBe(false);
+      expect(time.value).toBe('5');
+    });
+
+    it('seeds Manual selection when autoPurgeTimeSec is missing/0', async () => {
+      renderEditor({
+        beverages: [
+          sampleBeverage({
+            steps: [beverageStep('steam', {}, 'step-steam')],
+          }),
+        ],
+      });
+      const manual = (await waitFor(() =>
+        screen.getByTestId('step-step-steam-purge-manual'),
+      )) as HTMLInputElement;
+      expect(manual.checked).toBe(true);
+      // Time-to-purge input is hidden under Manual.
+      expect(
+        screen.queryByTestId('step-step-steam-purge-time'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('switching to Auto from Manual seeds a 5-second default', async () => {
+      const { repos } = renderEditor({
+        beverages: [
+          sampleBeverage({
+            steps: [beverageStep('steam', {}, 'step-steam')],
+          }),
+        ],
+      });
+      const auto = (await waitFor(() =>
+        screen.getByTestId('step-step-steam-purge-auto'),
+      )) as HTMLInputElement;
+      fireEvent.click(auto);
+
+      await waitFor(async () => {
+        const b = await repos.beverages.get('bev-1');
+        const steam = b?.steps.find((s) => s.id === 'step-steam');
+        expect(
+          steam?.type === 'steam' ? steam.config.autoPurgeTimeSec : null,
+        ).toBe(5);
+      });
+    });
+
+    it('switching to Manual clears autoPurgeTimeSec', async () => {
+      const { repos } = renderEditor({ beverages: [sampleBeverage()] });
+      const manual = (await waitFor(() =>
+        screen.getByTestId('step-step-steam-purge-manual'),
+      )) as HTMLInputElement;
+      fireEvent.click(manual);
+
+      await waitFor(async () => {
+        const b = await repos.beverages.get('bev-1');
+        const steam = b?.steps.find((s) => s.id === 'step-steam');
+        expect(
+          steam?.type === 'steam' ? steam.config.autoPurgeTimeSec : 'x',
+        ).toBeUndefined();
+      });
+    });
+
+    it('editing Time to Purge persists the new value', async () => {
+      const { repos } = renderEditor({ beverages: [sampleBeverage()] });
+      const time = (await waitFor(() =>
+        screen.getByTestId('step-step-steam-purge-time'),
+      )) as HTMLInputElement;
+      time.value = '8';
+      fireEvent.input(time);
+
+      await waitFor(async () => {
+        const b = await repos.beverages.get('bev-1');
+        const steam = b?.steps.find((s) => s.id === 'step-steam');
+        expect(
+          steam?.type === 'steam' ? steam.config.autoPurgeTimeSec : null,
+        ).toBe(8);
+      });
+    });
+
+    it('renders help text for both purge modes', async () => {
+      renderEditor({ beverages: [sampleBeverage()] });
+      const fs = await waitFor(() =>
+        screen.getByTestId('step-step-steam-purge-mode'),
+      );
+      expect(fs).toHaveTextContent(/wipe the steam wand/i);
+      expect(fs).toHaveTextContent(/purge button on the machine/i);
+    });
+  });
+
+  describe('delete — cascade through referencing Recipes', () => {
+    it('lists referencing Recipes and gates Delete behind a checkbox', async () => {
       const { repos, onClose } = renderEditor({
         beverages: [sampleBeverage()],
         recipes: [
@@ -330,11 +451,71 @@ describe('BeverageEditor', () => {
       expect(blocked).toHaveTextContent('Indonesia X');
       expect(blocked).not.toHaveTextContent('Unrelated');
 
-      // No confirm button in the blocked panel.
-      expect(screen.queryByTestId('confirm-delete-button')).not.toBeInTheDocument();
+      // Delete is disabled until the cascade checkbox is ticked.
+      const del = screen.getByTestId(
+        'confirm-cascade-delete-button',
+      ) as HTMLButtonElement;
+      expect(del.disabled).toBe(true);
 
-      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      // Clicking the disabled Delete is a no-op.
+      fireEvent.click(del);
       expect(await repos.beverages.get('bev-1')).not.toBeNull();
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it('ticking the checkbox enables Delete and cascades through the Recipes', async () => {
+      const { repos, onClose } = renderEditor({
+        beverages: [sampleBeverage()],
+        recipes: [
+          { id: 'r1', name: "Wife's", beverageId: 'bev-1', overrides: {} },
+          { id: 'r2', name: 'Indonesia X', beverageId: 'bev-1', overrides: {} },
+          { id: 'r3', name: 'Unrelated', beverageId: 'other-bev', overrides: {} },
+        ],
+      });
+      await waitFor(() => screen.getByTestId('delete-beverage-button'));
+
+      fireEvent.click(screen.getByTestId('delete-beverage-button'));
+      await waitFor(() => screen.getByTestId('delete-blocked'));
+
+      fireEvent.click(screen.getByTestId('cascade-ack-checkbox'));
+      const del = screen.getByTestId(
+        'confirm-cascade-delete-button',
+      ) as HTMLButtonElement;
+      expect(del.disabled).toBe(false);
+
+      fireEvent.click(del);
+
+      await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+      expect(await repos.beverages.get('bev-1')).toBeNull();
+      // Referencing Recipes are gone; unrelated Recipes are untouched.
+      expect(await repos.recipes.get('r1')).toBeNull();
+      expect(await repos.recipes.get('r2')).toBeNull();
+      expect(await repos.recipes.get('r3')).not.toBeNull();
+    });
+
+    it('Cancel resets the checkbox and dismisses without deleting', async () => {
+      const { repos, onClose } = renderEditor({
+        beverages: [sampleBeverage()],
+        recipes: [
+          { id: 'r1', name: 'Only', beverageId: 'bev-1', overrides: {} },
+        ],
+      });
+      await waitFor(() => screen.getByTestId('delete-beverage-button'));
+      fireEvent.click(screen.getByTestId('delete-beverage-button'));
+      await waitFor(() => screen.getByTestId('delete-blocked'));
+
+      fireEvent.click(screen.getByTestId('cascade-ack-checkbox'));
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      // Reopen — checkbox is reset to unchecked.
+      fireEvent.click(screen.getByTestId('delete-beverage-button'));
+      const ack = (await waitFor(() =>
+        screen.getByTestId('cascade-ack-checkbox'),
+      )) as HTMLInputElement;
+      expect(ack.checked).toBe(false);
+
+      expect(await repos.beverages.get('bev-1')).not.toBeNull();
+      expect(await repos.recipes.get('r1')).not.toBeNull();
       expect(onClose).not.toHaveBeenCalled();
     });
 
@@ -347,11 +528,11 @@ describe('BeverageEditor', () => {
       });
       await waitFor(() => screen.getByTestId('delete-beverage-button'));
       fireEvent.click(screen.getByTestId('delete-beverage-button'));
-      await waitFor(() =>
-        expect(screen.getByTestId('delete-blocked')).toHaveTextContent(
-          /1 Recipe uses/i,
-        ),
+      const blocked = await waitFor(() =>
+        screen.getByTestId('delete-blocked'),
       );
+      expect(blocked).toHaveTextContent(/1 Recipe uses/i);
+      expect(blocked).toHaveTextContent(/Also delete this Recipe/i);
     });
   });
 });
