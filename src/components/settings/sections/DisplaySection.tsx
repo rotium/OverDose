@@ -96,6 +96,26 @@ export const DisplaySection: Component = () => {
           </div>
         </div>
       </section>
+
+      <section class="settings-section" aria-labelledby="display-steam-heading">
+        <h2 id="display-steam-heading">Live steam view</h2>
+        <label class="settings-checkbox">
+          <input
+            type="checkbox"
+            data-testid="pref-show-steam-flow-slider"
+            checked={prefs.showSteamFlowSlider()}
+            onChange={(e) =>
+              prefs.setShowSteamFlowSlider(e.currentTarget.checked)
+            }
+          />
+          <span>Show steam-flow slider during steaming</span>
+        </label>
+        <p class="settings-help">
+          The current flow value always appears in the readouts row. Enable
+          this to also expose a slider that lets you tune the flow
+          mid-session (mirrors Decent.app's own steam screen).
+        </p>
+      </section>
     </div>
   );
 };

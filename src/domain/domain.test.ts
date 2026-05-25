@@ -17,14 +17,10 @@ describe('beverageStep() builder', () => {
     expect(brew.id.length).toBeGreaterThan(0);
   });
 
-  it('produces steam steps with auto-purge config', () => {
-    const steam: BeverageStep = beverageStep('steam', {
-      autoPurgeTimeSec: 5,
-    });
+  it('produces steam steps with an empty Beverage-level config', () => {
+    const steam: BeverageStep = beverageStep('steam', {});
     expect(steam.type).toBe('steam');
-    if (steam.type === 'steam') {
-      expect(steam.config.autoPurgeTimeSec).toBe(5);
-    }
+    expect(steam.config).toEqual({});
   });
 
   it('honours an explicitly-passed id (for seed data stability)', () => {

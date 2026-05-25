@@ -9,10 +9,8 @@ import type { Beverage } from '../domain';
  *
  * Steps are only the machine actions the gateway runs (brew / steam /
  * water / flush). Bean / Profile / Grinder / Dose are Recipe-level and
- * not part of these definitions.
- *
- * Today only the steam step carries a Beverage-level parameter
- * (`autoPurgeTimeSec`); seeds default to a 5-second auto-purge.
+ * not part of these definitions. No step type carries a Beverage-level
+ * field today.
  */
 export const SEED_BEVERAGES: Beverage[] = [
   {
@@ -26,11 +24,7 @@ export const SEED_BEVERAGES: Beverage[] = [
     steps: [
       beverageStep('brew', {}, 'seed-bev-cappuccino-brew'),
       beverageStep('flush', {}, 'seed-bev-cappuccino-flush'),
-      beverageStep(
-        'steam',
-        { autoPurgeTimeSec: 5 },
-        'seed-bev-cappuccino-steam',
-      ),
+      beverageStep('steam', {}, 'seed-bev-cappuccino-steam'),
     ],
   },
   {
@@ -47,11 +41,7 @@ export const SEED_BEVERAGES: Beverage[] = [
     steps: [
       beverageStep('brew', {}, 'seed-bev-flat-white-brew'),
       beverageStep('flush', {}, 'seed-bev-flat-white-flush'),
-      beverageStep(
-        'steam',
-        { autoPurgeTimeSec: 5 },
-        'seed-bev-flat-white-steam',
-      ),
+      beverageStep('steam', {}, 'seed-bev-flat-white-steam'),
     ],
   },
   {
@@ -60,7 +50,7 @@ export const SEED_BEVERAGES: Beverage[] = [
     steps: [
       beverageStep('brew', {}, 'seed-bev-latte-brew'),
       beverageStep('flush', {}, 'seed-bev-latte-flush'),
-      beverageStep('steam', { autoPurgeTimeSec: 5 }, 'seed-bev-latte-steam'),
+      beverageStep('steam', {}, 'seed-bev-latte-steam'),
     ],
   },
 ];

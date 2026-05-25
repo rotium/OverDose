@@ -775,6 +775,198 @@ html {
   line-height: 1;
 }
 
+/* ─── Live brew view (steam) ──────────────────────────────────────── */
+
+/* Small ready-state chip in the steam header. Color follows the same
+   cold / approaching / at-target ladder we use for the hero "ready" hint. */
+.steam-ready-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.steam-ready-chip[data-temp-severity='at'] {
+  color: var(--good);
+  border-color: var(--good);
+  background: rgba(45, 160, 96, 0.12);
+}
+
+.steam-ready-chip[data-temp-severity='near'] {
+  color: var(--warn);
+  border-color: var(--warn);
+  background: rgba(168, 106, 0, 0.18);
+}
+
+/* Steam duration adjust pair — −5s / +5s buttons sit side-by-side under
+   the hero countdown. Row stays centered with consistent gap. */
+.steam-adjust-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* Adjust pill. Two variants:
+   - default       : pill, neutral (used outside the hero — no callers today)
+   - --hero        : larger, sits under the giant countdown */
+.steam-extend {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--fg);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: 0.3rem 0.85rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background 120ms ease, transform 80ms ease, opacity 120ms ease;
+}
+
+.steam-extend--hero {
+  padding: 0.7rem 1.8rem;
+  font-size: 1.05rem;
+  letter-spacing: 0.04em;
+}
+
+.steam-extend:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.steam-extend:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.steam-extend:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.steam-extend:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Steam hero — countdown is the centerpiece. Fills the chart slot the
+   espresso view uses, keeping the same vertical rhythm: header → flex:1
+   middle → readouts → STOP. */
+.steam-hero {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0 0.5rem;
+}
+
+/* The countdown timer dominates — big, tabular nums so digits don't jitter
+   as they tick down. Color tints (near / over) come from data-severity. */
+.steam-hero__timer {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  line-height: 1;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+  transition: color 200ms ease;
+}
+
+.steam-hero__timer-num {
+  font-size: 8rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.steam-hero__timer-unit {
+  font-size: 1.75rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+/* Severity drives the countdown's color: amber when within 20% of the
+   target, red once we've overshot. Lines up with the STOP-button fill. */
+.steam-hero__timer[data-severity='near'] .steam-hero__timer-num {
+  color: var(--warn);
+}
+
+.steam-hero__timer[data-severity='over'] .steam-hero__timer-num {
+  color: var(--bad);
+}
+
+/* Wand-purge hero — replaces the countdown when phase is 'purging'.
+   No counter, just a "machine is working" cue. The firmware drives the
+   ~5 s purge autonomously and we don't know the remaining time, so a
+   fake countdown would lie. Subtle spin on the glyph keeps the eye on
+   the indicator without dominating the canvas. */
+.steam-hero__purge {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  color: var(--fg);
+  font-size: 2rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.steam-hero__purge-glyph {
+  font-size: 3rem;
+  line-height: 1;
+  color: var(--muted);
+  animation: steam-hero-purge-spin 1.6s linear infinite;
+  transform-origin: 50% 50%;
+  display: inline-block;
+}
+
+.steam-hero__purge-label {
+  color: var(--muted);
+}
+
+@keyframes steam-hero-purge-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Steam readouts row — 5 columns + STOP (STEAM TEMP / TARGET / TIME /
+   DURATION / FLOW). Matches espresso's column count for visual rhythm. */
+.live-view__readouts--steam {
+  grid-template-columns: repeat(5, 1fr) auto;
+}
+
+/* In-session steam-flow slider — only renders when the user pref
+   `showSteamFlowSlider` is on. Sits between hero + readouts, with a
+   left-side label and the slider filling the rest of the row. Kept compact
+   (single line) so it doesn't dominate the view. */
+.steam-flow-control {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.steam-flow-control__label {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.75rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.steam-flow-control__slider {
+  width: 100%;
+}
+
 /* ─── Water alert banner (bottom of Home) ─────────────────────────── */
 
 .water-banner {
@@ -947,6 +1139,65 @@ html {
   margin: 0.4rem 0 0;
   font-size: 0.85rem;
   color: var(--muted);
+}
+
+/* Range slider primitive — paired with an inline numeric readout so the user
+   can see the precise value while dragging. Layout intentionally grid-style
+   so the readout's tabular-num width doesn't shift the slider's track. */
+.slider-field {
+  display: grid;
+  grid-template-columns: 1fr 4.5rem;
+  align-items: center;
+  gap: 1rem;
+}
+
+.slider-field__input {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  background: #2a2a2a;
+  border-radius: 999px;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+.slider-field__input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+.slider-field__input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 2px solid var(--bg);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+.slider-field__input::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 2px solid var(--bg);
+}
+
+.slider-field__input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.slider-field__value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--fg);
+  text-align: right;
 }
 
 /* Sub-section nav rendered inside a tab body (e.g. App tab → Display / Alerts).
@@ -1276,7 +1527,7 @@ html {
 
 .beverage-editor__step-row {
   display: grid;
-  grid-template-columns: auto minmax(5rem, max-content) 1fr auto;
+  grid-template-columns: auto minmax(5rem, 1fr) auto;
   align-items: center;
   gap: 0.6rem;
 }
@@ -1284,13 +1535,6 @@ html {
 .beverage-editor__step-name {
   font-weight: 500;
   white-space: nowrap;
-}
-
-.beverage-editor__step-config {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  min-width: 0;
 }
 
 .step-field {
@@ -1332,51 +1576,6 @@ html {
 .step-field__input::placeholder {
   color: var(--fg-muted, #888);
   opacity: 0.6;
-}
-
-.step-purge {
-  border: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
-}
-
-.step-purge__option {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  column-gap: 0.5rem;
-  row-gap: 0.2rem;
-  align-items: baseline;
-  cursor: pointer;
-}
-
-.step-purge__option input[type='radio'] {
-  grid-column: 1;
-  align-self: center;
-  margin: 0;
-}
-
-.step-purge__heading {
-  grid-column: 2;
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem 0.9rem;
-}
-
-.step-purge__title {
-  font-weight: 500;
-  color: var(--fg);
-}
-
-.step-purge__help {
-  grid-column: 2;
-  margin: 0;
-  font-size: 0.8rem;
-  color: var(--fg-muted, #888);
-  line-height: 1.35;
 }
 
 .visually-hidden {

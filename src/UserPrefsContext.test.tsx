@@ -36,6 +36,8 @@ describe('UserPrefsContext', () => {
       expect(prefs.waterBlockMm()).toBe(WATER_BLOCK_MM);
       expect(prefs.chartSmoothing()).toBe(DEFAULT_CHART_SMOOTHING);
       expect(prefs.traceVisibility()).toEqual(DEFAULT_TRACE_VISIBILITY);
+      // Steam-flow slider opts in — hidden by default.
+      expect(prefs.showSteamFlowSlider()).toBe(false);
     });
 
     it('falls back to defaults when storage contains corrupt JSON', () => {
@@ -115,6 +117,27 @@ describe('UserPrefsContext', () => {
       const next = withProvider(storage, () => useUserPrefs());
       expect(next.waterWarnMm()).toBe(8);
       expect(next.chartSmoothing()).toBe('spline');
+    });
+  });
+
+  describe('showSteamFlowSlider', () => {
+    it('persists when toggled', () => {
+      const storage = new MemoryStorage();
+      const prefs = withProvider(storage, () => useUserPrefs());
+      prefs.setShowSteamFlowSlider(true);
+      expect(prefs.showSteamFlowSlider()).toBe(true);
+      const parsed = JSON.parse(storage.getItem(STORAGE_KEY)!);
+      expect(parsed.showSteamFlowSlider).toBe(true);
+    });
+
+    it('rehydrates from storage', () => {
+      const storage = new MemoryStorage();
+      storage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ showSteamFlowSlider: true }),
+      );
+      const prefs = withProvider(storage, () => useUserPrefs());
+      expect(prefs.showSteamFlowSlider()).toBe(true);
     });
   });
 

@@ -4,7 +4,11 @@ import { createSignal } from 'solid-js';
 import { LiveBrewDrawer } from './LiveBrewDrawer';
 import { LiveShotProvider } from '../LiveShotContext';
 import { WithPrefs } from '../test/prefs';
-import type { MachineSnapshot, ScaleMessage } from '../snapshot';
+import type {
+  MachineSnapshot,
+  ScaleMessage,
+  ShotSettingsSnapshot,
+} from '../snapshot';
 import type { WorkflowSnapshot } from '../api';
 import type { WsStatus, WsStream } from '../streams';
 
@@ -31,12 +35,20 @@ const mkSnap = (over: Partial<MachineSnapshot> = {}): MachineSnapshot => ({
 
 const setupDrawer = (initial?: {
   workflow?: WorkflowSnapshot;
+  shotSettings?: ShotSettingsSnapshot;
 }) => {
   const [machine, setMachine] = createSignal<MachineSnapshot | null>(null);
   const [scale] = createSignal<ScaleMessage | null>(null);
+  const [shotSettings, setShotSettings] = createSignal<ShotSettingsSnapshot | null>(
+    initial?.shotSettings ?? null,
+  );
   const status = createSignal<WsStatus>('open')[0];
   const machineStream: WsStream<MachineSnapshot> = { latest: machine, status };
   const scaleStream: WsStream<ScaleMessage> = { latest: scale, status };
+  const shotSettingsStream: WsStream<ShotSettingsSnapshot> = {
+    latest: shotSettings,
+    status,
+  };
   const fetchWorkflow = vi
     .fn<() => Promise<WorkflowSnapshot>>()
     .mockResolvedValue(initial?.workflow ?? { context: {} });
@@ -47,6 +59,7 @@ const setupDrawer = (initial?: {
       <LiveShotProvider
         machineStream={machineStream}
         scaleStream={scaleStream}
+        shotSettingsStream={shotSettingsStream}
         fetchWorkflow={fetchWorkflow}
         onStop={onStop}
       >
@@ -55,7 +68,7 @@ const setupDrawer = (initial?: {
     </WithPrefs>
   ));
 
-  return { setMachine, onStop };
+  return { setMachine, setShotSettings, onStop };
 };
 
 describe('LiveBrewDrawer', () => {
@@ -147,5 +160,88 @@ describe('LiveBrewDrawer', () => {
     );
     fireEvent.click(screen.getByTestId('live-view-stop'));
     expect(onStop).toHaveBeenCalledTimes(1);
+  });
+
+  describe('steam operation', () => {
+    const mkSteamSettings = (): ShotSettingsSnapshot => ({
+      steamSetting: 1,
+      targetSteamTemp: 145,
+      targetSteamDuration: 30,
+      targetHotWaterTemp: 90,
+      targetHotWaterVolume: 100,
+      targetHotWaterDuration: 30,
+      targetShotVolume: 36,
+      groupTemp: 92,
+    });
+
+    it('opens with the steam view when machine state enters steam', () => {
+      const { setMachine } = setupDrawer({ shotSettings: mkSteamSettings() });
+      setMachine(
+        mkSnap({
+          timestamp: '2026-05-25T08:00:00.000Z',
+          state: { state: 'steam', substate: 'idle' },
+        }),
+      );
+      expect(screen.getByTestId('live-brew-drawer')).toHaveAttribute('data-state', 'open');
+      expect(screen.getByTestId('live-steam-view')).toBeInTheDocument();
+      expect(screen.queryByTestId('live-espresso-view')).not.toBeInTheDocument();
+    });
+
+    it('slides out and unmounts when machine leaves steam state', async () => {
+      const { setMachine } = setupDrawer({ shotSettings: mkSteamSettings() });
+      setMachine(
+        mkSnap({
+          timestamp: '2026-05-25T08:00:00.000Z',
+          state: { state: 'steam', substate: 'idle' },
+        }),
+      );
+      expect(screen.getByTestId('live-brew-drawer')).toHaveAttribute('data-state', 'open');
+
+      setMachine(
+        mkSnap({
+          timestamp: '2026-05-25T08:00:30.000Z',
+          state: { state: 'idle', substate: 'idle' },
+        }),
+      );
+      expect(screen.getByTestId('live-brew-drawer')).toHaveAttribute('data-state', 'closing');
+      vi.advanceTimersByTime(280);
+      await waitFor(() =>
+        expect(screen.queryByTestId('live-brew-drawer')).not.toBeInTheDocument(),
+      );
+    });
+
+    it('STOP in steam view calls the injected onStop side-effect', () => {
+      const { setMachine, onStop } = setupDrawer({ shotSettings: mkSteamSettings() });
+      setMachine(
+        mkSnap({
+          timestamp: '2026-05-25T08:00:00.000Z',
+          state: { state: 'steam', substate: 'idle' },
+        }),
+      );
+      fireEvent.click(screen.getByTestId('live-view-stop'));
+      expect(onStop).toHaveBeenCalledTimes(1);
+    });
+
+    it('hero timer shows a whole-second countdown to targetSteamDuration', () => {
+      const { setMachine } = setupDrawer({ shotSettings: mkSteamSettings() });
+      setMachine(
+        mkSnap({
+          timestamp: '2026-05-25T08:00:00.000Z',
+          state: { state: 'steam', substate: 'idle' },
+        }),
+      );
+      // 10s elapsed, 30s target → 20s remaining.
+      setMachine(
+        mkSnap({
+          timestamp: '2026-05-25T08:00:10.000Z',
+          state: { state: 'steam', substate: 'idle' },
+          steamTemperature: 144,
+        }),
+      );
+      const timer = screen.getByTestId('live-view-timer');
+      expect(timer).toHaveAttribute('data-mode', 'countdown');
+      expect(timer).toHaveTextContent('20');
+      expect(timer).toHaveTextContent('s left');
+    });
   });
 });

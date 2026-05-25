@@ -13,19 +13,15 @@ import {
   beverageStep,
   formatStepType,
   type Beverage,
-  type BeverageStep,
   type Recipe,
   type StepType,
 } from '../../../../domain';
 import { useRepositories } from '../../../../RepositoriesContext';
-import { StepConfigFields } from './StepConfigFields';
 
 export interface BeverageEditorProps {
   beverageId: string;
   /** Called after a successful delete; the sheet wrapper closes itself. */
   onClose: () => void;
-  /** Debounce override for tests. Production code leaves this undefined. */
-  debounceMs?: number;
 }
 
 /**
@@ -102,15 +98,6 @@ export const BeverageEditor: Component<BeverageEditorProps> = (p) => {
     if (!b) return;
     setShowStepPicker(false);
     void saveBeverage({ ...b, steps: [...b.steps, beverageStep(type, {})] });
-  };
-
-  const patchStepConfig = (id: string, nextConfig: BeverageStep['config']) => {
-    const b = beverage();
-    if (!b) return;
-    const steps = b.steps.map((s) =>
-      s.id === id ? ({ ...s, config: nextConfig } as BeverageStep) : s,
-    );
-    void saveBeverage({ ...b, steps });
   };
 
   const handleDelete = async () => {
@@ -206,13 +193,6 @@ export const BeverageEditor: Component<BeverageEditorProps> = (p) => {
                           <span class="beverage-editor__step-name">
                             {i() + 1}. {formatStepType(s.type)}
                           </span>
-                          <div class="beverage-editor__step-config">
-                            <StepConfigFields
-                              step={s}
-                              onCommit={(cfg) => patchStepConfig(s.id, cfg)}
-                              debounceMs={p.debounceMs}
-                            />
-                          </div>
                           <button
                             type="button"
                             class="icon-btn icon-btn--compact"

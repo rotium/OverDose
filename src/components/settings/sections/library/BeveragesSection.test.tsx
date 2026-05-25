@@ -16,7 +16,7 @@ const seedBeverage = (id: string, name: string, hidden = false): Beverage => ({
   hidden,
   steps: [
     beverageStep('brew', {}),
-    beverageStep('steam', { autoPurgeTimeSec: 5 }),
+    beverageStep('steam', {}),
   ],
 });
 

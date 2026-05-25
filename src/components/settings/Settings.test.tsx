@@ -1,10 +1,40 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
 import { Settings } from './Settings';
 import { UserPrefsProvider, useUserPrefs } from '../../UserPrefsContext';
 import { MemoryStorage } from '../../test/memoryStorage';
 import { WithRepositories } from '../../test/repositories';
 import type { UserPrefsContextValue } from '../../UserPrefsContext';
+
+// The Machine tab calls `GET /api/v1/machine/settings` on mount. jsdom's
+// fetch chokes on relative URLs, so stub it for the whole Settings suite.
+// Most tests here never click Machine, but Solid's <Switch> still mounts
+// the matching arm and the resource fires regardless.
+beforeEach(() => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          fan: 50,
+          usb: 'disable',
+          flushTemp: 90,
+          flushTimeout: 5,
+          flushFlow: 4,
+          hotWaterFlow: 4,
+          steamFlow: 1.0,
+          tankTemp: 25,
+          steamPurgeMode: 0,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    ),
+  );
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 interface Harness {
   prefs: UserPrefsContextValue;

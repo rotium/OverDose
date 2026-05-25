@@ -2,8 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { LiveShotProvider, useLiveShot } from './LiveShotContext';
-import type { MachineSnapshot, ScaleMessage } from './snapshot';
-import type { WorkflowSnapshot } from './api';
+import type {
+  MachineSnapshot,
+  ScaleMessage,
+  ShotSettingsSnapshot,
+} from './snapshot';
+import type { MachineSettingsSnapshot, WorkflowSnapshot } from './api';
 import type { WsStream, WsStatus } from './streams';
 
 /**
@@ -37,29 +41,56 @@ const mkSnap = (over: Partial<MachineSnapshot> = {}): MachineSnapshot => ({
 interface Rig {
   machineStream: WsStream<MachineSnapshot>;
   scaleStream: WsStream<ScaleMessage>;
+  shotSettingsStream: WsStream<ShotSettingsSnapshot>;
   setMachine: (s: MachineSnapshot | null) => void;
   setScale: (s: ScaleMessage | null) => void;
+  setShotSettings: (s: ShotSettingsSnapshot | null) => void;
   fetchWorkflow: ReturnType<typeof vi.fn<() => Promise<WorkflowSnapshot>>>;
   onStop: ReturnType<typeof vi.fn<() => Promise<void>>>;
+  onUpdateShotSettings: ReturnType<
+    typeof vi.fn<(s: ShotSettingsSnapshot) => Promise<void>>
+  >;
+  onFetchMachineSettings: ReturnType<
+    typeof vi.fn<() => Promise<MachineSettingsSnapshot | null>>
+  >;
+  onUpdateMachineSettings: ReturnType<
+    typeof vi.fn<(p: Partial<MachineSettingsSnapshot>) => Promise<void>>
+  >;
 }
 
 const buildRig = (initial: {
   machine?: MachineSnapshot | null;
   scale?: ScaleMessage | null;
+  shotSettings?: ShotSettingsSnapshot | null;
   workflow?: WorkflowSnapshot;
+  machineSettings?: MachineSettingsSnapshot | null;
 } = {}): Rig => {
   const [machine, setMachine] = createSignal<MachineSnapshot | null>(initial.machine ?? null);
   const [scale, setScale] = createSignal<ScaleMessage | null>(initial.scale ?? null);
+  const [shotSettings, setShotSettings] = createSignal<ShotSettingsSnapshot | null>(
+    initial.shotSettings ?? null,
+  );
   const status = createSignal<WsStatus>('open')[0];
   return {
     machineStream: { latest: machine, status },
     scaleStream: { latest: scale, status },
+    shotSettingsStream: { latest: shotSettings, status },
     setMachine,
     setScale,
+    setShotSettings,
     fetchWorkflow: vi
       .fn<() => Promise<WorkflowSnapshot>>()
       .mockResolvedValue(initial.workflow ?? { context: {} }),
     onStop: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+    onUpdateShotSettings: vi
+      .fn<(s: ShotSettingsSnapshot) => Promise<void>>()
+      .mockResolvedValue(undefined),
+    onFetchMachineSettings: vi
+      .fn<() => Promise<MachineSettingsSnapshot | null>>()
+      .mockResolvedValue(initial.machineSettings ?? null),
+    onUpdateMachineSettings: vi
+      .fn<(p: Partial<MachineSettingsSnapshot>) => Promise<void>>()
+      .mockResolvedValue(undefined),
   };
 };
 
@@ -68,8 +99,12 @@ const mount = (rig: Rig) =>
     <LiveShotProvider
       machineStream={rig.machineStream}
       scaleStream={rig.scaleStream}
+      shotSettingsStream={rig.shotSettingsStream}
       fetchWorkflow={rig.fetchWorkflow}
       onStop={rig.onStop}
+      onUpdateShotSettings={rig.onUpdateShotSettings}
+      onFetchMachineSettings={rig.onFetchMachineSettings}
+      onUpdateMachineSettings={rig.onUpdateMachineSettings}
     >
       <Probe />
     </LiveShotProvider>
@@ -270,5 +305,330 @@ describe('LiveShotProvider', () => {
     mount(rig);
     await liveCtx().stop();
     expect(rig.onStop).toHaveBeenCalledTimes(1);
+  });
+
+  describe('steam session', () => {
+    it('starts idle and stays idle while the machine is not in steam', () => {
+      const rig = buildRig({ machine: mkSnap({ state: { state: 'idle', substate: 'idle' } }) });
+      mount(rig);
+      expect(liveCtx().steamSession.status()).toBe('idle');
+      expect(liveCtx().steamSession.startedAtMs()).toBe(0);
+    });
+
+    it('flips to "active" when machine state enters steam and records the timestamp', () => {
+      const rig = buildRig();
+      mount(rig);
+      rig.setMachine(
+        mkSnap({
+          timestamp: '2026-05-25T08:00:00.000Z',
+          state: { state: 'steam', substate: 'idle' },
+        }),
+      );
+      expect(liveCtx().steamSession.status()).toBe('active');
+      expect(liveCtx().steamSession.startedAtMs()).toBe(
+        Date.parse('2026-05-25T08:00:00.000Z'),
+      );
+    });
+
+    it('returns to "idle" when machine leaves steam state', () => {
+      const rig = buildRig();
+      mount(rig);
+      rig.setMachine(
+        mkSnap({
+          timestamp: '2026-05-25T08:00:00.000Z',
+          state: { state: 'steam', substate: 'idle' },
+        }),
+      );
+      expect(liveCtx().steamSession.status()).toBe('active');
+      rig.setMachine(
+        mkSnap({
+          timestamp: '2026-05-25T08:00:30.000Z',
+          state: { state: 'idle', substate: 'idle' },
+        }),
+      );
+      expect(liveCtx().steamSession.status()).toBe('idle');
+      expect(liveCtx().steamSession.startedAtMs()).toBe(0);
+    });
+
+    it('does not affect the espresso accumulator', () => {
+      const rig = buildRig();
+      mount(rig);
+      rig.setMachine(
+        mkSnap({ state: { state: 'steam', substate: 'idle' } }),
+      );
+      expect(liveCtx().accumulator.status()).toBe('idle');
+      expect(liveCtx().accumulator.frameCount()).toBe(0);
+    });
+
+    it('phase tracks the steam → airPurge → idle firmware sequence', () => {
+      // The DE1 runs an autonomous ~5 s wand purge after a steam stop. From
+      // the skin's perspective: state enters 'steam' (phase: steaming) →
+      // transitions to 'airPurge' (phase: purging, session still active) →
+      // eventually 'idle' (session ends, phase idle). The gateway maps the
+      // brief firmware 'puffing' substate to 'idle' under steam, so we
+      // don't see it directly — but we're still in state=steam for the
+      // whole window before the airPurge state, so no extra handling.
+      const rig = buildRig();
+      mount(rig);
+      expect(liveCtx().steamSession.phase()).toBe('idle');
+
+      rig.setMachine(
+        mkSnap({
+          timestamp: '2026-05-25T08:00:00.000Z',
+          state: { state: 'steam', substate: 'idle' },
+        }),
+      );
+      expect(liveCtx().steamSession.status()).toBe('active');
+      expect(liveCtx().steamSession.phase()).toBe('steaming');
+
+      rig.setMachine(
+        mkSnap({
+          timestamp: '2026-05-25T08:00:25.000Z',
+          state: { state: 'airPurge', substate: 'idle' },
+        }),
+      );
+      expect(liveCtx().steamSession.status()).toBe('active');
+      expect(liveCtx().steamSession.phase()).toBe('purging');
+      // startedAtMs should still be the steam-entry timestamp so the
+      // TIME readout keeps counting from session start, not from
+      // purge start.
+      expect(liveCtx().steamSession.startedAtMs()).toBe(
+        Date.parse('2026-05-25T08:00:00.000Z'),
+      );
+
+      rig.setMachine(
+        mkSnap({
+          timestamp: '2026-05-25T08:00:30.000Z',
+          state: { state: 'idle', substate: 'idle' },
+        }),
+      );
+      expect(liveCtx().steamSession.status()).toBe('idle');
+      expect(liveCtx().steamSession.phase()).toBe('idle');
+      expect(liveCtx().steamSession.startedAtMs()).toBe(0);
+    });
+
+    it('two-tap-stop path: steam → idle (no airPurge) ends the session immediately', () => {
+      // In two-tap-stop mode the firmware parks in the puffing substate
+      // until a second tap. If the user never taps and the machine
+      // eventually goes idle without an airPurge transition, the session
+      // should still end cleanly.
+      const rig = buildRig();
+      mount(rig);
+      rig.setMachine(
+        mkSnap({ state: { state: 'steam', substate: 'idle' } }),
+      );
+      expect(liveCtx().steamSession.phase()).toBe('steaming');
+      rig.setMachine(
+        mkSnap({ state: { state: 'idle', substate: 'idle' } }),
+      );
+      expect(liveCtx().steamSession.status()).toBe('idle');
+      expect(liveCtx().steamSession.phase()).toBe('idle');
+    });
+  });
+
+  describe('extendSteam', () => {
+    const baseSettings: ShotSettingsSnapshot = {
+      steamSetting: 1,
+      targetSteamTemp: 145,
+      targetSteamDuration: 30,
+      targetHotWaterTemp: 90,
+      targetHotWaterVolume: 100,
+      targetHotWaterDuration: 30,
+      targetShotVolume: 36,
+      groupTemp: 92,
+    };
+
+    it('reads current shotSettings, adds delta, calls onUpdateShotSettings', async () => {
+      const rig = buildRig({ shotSettings: baseSettings });
+      mount(rig);
+      await liveCtx().extendSteam(10);
+      expect(rig.onUpdateShotSettings).toHaveBeenCalledWith({
+        ...baseSettings,
+        targetSteamDuration: 40,
+      });
+    });
+
+    it('is a no-op when no shotSettings have arrived yet', async () => {
+      const rig = buildRig({ shotSettings: null });
+      mount(rig);
+      await liveCtx().extendSteam(10);
+      expect(rig.onUpdateShotSettings).not.toHaveBeenCalled();
+    });
+
+    it('clamps the new duration at 0 (never negative)', async () => {
+      const rig = buildRig({
+        shotSettings: { ...baseSettings, targetSteamDuration: 5 },
+      });
+      mount(rig);
+      await liveCtx().extendSteam(-100);
+      expect(rig.onUpdateShotSettings).toHaveBeenCalledWith({
+        ...baseSettings,
+        targetSteamDuration: 0,
+      });
+    });
+
+    describe('session-only semantics', () => {
+      it('restores the original targetSteamDuration when steam ends after an extend', async () => {
+        const rig = buildRig({ shotSettings: baseSettings });
+        mount(rig);
+
+        // Steam starts — snapshot the original (30 s) for later restore.
+        rig.setMachine(
+          mkSnap({
+            timestamp: '2026-05-25T08:00:00.000Z',
+            state: { state: 'steam', substate: 'idle' },
+          }),
+        );
+
+        // User bumps it to 40 mid-session.
+        await liveCtx().extendSteam(10);
+        rig.setShotSettings({ ...baseSettings, targetSteamDuration: 40 });
+        expect(rig.onUpdateShotSettings).toHaveBeenLastCalledWith({
+          ...baseSettings,
+          targetSteamDuration: 40,
+        });
+
+        // Steam ends — the saved firmware default should be put back.
+        rig.setMachine(
+          mkSnap({
+            timestamp: '2026-05-25T08:00:30.000Z',
+            state: { state: 'idle', substate: 'idle' },
+          }),
+        );
+        expect(rig.onUpdateShotSettings).toHaveBeenLastCalledWith({
+          ...baseSettings,
+          targetSteamDuration: 30, // restored
+        });
+      });
+
+      it('does not write on session-end when the duration was not extended', () => {
+        const rig = buildRig({ shotSettings: baseSettings });
+        mount(rig);
+        rig.setMachine(
+          mkSnap({ state: { state: 'steam', substate: 'idle' } }),
+        );
+        const callsBeforeEnd = rig.onUpdateShotSettings.mock.calls.length;
+        rig.setMachine(
+          mkSnap({
+            timestamp: '2026-05-25T08:00:30.000Z',
+            state: { state: 'idle', substate: 'idle' },
+          }),
+        );
+        // No new POST — nothing to restore.
+        expect(rig.onUpdateShotSettings.mock.calls.length).toBe(callsBeforeEnd);
+      });
+
+      it('restoration uses the duration captured at steam-session start, not whichever value happens to be live at session end', async () => {
+        const rig = buildRig({ shotSettings: baseSettings });
+        mount(rig);
+        // Steam starts when saved duration is 30.
+        rig.setMachine(
+          mkSnap({ state: { state: 'steam', substate: 'idle' } }),
+        );
+
+        // Multiple extends during the session.
+        await liveCtx().extendSteam(10);
+        rig.setShotSettings({ ...baseSettings, targetSteamDuration: 40 });
+        await liveCtx().extendSteam(10);
+        rig.setShotSettings({ ...baseSettings, targetSteamDuration: 50 });
+
+        // End the session.
+        rig.setMachine(
+          mkSnap({
+            timestamp: '2026-05-25T08:00:30.000Z',
+            state: { state: 'idle', substate: 'idle' },
+          }),
+        );
+        expect(rig.onUpdateShotSettings).toHaveBeenLastCalledWith({
+          ...baseSettings,
+          targetSteamDuration: 30, // captured at start, not the 50 at end
+        });
+      });
+    });
+  });
+
+  describe('machineSettings (fetched on steam start)', () => {
+    const baseMachine: MachineSettingsSnapshot = {
+      fan: 50,
+      usb: 'disable',
+      flushTemp: 90,
+      flushTimeout: 5,
+      flushFlow: 4,
+      hotWaterFlow: 4,
+      steamFlow: 1.0,
+      tankTemp: 25,
+      steamPurgeMode: 0,
+    };
+
+    it('starts as null', () => {
+      const rig = buildRig();
+      mount(rig);
+      expect(liveCtx().machineSettings()).toBeNull();
+    });
+
+    it('fetches machine settings when state enters steam', async () => {
+      const rig = buildRig({ machineSettings: baseMachine });
+      mount(rig);
+      rig.setMachine(
+        mkSnap({
+          timestamp: '2026-05-25T08:00:00.000Z',
+          state: { state: 'steam', substate: 'idle' },
+        }),
+      );
+      expect(rig.onFetchMachineSettings).toHaveBeenCalledTimes(1);
+      await waitFor(() =>
+        expect(liveCtx().machineSettings()?.steamFlow).toBe(1.0),
+      );
+    });
+
+    it('does not re-fetch on subsequent steam frames (only on session start)', async () => {
+      const rig = buildRig({ machineSettings: baseMachine });
+      mount(rig);
+      rig.setMachine(
+        mkSnap({ state: { state: 'steam', substate: 'idle' } }),
+      );
+      await waitFor(() => liveCtx().machineSettings() !== null);
+      rig.setMachine(
+        mkSnap({
+          timestamp: '2026-05-25T08:00:05.000Z',
+          state: { state: 'steam', substate: 'idle' },
+          steamTemperature: 144,
+        }),
+      );
+      expect(rig.onFetchMachineSettings).toHaveBeenCalledTimes(1);
+    });
+
+    it('updateMachineSettings optimistically merges + calls the injected updater', async () => {
+      const rig = buildRig({ machineSettings: baseMachine });
+      mount(rig);
+      rig.setMachine(
+        mkSnap({ state: { state: 'steam', substate: 'idle' } }),
+      );
+      await waitFor(() => liveCtx().machineSettings() !== null);
+
+      await liveCtx().updateMachineSettings({ steamFlow: 1.6 });
+      expect(rig.onUpdateMachineSettings).toHaveBeenCalledWith({ steamFlow: 1.6 });
+      // Optimistic merge: the cached snapshot reflects the new value
+      // immediately (machineSettings has no WS stream to refresh it).
+      expect(liveCtx().machineSettings()?.steamFlow).toBe(1.6);
+      // Other fields untouched.
+      expect(liveCtx().machineSettings()?.fan).toBe(50);
+    });
+
+    it('rolls the optimistic merge back when the gateway update rejects', async () => {
+      const rig = buildRig({ machineSettings: baseMachine });
+      rig.onUpdateMachineSettings.mockRejectedValueOnce(new Error('500'));
+      mount(rig);
+      rig.setMachine(
+        mkSnap({ state: { state: 'steam', substate: 'idle' } }),
+      );
+      await waitFor(() => liveCtx().machineSettings() !== null);
+
+      await expect(
+        liveCtx().updateMachineSettings({ steamFlow: 1.9 }),
+      ).rejects.toThrow();
+      // Rollback restores the original value.
+      expect(liveCtx().machineSettings()?.steamFlow).toBe(1.0);
+    });
   });
 });

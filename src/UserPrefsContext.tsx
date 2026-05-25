@@ -30,6 +30,7 @@ interface PersistedPrefs {
   waterBlockMm?: number;
   chartSmoothing?: ChartSmoothing;
   traceVisibility?: TraceVisibility;
+  showSteamFlowSlider?: boolean;
 }
 
 export interface UserPrefsContextValue {
@@ -45,6 +46,14 @@ export interface UserPrefsContextValue {
   setTraceVisibility: (v: TraceVisibility) => void;
   /** Update a single trace flag without rebuilding the whole object inline. */
   setTraceVisible: (k: keyof TraceVisibility, v: boolean) => void;
+  /**
+   * Whether the live steam view exposes an in-session steam-flow slider.
+   * Default off — the value is still shown in the readouts row regardless;
+   * the toggle is purely about whether a slider control appears below the
+   * hero so the user can tune mid-session.
+   */
+  showSteamFlowSlider: Accessor<boolean>;
+  setShowSteamFlowSlider: (v: boolean) => void;
 }
 
 const Ctx = createContext<UserPrefsContextValue>();
@@ -85,6 +94,9 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
   const [traceVisibility, setTraceVisibility] = createSignal<TraceVisibility>(
     initial.traceVisibility ?? DEFAULT_TRACE_VISIBILITY,
   );
+  const [showSteamFlowSlider, setShowSteamFlowSlider] = createSignal<boolean>(
+    initial.showSteamFlowSlider ?? false,
+  );
 
   const setTraceVisible = (k: keyof TraceVisibility, v: boolean) =>
     setTraceVisibility({ ...traceVisibility(), [k]: v });
@@ -98,6 +110,7 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
       waterBlockMm: waterBlockMm(),
       chartSmoothing: chartSmoothing(),
       traceVisibility: traceVisibility(),
+      showSteamFlowSlider: showSteamFlowSlider(),
     };
     storage.setItem(STORAGE_KEY, JSON.stringify(shape));
   });
@@ -114,6 +127,8 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
     traceVisibility,
     setTraceVisibility,
     setTraceVisible,
+    showSteamFlowSlider,
+    setShowSteamFlowSlider,
   };
 
   return <Ctx.Provider value={value}>{p.children}</Ctx.Provider>;

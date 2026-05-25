@@ -144,4 +144,43 @@ export const api = {
    * Snapshotted once when the drawer opens; the WS streams don't expose it.
    */
   workflow: () => fetchJson<WorkflowSnapshot>('/api/v1/workflow'),
+
+  /**
+   * Machine-level settings (the firmware MMR values: steam flow, fan, USB,
+   * flush flow/temp/timeout, hot water flow, tank temp, steam purge mode).
+   * These live on a different endpoint from `shotSettings` — they're
+   * persisted in the DE1's firmware register, not per-shot.
+   *
+   * The POST handler accepts sparse JSON: any key present is applied, the
+   * rest are left alone. So `updateMachineSettings({ steamFlow: 1.6 })` is
+   * the right shape for a single-knob change. No GET required first.
+   */
+  machineSettings: () =>
+    fetchJson<MachineSettingsSnapshot>('/api/v1/machine/settings'),
+  updateMachineSettings: (partial: Partial<MachineSettingsSnapshot>) =>
+    fetchEmpty('/api/v1/machine/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(partial),
+    }),
 };
+
+/**
+ * Shape returned by `GET /api/v1/machine/settings` (see `de1handler.dart`).
+ * All fields are optional on POST — a sparse partial is the supported
+ * mutation pattern. Typed as required on GET because the gateway always
+ * returns every key.
+ */
+export interface MachineSettingsSnapshot {
+  fan: number;
+  usb: 'enable' | 'disable';
+  flushTemp: number;
+  flushTimeout: number;
+  flushFlow: number;
+  hotWaterFlow: number;
+  /** Target steam flow in mL/s. Decent.app's slider exposes 0.4-2.0. */
+  steamFlow: number;
+  tankTemp: number;
+  /** 0 = normal, 1 = two-tap stop (per mock_de1.dart:469). */
+  steamPurgeMode: number;
+}

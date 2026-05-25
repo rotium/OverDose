@@ -164,8 +164,17 @@ export const App: Component = () => {
         <LiveShotProvider
           machineStream={streams.machine}
           scaleStream={streams.scale}
+          shotSettingsStream={streams.shotSettings}
           fetchWorkflow={api.workflow}
           onStop={onStop}
+          onUpdateShotSettings={onUpdateShotSettings}
+          onFetchMachineSettings={() =>
+            api.machineSettings().catch((e) => {
+              console.warn('fetch machineSettings failed', e);
+              return null;
+            })
+          }
+          onUpdateMachineSettings={api.updateMachineSettings}
         >
           <AppBody streams={streams} />
         </LiveShotProvider>

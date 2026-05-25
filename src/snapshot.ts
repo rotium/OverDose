@@ -11,6 +11,7 @@ export type MachineState =
   | 'steamRinse'
   | 'cleaning'
   | 'descaling'
+  | 'airPurge'
   | 'needsWater'
   | 'error';
 

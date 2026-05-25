@@ -85,7 +85,7 @@ const cappuccino = (): Beverage => ({
   steps: [
     beverageStep('brew', {}, 'step-brew'),
     beverageStep('flush', {}, 'step-flush'),
-    beverageStep('steam', { autoPurgeTimeSec: 5 }, 'step-steam'),
+    beverageStep('steam', {}, 'step-steam'),
   ],
 });
 
@@ -171,24 +171,10 @@ describe('RecipeBrewScreen', () => {
       expect(card).toHaveTextContent(/Profile library not built/i);
     });
 
-    it('shows steam prep describing the purge mode', async () => {
-      renderScreen({
-        beverages: [
-          {
-            id: 'bev-cap',
-            name: 'Cappuccino',
-            steps: [beverageStep('steam', { autoPurgeTimeSec: 7 }, 'step-steam')],
-          },
-        ],
-        recipes: [sampleRecipe()],
-      });
-      const card = await waitFor(() => screen.getByTestId('prep-card-steam'));
-      expect(card).toHaveTextContent(/Purge/i);
-      expect(card).toHaveTextContent(/Auto/i);
-      expect(card).toHaveTextContent('7s');
-    });
-
-    it('shows manual purge copy when autoPurgeTimeSec is missing', async () => {
+    it('steam prep has no Beverage-level parameters today', async () => {
+      // No SteamConfig fields ship at the Beverage layer (purge is firmware-
+      // driven, not Recipe-level). The prep card falls through to the
+      // generic "no prep needed" copy, like water and flush.
       renderScreen({
         beverages: [
           {
@@ -199,8 +185,8 @@ describe('RecipeBrewScreen', () => {
         ],
         recipes: [sampleRecipe()],
       });
-      const card = await waitFor(() => screen.getByTestId('prep-card-steam'));
-      expect(card).toHaveTextContent(/Manual/i);
+      const card = await waitFor(() => screen.getByTestId('prep-card'));
+      expect(card).toHaveTextContent(/No prep needed/i);
     });
 
     it('shows a "no prep needed" caption for water and flush', async () => {

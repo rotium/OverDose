@@ -34,7 +34,7 @@ const sampleBeverage = (over: Partial<Beverage> = {}): Beverage => ({
   steps: [
     beverageStep('brew', {}, 'step-brew'),
     beverageStep('flush', {}, 'step-flush'),
-    beverageStep('steam', { autoPurgeTimeSec: 5 }, 'step-steam'),
+    beverageStep('steam', {}, 'step-steam'),
   ],
   ...over,
 });
@@ -44,11 +44,7 @@ const renderEditor = (opts: SeedOpts, beverageId = 'bev-1') => {
   const onClose = vi.fn();
   render(() => (
     <WithRepositories beverages={repos.beverages} recipes={repos.recipes}>
-      <BeverageEditor
-        beverageId={beverageId}
-        onClose={onClose}
-        debounceMs={0}
-      />
+      <BeverageEditor beverageId={beverageId} onClose={onClose} />
     </WithRepositories>
   ));
   return { repos, onClose };
@@ -311,123 +307,6 @@ describe('BeverageEditor', () => {
         expect(b?.steps[0]?.type).toBe('brew');
         expect(b?.steps[0]?.config).toEqual({});
       });
-    });
-  });
-
-  describe('per-step config', () => {
-    it('only the steam step renders the purge-mode controls', async () => {
-      renderEditor({ beverages: [sampleBeverage()] });
-      await waitFor(() => screen.getByTestId('beverage-steps-list'));
-
-      expect(
-        screen.getByTestId('step-step-steam-purge-mode'),
-      ).toBeInTheDocument();
-      // Brew, water, flush rows have no fieldset.
-      expect(
-        screen.queryByTestId('step-step-brew-purge-mode'),
-      ).not.toBeInTheDocument();
-      expect(
-        screen.queryByTestId('step-step-flush-purge-mode'),
-      ).not.toBeInTheDocument();
-    });
-
-    it('seeds Auto Purge selection from an existing autoPurgeTimeSec > 0', async () => {
-      renderEditor({ beverages: [sampleBeverage()] });
-      const auto = (await waitFor(() =>
-        screen.getByTestId('step-step-steam-purge-auto'),
-      )) as HTMLInputElement;
-      const manual = screen.getByTestId(
-        'step-step-steam-purge-manual',
-      ) as HTMLInputElement;
-      const time = screen.getByTestId(
-        'step-step-steam-purge-time',
-      ) as HTMLInputElement;
-
-      expect(auto.checked).toBe(true);
-      expect(manual.checked).toBe(false);
-      expect(time.value).toBe('5');
-    });
-
-    it('seeds Manual selection when autoPurgeTimeSec is missing/0', async () => {
-      renderEditor({
-        beverages: [
-          sampleBeverage({
-            steps: [beverageStep('steam', {}, 'step-steam')],
-          }),
-        ],
-      });
-      const manual = (await waitFor(() =>
-        screen.getByTestId('step-step-steam-purge-manual'),
-      )) as HTMLInputElement;
-      expect(manual.checked).toBe(true);
-      // Time-to-purge input is hidden under Manual.
-      expect(
-        screen.queryByTestId('step-step-steam-purge-time'),
-      ).not.toBeInTheDocument();
-    });
-
-    it('switching to Auto from Manual seeds a 5-second default', async () => {
-      const { repos } = renderEditor({
-        beverages: [
-          sampleBeverage({
-            steps: [beverageStep('steam', {}, 'step-steam')],
-          }),
-        ],
-      });
-      const auto = (await waitFor(() =>
-        screen.getByTestId('step-step-steam-purge-auto'),
-      )) as HTMLInputElement;
-      fireEvent.click(auto);
-
-      await waitFor(async () => {
-        const b = await repos.beverages.get('bev-1');
-        const steam = b?.steps.find((s) => s.id === 'step-steam');
-        expect(
-          steam?.type === 'steam' ? steam.config.autoPurgeTimeSec : null,
-        ).toBe(5);
-      });
-    });
-
-    it('switching to Manual clears autoPurgeTimeSec', async () => {
-      const { repos } = renderEditor({ beverages: [sampleBeverage()] });
-      const manual = (await waitFor(() =>
-        screen.getByTestId('step-step-steam-purge-manual'),
-      )) as HTMLInputElement;
-      fireEvent.click(manual);
-
-      await waitFor(async () => {
-        const b = await repos.beverages.get('bev-1');
-        const steam = b?.steps.find((s) => s.id === 'step-steam');
-        expect(
-          steam?.type === 'steam' ? steam.config.autoPurgeTimeSec : 'x',
-        ).toBeUndefined();
-      });
-    });
-
-    it('editing Time to Purge persists the new value', async () => {
-      const { repos } = renderEditor({ beverages: [sampleBeverage()] });
-      const time = (await waitFor(() =>
-        screen.getByTestId('step-step-steam-purge-time'),
-      )) as HTMLInputElement;
-      time.value = '8';
-      fireEvent.input(time);
-
-      await waitFor(async () => {
-        const b = await repos.beverages.get('bev-1');
-        const steam = b?.steps.find((s) => s.id === 'step-steam');
-        expect(
-          steam?.type === 'steam' ? steam.config.autoPurgeTimeSec : null,
-        ).toBe(8);
-      });
-    });
-
-    it('renders help text for both purge modes', async () => {
-      renderEditor({ beverages: [sampleBeverage()] });
-      const fs = await waitFor(() =>
-        screen.getByTestId('step-step-steam-purge-mode'),
-      );
-      expect(fs).toHaveTextContent(/wipe the steam wand/i);
-      expect(fs).toHaveTextContent(/purge button on the machine/i);
     });
   });
 

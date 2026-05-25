@@ -337,12 +337,7 @@ const PrepCard: Component<{
         <Match when={p.step().type === 'brew'}>
           <BrewPrep recipe={p.recipe} />
         </Match>
-        <Match when={p.step().type === 'steam'}>
-          <SteamPrep step={p.step} />
-        </Match>
-        <Match
-          when={p.step().type === 'water' || p.step().type === 'flush'}
-        >
+        <Match when={p.step().type !== 'brew'}>
           <p class="prep__no-params">No prep needed.</p>
         </Match>
       </Switch>
@@ -415,29 +410,6 @@ const BrewPrep: Component<{
     </div>
   </>
 );
-
-const SteamPrep: Component<{ step: Accessor<BeverageStep> }> = (p) => {
-  const cfg = () =>
-    p.step().type === 'steam'
-      ? (p.step().config as { autoPurgeTimeSec?: number })
-      : null;
-  const auto = () => (cfg()?.autoPurgeTimeSec ?? 0) > 0;
-  return (
-    <section class="prep__profile" data-testid="prep-card-steam">
-      <span class="prep__profile-label">Purge</span>
-      <span class="prep__profile-value">
-        <Show
-          when={auto()}
-          fallback={
-            <>Manual — press the purge button on the machine when ready.</>
-          }
-        >
-          Auto — {cfg()!.autoPurgeTimeSec}s after steam ends.
-        </Show>
-      </span>
-    </section>
-  );
-};
 
 const PostBrewView: Component<{
   onDone: () => void;
