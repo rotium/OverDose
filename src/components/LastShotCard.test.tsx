@@ -99,7 +99,10 @@ describe('LastShotCard', () => {
     expect(onSeeAll).toHaveBeenCalledTimes(1);
   });
 
-  it('uses the profile title as the headline when present', async () => {
+  it('uses the profile title as the headline + workflow name as subtitle', async () => {
+    // The profile title is the headline (how the shot was pulled). The
+    // workflow / recipe name "slot" still surfaces as a muted subtitle so
+    // the user knows which drink the recorded shot belongs to.
     render(() => (
       <LastShotCard
         fetchSummary={() =>
@@ -117,8 +120,50 @@ describe('LastShotCard', () => {
       />
     ));
     await waitFor(() => screen.getByText('Gentle and Sweet'));
-    // Workflow name no longer leads the card.
-    expect(screen.queryByText('Cappuccino')).not.toBeInTheDocument();
+    const subtitle = screen.getByTestId('last-shot-subtitle');
+    expect(subtitle).toHaveTextContent('Cappuccino');
+  });
+
+  it('subtitle combines recipe name + bean when both are present', async () => {
+    render(() => (
+      <LastShotCard
+        fetchSummary={() =>
+          Promise.resolve(
+            summary({
+              workflow: {
+                name: 'Cappuccino',
+                context: { coffeeName: 'Brazil Dark' },
+                profile: { title: 'Gentle and Sweet' },
+              },
+            }),
+          )
+        }
+        fetchFull={() => new Promise(() => {})}
+        onSeeAll={() => {}}
+      />
+    ));
+    const subtitle = await waitFor(() =>
+      screen.getByTestId('last-shot-subtitle'),
+    );
+    expect(subtitle).toHaveTextContent('Cappuccino · Brazil Dark');
+  });
+
+  it('no subtitle rendered when the headline is already the recipe name', async () => {
+    // Headline falls back to workflow.name when no profile is set. The
+    // subtitle would be redundant in that case, so it's suppressed.
+    render(() => (
+      <LastShotCard
+        fetchSummary={() =>
+          Promise.resolve(summary({ workflow: { name: 'Cappuccino' } }))
+        }
+        fetchFull={() => new Promise(() => {})}
+        onSeeAll={() => {}}
+      />
+    ));
+    await waitFor(() => screen.getByText('Cappuccino'));
+    expect(
+      screen.queryByTestId('last-shot-subtitle'),
+    ).not.toBeInTheDocument();
   });
 
   it('falls back to the workflow name when no profile title is present', async () => {

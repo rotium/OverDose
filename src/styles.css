@@ -358,6 +358,19 @@ html {
   font-size: 0.95rem;
 }
 
+.tile__profile {
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-style: italic;
+  line-height: 1.2;
+  /* Cap to a single line at small tile widths — long profile names
+     stay legible without breaking the grid layout. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
 /* ─── Last-shot card ──────────────────────────────────────────────── */
 
 .last-shot__head {
@@ -375,6 +388,13 @@ html {
 .last-shot__name {
   margin: 0 0 0.125rem;
   font-weight: 600;
+}
+
+.last-shot__subtitle {
+  margin: 0 0 0.25rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-style: italic;
 }
 
 .last-shot__stats {
@@ -647,7 +667,7 @@ html {
 
 .live-view__readouts {
   display: grid;
-  grid-template-columns: repeat(5, 1fr) auto;
+  grid-template-columns: repeat(6, 1fr) auto;
   /* Top-align so the LABEL row + VALUE row line up across all columns even
      when YIELD adds a progress bar below its value. Bar dangles below the
      value without pushing the label/value up. */
@@ -1842,42 +1862,42 @@ html {
   gap: 0.4rem;
 }
 
-.profile-preview__chart {
+/* Reusable curve-chart styles. Used by both the ProfilePreview pane
+   and RecipeBrewScreen.BrewPrep (smaller, compact variant). */
+.profile-curve-chart {
   width: 100%;
   height: auto;
   display: block;
 }
 
-.profile-preview__chart-plot {
+.profile-curve-chart__plot {
   fill: rgba(255, 255, 255, 0.02);
   stroke: var(--border);
   stroke-width: 1;
 }
 
-.profile-preview__chart-grid {
+.profile-curve-chart__grid {
   stroke: var(--border);
   stroke-width: 0.5;
   opacity: 0.5;
 }
 
-.profile-preview__chart-tick {
+.profile-curve-chart__tick {
   font-size: 10px;
   fill: var(--muted);
 }
 
-/* Single axis now — drop the per-trace tick colours (they implied
-   dual axes which is no longer the case). Keep the class slots so
-   any external override still has a hook. */
-.profile-preview__chart-tick--pressure,
-.profile-preview__chart-tick--flow {
-  fill: var(--muted);
-}
-
-.profile-preview__chart-line {
+.profile-curve-chart__line {
   fill: none;
   stroke-width: 2;
   stroke-linejoin: round;
   stroke-linecap: round;
+}
+
+.profile-curve-chart[data-compact] .profile-curve-chart__line {
+  /* Thinner stroke at compact sizes so traces don't visually merge in
+     a small thumbnail. */
+  stroke-width: 1.5;
 }
 
 .profile-preview__chart-legend {
@@ -2525,6 +2545,38 @@ html {
   line-height: 1.25;
 }
 
+.prep__profile-value--muted {
+  font-weight: 400;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.prep__profile-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+}
+
+.prep__profile-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.6rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.prep__profile-author {
+  font-style: italic;
+}
+
+.prep__profile-chart {
+  margin-top: 0.3rem;
+  /* The chart is sized via SVG viewBox; constrain its rendered width so
+     it doesn't dominate the prep card on a wide tablet. */
+  max-width: 320px;
+}
+
 .prep__stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -2563,6 +2615,52 @@ html {
   font-size: 0.85rem;
   font-weight: 500;
   color: var(--muted);
+}
+
+/* Editable variant — the prep card's per-shot override inputs. The
+   `.prep__stat` is a <label> so tapping the row focuses the input. */
+.prep__stat-edit {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
+.prep__stat-input {
+  width: 100%;
+  min-width: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.25rem 0.5rem;
+  line-height: 1.1;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.prep__stat-input::-webkit-outer-spin-button,
+.prep__stat-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.prep__stat-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.prep__profile-toprow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.prep__profile-change {
+  padding: 0.25rem 0.7rem;
+  font-size: 0.8rem;
 }
 
 .prep__stat-value em {

@@ -166,6 +166,32 @@ export const LastShotCard: Component<LastShotCardProps> = (p) => {
     displayedSummary()?.workflow?.context?.coffeeName ??
     'Shot';
 
+  /**
+   * Subtitle = recipe slot + bean name when the headline is the profile.
+   * Without this the recipe/bean info gets dropped from the card entirely
+   * once a shot has profile metadata. Returns the empty string when there's
+   * nothing useful to add (the headline is already the recipe name, or
+   * neither recipe nor bean is set).
+   */
+  const subtitleLine = (): string => {
+    const s = displayedSummary();
+    if (!s?.workflow) return '';
+    const profileTitle = s.workflow.profile?.title ?? '';
+    const recipeName = s.workflow.name ?? '';
+    const coffeeName = s.workflow.context?.coffeeName ?? '';
+    // Headline is already the recipe name (profile missing) — nothing to
+    // add unless bean is interesting.
+    if (!profileTitle) {
+      return recipeName && coffeeName && coffeeName !== recipeName
+        ? coffeeName
+        : '';
+    }
+    const parts: string[] = [];
+    if (recipeName) parts.push(recipeName);
+    if (coffeeName && coffeeName !== recipeName) parts.push(coffeeName);
+    return parts.join(' · ');
+  };
+
   return (
     <section class="card last-shot">
       <header class="last-shot__head">
@@ -188,6 +214,14 @@ export const LastShotCard: Component<LastShotCardProps> = (p) => {
           {(s) => (
             <div class="last-shot__body" data-source={usingOptimistic() ? 'optimistic' : 'gateway'}>
               <p class="last-shot__name">{headlineName()}</p>
+              <Show when={subtitleLine()}>
+                <p
+                  class="last-shot__subtitle"
+                  data-testid="last-shot-subtitle"
+                >
+                  {subtitleLine()}
+                </p>
+              </Show>
               <p class="last-shot__stats" data-testid="last-shot-stats">
                 <Show when={dose() != null && yieldG() != null} fallback={<span>—</span>}>
                   <span>

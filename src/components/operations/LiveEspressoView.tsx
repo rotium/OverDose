@@ -300,6 +300,10 @@ export const LiveEspressoView: Component<LiveEspressoViewProps> = (p) => {
           <div class="readout__label">WEIGHT</div>
           <div class="readout__value">{fmtNumber(r()?.weight, 1, ' g')}</div>
         </div>
+        <div class="readout" data-testid="readout-volume">
+          <div class="readout__label">VOLUME</div>
+          <div class="readout__value">{fmtNumber(r()?.volumeMl, 0, ' mL')}</div>
+        </div>
         <div class="readout">
           <div class="readout__label">TIME</div>
           <div class="readout__value">{fmtElapsed(r()?.elapsedSec)}</div>

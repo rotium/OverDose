@@ -11,6 +11,7 @@ import { MemoryStorage } from '../test/memoryStorage';
 import { beverageStep } from '../domain';
 import type { Beverage, Recipe } from '../domain';
 import type { MachineSnapshot, MachineState } from '../snapshot';
+import type { ProfileRecord } from '../api';
 import type { WsStream } from '../streams';
 
 interface SeedOpts {
@@ -63,9 +64,23 @@ const mkSetup = (opts: SeedOpts) => {
 };
 
 const renderScreen = (
-  opts: SeedOpts & { recipeId?: string },
-): ReturnType<typeof mkSetup> => {
+  opts: SeedOpts & {
+    recipeId?: string;
+    loadProfileById?: (id: string) => Promise<ProfileRecord | null>;
+    loadProfiles?: () => Promise<ProfileRecord[]>;
+  },
+): ReturnType<typeof mkSetup> & {
+  onApplyWorkflow: ReturnType<typeof vi.fn>;
+} => {
   const env = mkSetup({ beverages: opts.beverages, recipes: opts.recipes });
+  // Default profile fetchers return empty/null so the brew-step prep card
+  // never hits the real api in tests; callers that need a profile-loaded
+  // assertion pass their own.
+  const loadProfileById =
+    opts.loadProfileById ?? (() => Promise.resolve<ProfileRecord | null>(null));
+  const loadProfiles =
+    opts.loadProfiles ?? (() => Promise.resolve<ProfileRecord[]>([]));
+  const onApplyWorkflow = vi.fn(async () => {});
   render(() => (
     <WithRepositories beverages={env.repos.beverages} recipes={env.repos.recipes}>
       <RecipeBrewScreen
@@ -73,11 +88,29 @@ const renderScreen = (
         onExit={env.onExit}
         machineStream={() => env.machineStream}
         requestState={env.requestState}
+        loadProfileById={loadProfileById}
+        loadProfiles={loadProfiles}
+        onApplyWorkflow={onApplyWorkflow}
       />
     </WithRepositories>
   ));
-  return env;
+  return { ...env, onApplyWorkflow };
 };
+
+const mkProfileRecord = (
+  over: Partial<ProfileRecord> = {},
+): ProfileRecord => ({
+  id: over.id ?? 'profile:abc',
+  profile: over.profile ?? { title: 'Best Practice C+' },
+  metadataHash: 'm',
+  compoundHash: 'c',
+  parentId: null,
+  visibility: 'visible',
+  isDefault: false,
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-01T00:00:00Z',
+  ...over,
+});
 
 const cappuccino = (): Beverage => ({
   id: 'bev-cap',
@@ -161,16 +194,272 @@ describe('RecipeBrewScreen', () => {
   });
 
   describe('prep card per step type', () => {
-    it('shows brew prep with dose, grinder setting, profile placeholder', async () => {
-      renderScreen({ beverages: [cappuccino()], recipes: [sampleRecipe()] });
-      const card = await waitFor(() => screen.getByTestId('prep-card'));
-      expect(card).toHaveTextContent('Dose');
-      expect(card).toHaveTextContent('18');
-      expect(card).toHaveTextContent('Grinder setting');
-      expect(card).toHaveTextContent('4.5');
-      expect(card).toHaveTextContent(/Profile library not built/i);
+    it('seeds the editable dose/grinder inputs from the Recipe; profile shows the Choose prompt when none is pinned', async () => {
+      renderScreen({
+        beverages: [cappuccino()],
+        recipes: [sampleRecipe({ profileId: undefined })],
+      });
+      await waitFor(() => screen.getByTestId('prep-card'));
+      expect(
+        (screen.getByTestId('prep-card-dose-input') as HTMLInputElement).value,
+      ).toBe('18');
+      expect(
+        (screen.getByTestId('prep-card-grinder-input') as HTMLInputElement)
+          .value,
+      ).toBe('4.5');
+      expect(
+        screen.getByTestId('prep-card-profile-empty'),
+      ).toBeInTheDocument();
     });
 
+    it('target yield + volume inputs are empty when the Recipe doesn’t set them', async () => {
+      renderScreen({
+        beverages: [cappuccino()],
+        recipes: [sampleRecipe()],
+      });
+      await waitFor(() => screen.getByTestId('prep-card'));
+      expect(
+        (screen.getByTestId('prep-card-target-yield-input') as HTMLInputElement)
+          .value,
+      ).toBe('');
+      expect(
+        (
+          screen.getByTestId(
+            'prep-card-target-volume-input',
+          ) as HTMLInputElement
+        ).value,
+      ).toBe('');
+    });
+
+    it('seeds target yield + volume inputs from the Recipe when present', async () => {
+      renderScreen({
+        beverages: [cappuccino()],
+        recipes: [
+          sampleRecipe({ targetYieldGrams: 36, targetVolumeMl: 40 }),
+        ],
+      });
+      await waitFor(() => screen.getByTestId('prep-card'));
+      expect(
+        (screen.getByTestId('prep-card-target-yield-input') as HTMLInputElement)
+          .value,
+      ).toBe('36');
+      expect(
+        (
+          screen.getByTestId(
+            'prep-card-target-volume-input',
+          ) as HTMLInputElement
+        ).value,
+      ).toBe('40');
+    });
+
+    it('editing a prep-card field overrides for this shot only — the saved Recipe is untouched', async () => {
+      const { repos } = renderScreen({
+        beverages: [cappuccino()],
+        recipes: [sampleRecipe({ doseGrams: 18 })],
+      });
+      const dose = (await waitFor(() =>
+        screen.getByTestId('prep-card-dose-input'),
+      )) as HTMLInputElement;
+      dose.value = '20';
+      fireEvent.input(dose);
+      fireEvent.blur(dose);
+      // The input reflects the override...
+      expect(dose.value).toBe('20');
+      // ...but the persisted Recipe is unchanged.
+      const r = await repos.recipes.get('rec-1');
+      expect(r?.doseGrams).toBe(18);
+    });
+
+    it('shows the resolved profile title + chart when a Recipe has a profileId', async () => {
+      const profile = mkProfileRecord({
+        id: 'profile:c-plus',
+        profile: {
+          title: 'Best Practice C+',
+          author: 'Decent',
+          tank_temperature: 93,
+          steps: [{ name: 'pour', pump: 'pressure', seconds: 20, pressure: 9 }],
+        },
+        isDefault: true,
+      });
+      renderScreen({
+        beverages: [cappuccino()],
+        recipes: [sampleRecipe({ profileId: profile.id })],
+        loadProfileById: () => Promise.resolve(profile),
+      });
+      const title = await waitFor(() =>
+        screen.getByTestId('prep-card-profile-title'),
+      );
+      expect(title).toHaveTextContent('Best Practice C+');
+      expect(
+        screen.getByTestId('prep-card-profile-default-badge'),
+      ).toBeInTheDocument();
+      expect(screen.getByTestId('prep-card-profile-meta')).toHaveTextContent(
+        'by Decent',
+      );
+      expect(screen.getByTestId('prep-card-profile-meta')).toHaveTextContent(
+        'Tank 93.0 °C',
+      );
+      expect(
+        screen.getByTestId('prep-card-profile-chart'),
+      ).toBeInTheDocument();
+    });
+
+    it('falls back to "(missing profile — id)" when the loader returns null', async () => {
+      renderScreen({
+        beverages: [cappuccino()],
+        recipes: [sampleRecipe({ profileId: 'profile:ghost' })],
+        loadProfileById: () => Promise.resolve(null),
+      });
+      const missing = await waitFor(() =>
+        screen.getByTestId('prep-card-profile-missing'),
+      );
+      expect(missing).toHaveTextContent('missing profile — profile:ghost');
+    });
+
+    it('Change-profile dialog overrides the shot profile without touching the Recipe', async () => {
+      const original = mkProfileRecord({
+        id: 'profile:orig',
+        profile: { title: 'Original' },
+      });
+      const swapped = mkProfileRecord({
+        id: 'profile:swap',
+        profile: { title: 'Swapped In' },
+      });
+      // loadProfileById serves whichever id the draft currently holds;
+      // loadProfiles backs the picker dialog list.
+      const byId: Record<string, ProfileRecord> = {
+        'profile:orig': original,
+        'profile:swap': swapped,
+      };
+      const { repos } = renderScreen({
+        beverages: [cappuccino()],
+        recipes: [sampleRecipe({ profileId: 'profile:orig' })],
+        loadProfileById: (id) => Promise.resolve(byId[id] ?? null),
+        loadProfiles: () => Promise.resolve([original, swapped]),
+      });
+      await waitFor(() =>
+        expect(screen.getByTestId('prep-card-profile-title')).toHaveTextContent(
+          'Original',
+        ),
+      );
+      // Open the picker, choose the other profile.
+      fireEvent.click(screen.getByTestId('prep-card-profile-change'));
+      const row = await waitFor(() =>
+        screen.getByTestId('profile-row-profile:swap-button'),
+      );
+      fireEvent.click(row);
+      fireEvent.click(screen.getByTestId('profile-picker-choose'));
+
+      // Prep card repaints to the swapped profile...
+      await waitFor(() =>
+        expect(screen.getByTestId('prep-card-profile-title')).toHaveTextContent(
+          'Swapped In',
+        ),
+      );
+      // ...and the saved Recipe still points at the original.
+      const r = await repos.recipes.get('rec-1');
+      expect(r?.profileId).toBe('profile:orig');
+    });
+  });
+
+  describe('workflow push (gateway binding)', () => {
+    const profileWithSteps = mkProfileRecord({
+      id: 'profile:p1',
+      profile: {
+        title: 'Pushed Profile',
+        target_volume: 50,
+        steps: [{ name: 'pour', pump: 'pressure', seconds: 20, pressure: 9 }],
+      },
+    });
+
+    it('pushes profile + context to the gateway once the profile resolves', async () => {
+      const { onApplyWorkflow } = renderScreen({
+        beverages: [cappuccino()],
+        recipes: [
+          sampleRecipe({
+            name: 'Wife’s',
+            profileId: profileWithSteps.id,
+            doseGrams: 18,
+            grinderSetting: 4.5,
+            targetYieldGrams: 36,
+          }),
+        ],
+        loadProfileById: () => Promise.resolve(profileWithSteps),
+      });
+      await waitFor(() => expect(onApplyWorkflow).toHaveBeenCalled());
+      const body = onApplyWorkflow.mock.calls.at(-1)![0];
+      expect(body.name).toBe('Wife’s');
+      expect(body.profile?.title).toBe('Pushed Profile');
+      expect(body.context).toEqual({
+        targetDoseWeight: 18,
+        targetYield: 36,
+        grinderSetting: '4.5', // gateway wants a string
+      });
+    });
+
+    it('overrides the pushed profile target_volume from the draft', async () => {
+      const { onApplyWorkflow } = renderScreen({
+        beverages: [cappuccino()],
+        recipes: [
+          sampleRecipe({
+            profileId: profileWithSteps.id,
+            targetVolumeMl: 42,
+          }),
+        ],
+        loadProfileById: () => Promise.resolve(profileWithSteps),
+      });
+      await waitFor(() => expect(onApplyWorkflow).toHaveBeenCalled());
+      const body = onApplyWorkflow.mock.calls.at(-1)![0];
+      // Profile's own target_volume (50) replaced by the draft override (42).
+      expect(body.profile?.target_volume).toBe(42);
+    });
+
+    it('sends the profile target_volume unchanged when the draft has no override', async () => {
+      const { onApplyWorkflow } = renderScreen({
+        beverages: [cappuccino()],
+        recipes: [sampleRecipe({ profileId: profileWithSteps.id })],
+        loadProfileById: () => Promise.resolve(profileWithSteps),
+      });
+      await waitFor(() => expect(onApplyWorkflow).toHaveBeenCalled());
+      const body = onApplyWorkflow.mock.calls.at(-1)![0];
+      expect(body.profile?.target_volume).toBe(50);
+    });
+
+    it('does NOT push when the recipe has no profile', async () => {
+      const { onApplyWorkflow } = renderScreen({
+        beverages: [cappuccino()],
+        recipes: [sampleRecipe({ profileId: undefined })],
+      });
+      // Give the screen a beat to settle (resource + effects).
+      await waitFor(() => screen.getByTestId('prep-card'));
+      await Promise.resolve();
+      expect(onApplyWorkflow).not.toHaveBeenCalled();
+    });
+
+    it('re-pushes after an in-prep edit, syncing the new value (Recipe untouched)', async () => {
+      const { onApplyWorkflow, repos } = renderScreen({
+        beverages: [cappuccino()],
+        recipes: [
+          sampleRecipe({ profileId: profileWithSteps.id, doseGrams: 18 }),
+        ],
+        loadProfileById: () => Promise.resolve(profileWithSteps),
+      });
+      await waitFor(() => expect(onApplyWorkflow).toHaveBeenCalled());
+      const dose = screen.getByTestId('prep-card-dose-input') as HTMLInputElement;
+      dose.value = '20';
+      fireEvent.input(dose);
+      fireEvent.blur(dose);
+      await waitFor(() => {
+        const body = onApplyWorkflow.mock.calls.at(-1)![0];
+        expect(body.context?.targetDoseWeight).toBe(20);
+      });
+      // Saved Recipe still has the original dose.
+      const r = await repos.recipes.get('rec-1');
+      expect(r?.doseGrams).toBe(18);
+    });
+  });
+
+  describe('non-brew prep', () => {
     it('steam prep has no Beverage-level parameters today', async () => {
       // No SteamConfig fields ship at the Beverage layer (purge is firmware-
       // driven, not Recipe-level). The prep card falls through to the

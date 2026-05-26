@@ -3,9 +3,8 @@ import type { ProfileRecord } from '../../../../api';
 import {
   buildProfileCurve,
   type ProfileCurve,
-  type SeriesPoint,
 } from '../../../../profile/curve';
-import { TRACE_COLOR, TRACE_TRANSFORM } from '../../../chartTraces';
+import { ProfileCurveChart } from './ProfileCurveChart';
 
 /**
  * Detail pane for a single profile. Renders the title, metadata chips,
@@ -28,17 +27,6 @@ export interface ProfilePreviewProps {
   record: ProfileRecord | null | undefined;
 }
 
-const CHART_W = 520;
-const CHART_H = 200;
-const PAD_LEFT = 32;
-const PAD_RIGHT = 16;
-const PAD_TOP = 12;
-const PAD_BOTTOM = 28;
-/** Single shared Y axis ceiling. Pressure tops out at 12 bar (DE1
- *  firmware ceiling); flow caps below; temperature ÷ 10 keeps °C in
- *  range (100 °C → 10.0). */
-const Y_AXIS_MAX = 12;
-
 const fmtGrams = (n: number | undefined): string | null =>
   typeof n === 'number' && n > 0 ? `${n.toFixed(0)} g` : null;
 const fmtMl = (n: number | undefined): string | null =>
@@ -47,25 +35,6 @@ const fmtTemp = (n: number | undefined): string | null =>
   typeof n === 'number' && n > 0 ? `${n.toFixed(1)} °C` : null;
 const fmtSec = (n: number): string =>
   n < 10 ? n.toFixed(1) : Math.round(n).toString();
-
-const projectX = (t: number, durationSec: number): number => {
-  if (durationSec <= 0) return PAD_LEFT;
-  return PAD_LEFT + (t / durationSec) * (CHART_W - PAD_LEFT - PAD_RIGHT);
-};
-const projectY = (v: number): number => {
-  return CHART_H - PAD_BOTTOM - (v / Y_AXIS_MAX) * (CHART_H - PAD_TOP - PAD_BOTTOM);
-};
-
-/** Project a series-of-(t,v) onto chart pixels, with per-trace transform
- *  (pressure / flow raw, temperature ÷ 10). */
-const runToPoints = (
-  run: SeriesPoint[],
-  durationSec: number,
-  transform: (v: number) => number,
-): string =>
-  run
-    .map((p) => `${projectX(p.t, durationSec)},${projectY(transform(p.v))}`)
-    .join(' ');
 
 export const ProfilePreview: Component<ProfilePreviewProps> = (p) => {
   const record = (): ProfileRecord | null => p.record ?? null;
@@ -126,7 +95,20 @@ export const ProfilePreview: Component<ProfilePreviewProps> = (p) => {
             </div>
           }
         >
-          <CurveSvg curve={curve()} />
+          <div class="profile-preview__chart-wrap">
+            <ProfileCurveChart
+              curve={curve()}
+              testId="profile-preview-chart"
+            />
+            <div class="profile-preview__chart-legend" aria-hidden="true">
+              <span class="profile-preview__chart-swatch profile-preview__chart-swatch--pressure" />
+              <span>pressure (bar)</span>
+              <span class="profile-preview__chart-swatch profile-preview__chart-swatch--flow" />
+              <span>flow (mL/s)</span>
+              <span class="profile-preview__chart-swatch profile-preview__chart-swatch--temperature" />
+              <span>temp (°C)</span>
+            </div>
+          </div>
         </Show>
 
         <div class="profile-preview__chips" data-testid="profile-preview-chips">
@@ -179,123 +161,3 @@ export const ProfilePreview: Component<ProfilePreviewProps> = (p) => {
   );
 };
 
-interface CurveSvgProps {
-  curve: ProfileCurve;
-}
-
-const CurveSvg: Component<CurveSvgProps> = (p) => (
-  <div class="profile-preview__chart-wrap">
-    <svg
-      class="profile-preview__chart"
-      data-testid="profile-preview-chart"
-      viewBox={`0 0 ${CHART_W} ${CHART_H}`}
-      role="img"
-      aria-label="Profile target curve"
-    >
-      {/* Plot area background */}
-      <rect
-        x={PAD_LEFT}
-        y={PAD_TOP}
-        width={CHART_W - PAD_LEFT - PAD_RIGHT}
-        height={CHART_H - PAD_TOP - PAD_BOTTOM}
-        class="profile-preview__chart-plot"
-      />
-      {/* Y-axis ticks — single 0–12 axis. The values are unitless because
-          three traces share it (pressure bar, flow mL/s, temp ÷ 10 °C).
-          Real units live in the legend so the user never reads a
-          deceptive single-unit label off the chart. */}
-      <For each={[0, 3, 6, 9, 12]}>
-        {(v) => (
-          <g>
-            <line
-              x1={PAD_LEFT}
-              x2={CHART_W - PAD_RIGHT}
-              y1={projectY(v)}
-              y2={projectY(v)}
-              class="profile-preview__chart-grid"
-            />
-            <text
-              x={PAD_LEFT - 6}
-              y={projectY(v)}
-              text-anchor="end"
-              dominant-baseline="middle"
-              class="profile-preview__chart-tick"
-            >
-              {v}
-            </text>
-          </g>
-        )}
-      </For>
-      {/* X-axis labels — 0 and duration */}
-      <text
-        x={PAD_LEFT}
-        y={CHART_H - 6}
-        text-anchor="start"
-        class="profile-preview__chart-tick"
-      >
-        0
-      </text>
-      <text
-        x={CHART_W - PAD_RIGHT}
-        y={CHART_H - 6}
-        text-anchor="end"
-        class="profile-preview__chart-tick"
-      >
-        {Math.round(p.curve.durationSec)} s
-      </text>
-      {/* Trace order: temperature first (background-y), then flow, then
-          pressure on top — matches the live chart's z-order intuition
-          (pressure is the most-read trace). */}
-      <For each={p.curve.temperatureRuns}>
-        {(run) => (
-          <polyline
-            points={runToPoints(
-              run,
-              p.curve.durationSec,
-              TRACE_TRANSFORM.mixTemperature,
-            )}
-            class="profile-preview__chart-line profile-preview__chart-line--temperature"
-            stroke={TRACE_COLOR.mixTemperature}
-            data-testid="profile-preview-chart-temperature-run"
-          />
-        )}
-      </For>
-      <For each={p.curve.flowRuns}>
-        {(run) => (
-          <polyline
-            points={runToPoints(
-              run,
-              p.curve.durationSec,
-              TRACE_TRANSFORM.flow,
-            )}
-            class="profile-preview__chart-line profile-preview__chart-line--flow"
-            stroke={TRACE_COLOR.flow}
-            data-testid="profile-preview-chart-flow-run"
-          />
-        )}
-      </For>
-      <For each={p.curve.pressureRuns}>
-        {(run) => (
-          <polyline
-            points={runToPoints(
-              run,
-              p.curve.durationSec,
-              TRACE_TRANSFORM.pressure,
-            )}
-            class="profile-preview__chart-line profile-preview__chart-line--pressure"
-            stroke={TRACE_COLOR.pressure}
-            data-testid="profile-preview-chart-pressure-run"
-          />
-        )}
-      </For>
-    </svg>
-    <div class="profile-preview__chart-legend" aria-hidden="true">
-      <span class="profile-preview__chart-swatch profile-preview__chart-swatch--pressure" />
-      <span>pressure (bar)</span>
-      <span class="profile-preview__chart-swatch profile-preview__chart-swatch--flow" />
-      <span>flow (mL/s)</span>
-      <span class="profile-preview__chart-swatch profile-preview__chart-swatch--temperature" />
-      <span>temp (°C)</span>
-    </div>
-  </div>
-);

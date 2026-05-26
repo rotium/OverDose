@@ -3,6 +3,7 @@ import {
   Match,
   Show,
   Switch,
+  createMemo,
   createResource,
   type Accessor,
   type Component,
@@ -10,6 +11,7 @@ import {
 } from 'solid-js';
 import type { Recipe } from '../domain';
 import type { RecipeRepository } from '../repositories';
+import { api, type ProfileRecord } from '../api';
 import { RecipeTile, type DisabledReason } from './RecipeTile';
 
 /**
@@ -33,6 +35,12 @@ export interface RecipePickerProps {
   repository: RecipeRepository;
   onSelect: (recipe: Recipe) => void;
   disabledReason?: Accessor<DisabledReason | null>;
+  /** Fetcher seam for the gateway's profile list. The picker resolves
+   *  each tile's profile name from this for the subtitle. Defaults to
+   *  `api.profiles({})`; tests can inject a fake or omit (the default
+   *  catches its own errors so an offline gateway just hides the
+   *  subtitle on every tile). */
+  loadProfiles?: () => Promise<ProfileRecord[]>;
 }
 
 export interface RecipePickerHandle {
@@ -45,6 +53,31 @@ export const RecipePicker: Component<
 > = (p) => {
   const [recipes, { refetch }] = createResource(() => p.repository.list());
   p.ref?.({ recipes, refresh: () => void refetch() });
+
+  // Profile list — fetched once on mount, used to look up each tile's
+  // profile title. Catches its own errors so an offline gateway just
+  // hides the subtitle on every tile; the recipes themselves still
+  // render from the local repository.
+  const [profiles] = createResource<ProfileRecord[] | null>(() =>
+    (p.loadProfiles ?? (() => api.profiles({})))().catch((e) => {
+      console.warn('profile list load failed', e);
+      return null;
+    }),
+  );
+  const profileTitleById = createMemo<Map<string, string>>(() => {
+    const map = new Map<string, string>();
+    const list = profiles();
+    if (!list) return map;
+    for (const r of list) {
+      const t = (r.profile.title ?? '').trim();
+      if (t) map.set(r.id, t);
+    }
+    return map;
+  });
+  const profileTitleFor = (id: string | undefined): string | undefined => {
+    if (!id) return undefined;
+    return profileTitleById().get(id);
+  };
 
   return (
     <section class="picker" aria-label="Recipe picker">
@@ -74,6 +107,7 @@ export const RecipePicker: Component<
                       onSelect={p.onSelect}
                       disabled={reason() !== null}
                       disabledReason={reason() ?? undefined}
+                      profileTitle={profileTitleFor(r.profileId)}
                     />
                   );
                 }}

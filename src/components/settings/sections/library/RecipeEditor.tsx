@@ -132,6 +132,18 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
     void saveRecipe({ ...r, grinderSetting: n });
   };
 
+  const handleTargetYieldCommit = (g: number | undefined) => {
+    const r = recipe();
+    if (!r) return;
+    void saveRecipe({ ...r, targetYieldGrams: g });
+  };
+
+  const handleTargetVolumeCommit = (ml: number | undefined) => {
+    const r = recipe();
+    if (!r) return;
+    void saveRecipe({ ...r, targetVolumeMl: ml });
+  };
+
   const handleDelete = async () => {
     await repos.recipes.delete(p.recipeId);
     p.onClose();
@@ -268,7 +280,46 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
                       class="step-field__input"
                     />
                   </label>
+                  <label class="recipe-editor__field">
+                    <span class="recipe-editor__field-label">
+                      Target yield
+                    </span>
+                    <DebouncedNumberField
+                      value={r().targetYieldGrams}
+                      onCommit={handleTargetYieldCommit}
+                      placeholder="g"
+                      min={0}
+                      step={0.1}
+                      ariaLabel="Target yield (grams)"
+                      testId="recipe-target-yield-input"
+                      debounceMs={p.debounceMs}
+                      class="step-field__input"
+                    />
+                    <span class="step-field__unit">g</span>
+                  </label>
+                  <label class="recipe-editor__field">
+                    <span class="recipe-editor__field-label">
+                      Target volume
+                    </span>
+                    <DebouncedNumberField
+                      value={r().targetVolumeMl}
+                      onCommit={handleTargetVolumeCommit}
+                      placeholder="mL"
+                      min={0}
+                      step={1}
+                      ariaLabel="Target volume (millilitres)"
+                      testId="recipe-target-volume-input"
+                      debounceMs={p.debounceMs}
+                      class="step-field__input"
+                    />
+                    <span class="step-field__unit">mL</span>
+                  </label>
                 </div>
+                <p class="settings-help">
+                  Target yield stops the shot at this cup weight — needs a
+                  connected scale. Target volume is the fallback stop used
+                  when no scale is connected.
+                </p>
               </section>
 
               <section class="settings-section">

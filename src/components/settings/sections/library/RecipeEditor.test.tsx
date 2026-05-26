@@ -284,6 +284,54 @@ describe('RecipeEditor', () => {
         expect(r?.grinderSetting).toBe(5);
       });
     });
+
+    it('edits target yield and persists', async () => {
+      const { repos } = renderEditor({
+        beverages: [cappuccinoBev()],
+        recipes: [sampleRecipe()],
+      });
+      const y = (await waitFor(() =>
+        screen.getByTestId('recipe-target-yield-input'),
+      )) as HTMLInputElement;
+      y.value = '36';
+      fireEvent.input(y);
+      await waitFor(async () => {
+        const r = await repos.recipes.get('rec-1');
+        expect(r?.targetYieldGrams).toBe(36);
+      });
+    });
+
+    it('edits target volume and persists', async () => {
+      const { repos } = renderEditor({
+        beverages: [cappuccinoBev()],
+        recipes: [sampleRecipe()],
+      });
+      const v = (await waitFor(() =>
+        screen.getByTestId('recipe-target-volume-input'),
+      )) as HTMLInputElement;
+      v.value = '40';
+      fireEvent.input(v);
+      await waitFor(async () => {
+        const r = await repos.recipes.get('rec-1');
+        expect(r?.targetVolumeMl).toBe(40);
+      });
+    });
+
+    it('clearing target yield stores undefined', async () => {
+      const { repos } = renderEditor({
+        beverages: [cappuccinoBev()],
+        recipes: [sampleRecipe({ targetYieldGrams: 36 })],
+      });
+      const y = (await waitFor(() =>
+        screen.getByTestId('recipe-target-yield-input'),
+      )) as HTMLInputElement;
+      y.value = '';
+      fireEvent.input(y);
+      await waitFor(async () => {
+        const r = await repos.recipes.get('rec-1');
+        expect(r?.targetYieldGrams).toBeUndefined();
+      });
+    });
   });
 
   describe('profile picker', () => {

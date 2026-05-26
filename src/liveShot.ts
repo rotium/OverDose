@@ -35,6 +35,10 @@ export interface LiveShotReadouts {
   flow: number;              // mL/s
   weight: number;            // g (NaN allowed; UI renders em-dash)
   mixTemperature: number;    // °C
+  /** Dispensed volume so far (mL) — flow integrated over time. The live WS
+   *  stream has no volume field, so we integrate it client-side exactly
+   *  like the gateway does for the persisted record (flow × Δt, summed). */
+  volumeMl: number;
   elapsedSec: number;
   substate: MachineSubstate;
   profileFrame: number;
@@ -157,6 +161,10 @@ export function createLiveShotAccumulator(): LiveShotAccumulator {
   let startedAt = '';
   let endedAt = '';
   let workflow: WorkflowSnapshot | null = null;
+  // Running flow-integral (mL). Matches reaprime's ShotSequencer left-Riemann
+  // sum (`flow × timeSinceLastSample`); the live WS stream carries flow but
+  // not accumulated volume.
+  let volumeMl = 0;
 
   const buffers: LiveShotBuffers = {
     get cursor() {
@@ -241,6 +249,7 @@ export function createLiveShotAccumulator(): LiveShotAccumulator {
       cursor = 0;
       startedAt = '';
       endedAt = '';
+      volumeMl = 0;
       workflow = wf ?? null;
       setTargetYieldG(wf?.context?.targetYield ?? 0);
       setCurrentProfile(wf?.profile ?? null);
@@ -258,6 +267,12 @@ export function createLiveShotAccumulator(): LiveShotAccumulator {
         return;
       }
       if (cursor === 0) startedAt = frame.machineTimestamp;
+      else {
+        // Integrate flow since the previous sample. Left-Riemann (current
+        // flow × elapsed) — same as the gateway, so the live readout tracks
+        // the value that ends up in the persisted shot record.
+        volumeMl += frame.flow * ((frame.tMs - tMs[cursor - 1]!) / 1000);
+      }
       endedAt = frame.machineTimestamp;
 
       tMs[cursor] = frame.tMs;
@@ -285,6 +300,7 @@ export function createLiveShotAccumulator(): LiveShotAccumulator {
           flow: frame.flow,
           weight: frame.weight,
           mixTemperature: frame.mixTemperature,
+          volumeMl,
           elapsedSec: frame.tMs / 1000,
           substate: frame.substate,
           profileFrame: frame.profileFrame,
@@ -303,6 +319,7 @@ export function createLiveShotAccumulator(): LiveShotAccumulator {
       cursor = 0;
       startedAt = '';
       endedAt = '';
+      volumeMl = 0;
       workflow = null;
       setFrameCount(0);
       setReadouts(null);

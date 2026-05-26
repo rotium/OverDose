@@ -5,6 +5,24 @@ import type { Recipe } from '../domain';
 import type { RecipeRepository } from '../repositories';
 import type { DisabledReason } from './RecipeTile';
 import { RecipePicker } from './RecipePicker';
+import type { ProfileRecord } from '../api';
+
+const profRec = (
+  id: string,
+  title: string,
+  over: Partial<ProfileRecord> = {},
+): ProfileRecord => ({
+  id,
+  profile: { title },
+  metadataHash: 'm',
+  compoundHash: 'c',
+  parentId: null,
+  visibility: 'visible',
+  isDefault: false,
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-01T00:00:00Z',
+  ...over,
+});
 
 const rec = (id: string, name = id): Recipe => ({
   id,
@@ -37,6 +55,50 @@ describe('RecipePicker', () => {
     });
     expect(screen.getByText('Espresso')).toBeInTheDocument();
     expect(screen.getByText('Cappuccino')).toBeInTheDocument();
+  });
+
+  it('renders the profile-name subtitle on each tile that has a matching profileId', async () => {
+    const a: Recipe = { ...rec('a', 'Espresso'), profileId: 'profile:default' };
+    const b: Recipe = { ...rec('b', 'Cappuccino'), profileId: 'profile:gentle' };
+    const c: Recipe = rec('c', 'No-profile');
+    render(() => (
+      <RecipePicker
+        repository={repo([a, b, c])}
+        onSelect={() => {}}
+        loadProfiles={() =>
+          Promise.resolve([
+            profRec('profile:default', 'Best Practice C+'),
+            profRec('profile:gentle', 'Gentle and Sweet'),
+          ])
+        }
+      />
+    ));
+    await waitFor(() =>
+      expect(screen.getByTestId('recipe-tile-a-profile')).toHaveTextContent(
+        'Best Practice C+',
+      ),
+    );
+    expect(screen.getByTestId('recipe-tile-b-profile')).toHaveTextContent(
+      'Gentle and Sweet',
+    );
+    expect(
+      screen.queryByTestId('recipe-tile-c-profile'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('omits subtitles when the profile fetch fails (graceful degrade)', async () => {
+    const a: Recipe = { ...rec('a', 'Espresso'), profileId: 'profile:default' };
+    render(() => (
+      <RecipePicker
+        repository={repo([a])}
+        onSelect={() => {}}
+        loadProfiles={() => Promise.reject(new Error('boom'))}
+      />
+    ));
+    await waitFor(() => screen.getByTestId('recipe-tile-a'));
+    expect(
+      screen.queryByTestId('recipe-tile-a-profile'),
+    ).not.toBeInTheDocument();
   });
 
   it('invokes onSelect with the chosen recipe on tap', async () => {

@@ -182,7 +182,45 @@ export const api = {
     fetchJson<ProfileRecord>(
       `/api/v1/profiles/${encodeURIComponent(id)}`,
     ),
+
+  /**
+   * Update the current workflow (`PUT /api/v1/workflow`). The gateway
+   * deep-merges the partial body into the current workflow and uploads
+   * the profile to the machine if it changed (see reaprime
+   * `workflow_handler.dart`). This is the recommended way to load a
+   * profile + shot context for brewing — it keeps the persisted workflow
+   * (and thus the shot record + live UI) in sync, unlike POST
+   * /machine/profile which only touches the firmware.
+   *
+   * Send a partial: omitted top-level keys and omitted context fields are
+   * preserved by the deep-merge. Send `null` in a context field to
+   * explicitly clear it.
+   */
+  setWorkflow: (body: WorkflowUpdate) =>
+    fetchEmpty('/api/v1/workflow', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
 };
+
+/**
+ * Subset of the gateway's `WorkflowContext` we set from a Recipe/draft.
+ * `null` explicitly clears a field; omitting it preserves the gateway's
+ * existing value (deep-merge). Grinder setting is a string on the gateway.
+ */
+export interface WorkflowContextUpdate {
+  targetDoseWeight?: number | null;
+  targetYield?: number | null;
+  grinderSetting?: string | null;
+}
+
+/** Partial workflow body for `PUT /api/v1/workflow`. */
+export interface WorkflowUpdate {
+  name?: string;
+  profile?: Profile;
+  context?: WorkflowContextUpdate;
+}
 
 /**
  * Shape returned by `GET /api/v1/machine/settings` (see `de1handler.dart`).

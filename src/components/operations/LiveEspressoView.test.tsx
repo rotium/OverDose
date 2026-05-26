@@ -62,15 +62,18 @@ describe('LiveEspressoView', () => {
     });
   });
 
-  it('renders pressure / flow / weight / time / mix temp in real units after a frame', () => {
+  it('renders pressure / flow / weight / volume / time / mix temp in real units after a frame', () => {
     inRoot(() => {
       const acc = createLiveShotAccumulator();
       acc.start(null);
+      // Two frames so the flow-integral has a Δt to work with: 2 mL/s over
+      // 1s → 2 mL of accumulated volume.
+      acc.append(frame({ tMs: 11_500, flow: 2, machineTimestamp: '2026-05-22T08:00:11.500Z' }));
       acc.append(
         frame({
           tMs: 12_500,
           pressure: 6.2,
-          flow: 2.1,
+          flow: 2,
           weight: 28.4,
           mixTemperature: 92.7,
           targetPressure: 6,
@@ -83,11 +86,13 @@ describe('LiveEspressoView', () => {
 
       render(() => <LiveEspressoView acc={acc} onStop={() => {}} />);
       expect(screen.getByText(/6\.2 bar/)).toBeInTheDocument();
-      expect(screen.getByText(/2\.1 mL\/s/)).toBeInTheDocument();
+      expect(screen.getByText(/2\.0 mL\/s/)).toBeInTheDocument();
       expect(screen.getByText(/92\.7 °C/)).toBeInTheDocument();
       // Plain WEIGHT column — no progress bar, no "/36 g" target text.
       expect(screen.getByTestId('readout-weight')).toHaveTextContent('28.4 g');
       expect(screen.getByTestId('readout-weight')).not.toHaveTextContent(/\//);
+      // VOLUME column — flow integrated to 2 mL, rendered as whole mL.
+      expect(screen.getByTestId('readout-volume')).toHaveTextContent('2 mL');
       expect(screen.getAllByText(/12\.5 s/).length).toBeGreaterThan(0);
     });
   });

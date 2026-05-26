@@ -224,6 +224,38 @@ describe('LiveShotAccumulator', () => {
       });
     });
 
+    it('integrates flow into volume (mL) — left-Riemann, matching the gateway', () => {
+      inRoot(() => {
+        const acc = createLiveShotAccumulator();
+        acc.start(null);
+        // First frame contributes 0 (no previous sample to integrate against).
+        acc.append(frame({ tMs: 0, flow: 2 }));
+        expect(acc.readouts()!.volumeMl).toBeCloseTo(0);
+        // +1s at 2 mL/s → 2 mL.
+        acc.append(frame({ tMs: 1000, flow: 2 }));
+        expect(acc.readouts()!.volumeMl).toBeCloseTo(2);
+        // +0.5s at 4 mL/s → +2 mL → 4 mL total. Integration uses the
+        // *current* frame's flow over the elapsed since the last sample.
+        acc.append(frame({ tMs: 1500, flow: 4 }));
+        expect(acc.readouts()!.volumeMl).toBeCloseTo(4);
+      });
+    });
+
+    it('resets accumulated volume between shots', () => {
+      inRoot(() => {
+        const acc = createLiveShotAccumulator();
+        acc.start(null);
+        acc.append(frame({ tMs: 0, flow: 2 }));
+        acc.append(frame({ tMs: 1000, flow: 2 }));
+        expect(acc.readouts()!.volumeMl).toBeCloseTo(2);
+        // New shot → volume starts from zero again.
+        acc.start(null);
+        acc.append(frame({ tMs: 0, flow: 3 }));
+        acc.append(frame({ tMs: 1000, flow: 3 }));
+        expect(acc.readouts()!.volumeMl).toBeCloseTo(3);
+      });
+    });
+
     it('drops frames silently once buffer capacity is exhausted (no allocation, no throw)', () => {
       inRoot(() => {
         const acc = createLiveShotAccumulator();

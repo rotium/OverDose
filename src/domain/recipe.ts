@@ -41,9 +41,26 @@ export interface Recipe {
   /** Dose-in weight (grams) — the user weighs this much before brewing. */
   doseGrams?: number;
   /**
+   * Stop-at-weight target (grams of beverage in the cup). When set and a
+   * scale is connected, the machine auto-stops the shot at this weight.
+   * Maps to the gateway's `workflow.context.targetYield` at brew time —
+   * a clean context-layer override that doesn't alter the profile's
+   * identity. Requires a scale; ignored (falls back to volume / profile
+   * time) when none is connected.
+   */
+  targetYieldGrams?: number;
+  /**
+   * Stop-at-volume target (mL). The **no-scale fallback** stop: only
+   * consulted when no scale is connected (weight wins otherwise). Maps to
+   * the profile's `target_volume`, so applying it means pushing a
+   * content-modified profile to the *current workflow only* — it never
+   * enters the profile library and doesn't persist past a restart.
+   */
+  targetVolumeMl?: number;
+  /**
    * Espresso profile used by the brew step. References Profile.id from
-   * the Profile library (TODO). Per-Recipe rather than per-Beverage so
-   * the user can tune profile per-bean (matches grind / dose / bean).
+   * the Profile library. Per-Recipe rather than per-Beverage so the user
+   * can tune profile per-bean (matches grind / dose / bean).
    */
   profileId?: string;
   /** Optional path to a tile image displayed in the picker. */
