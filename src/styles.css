@@ -1046,6 +1046,15 @@ html {
   flex: 1;
   overflow: auto;
   padding: 1.25rem 1.5rem;
+  /* When a subsection opts into the `--fill` layout (currently only
+     ProfilesSection), its picker manages its own internal scrolling per
+     column — the page scroll must be suppressed so the right detail
+     pane doesn't scroll out of view when the user scrolls the list. */
+  min-height: 0;
+}
+
+.settings__content:has(.settings-section-stack--fill) {
+  overflow: hidden;
 }
 
 .settings-section-stack {
@@ -1055,11 +1064,33 @@ html {
   max-width: 720px;
 }
 
+/* `--fill` modifier: section claims the available height of the
+   settings sub-nav content area instead of being capped at 720px. Used
+   by ProfilesSection so the picker can scroll its columns internally
+   rather than push the whole page scroll. */
+.settings-section-stack--fill {
+  max-width: none;
+  height: 100%;
+  min-height: 0;
+}
+
 .settings-section {
   background: var(--bg-elev);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 1rem 1.25rem;
+}
+
+.settings-section--fill {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  /* The picker provides its own internal padding for list + detail
+     columns, so drop the section's bottom padding to let the picker
+     reach the section edge. Keep the top padding for the heading. */
+  padding-bottom: 0;
+  overflow: hidden;
 }
 
 .settings-section h2 {
@@ -1208,12 +1239,18 @@ html {
 .settings-subnav {
   display: grid;
   grid-template-columns: 160px 1fr;
+  /* `grid-template-rows: minmax(0, 1fr)` is the load-bearing piece here.
+     Without it the grid's implicit row is auto-sized (content-driven),
+     so the grid item's `height: 100%` asks for 100% of an auto-height
+     row — circular and resolves to auto. The whole fill-mode chain
+     below then has no definite height to anchor against and the
+     picker's internal scroll never engages. Forcing the row to 1fr of
+     the grid's definite (100%) height gives the grid item a real
+     number to be a percentage of. */
+  grid-template-rows: minmax(0, 1fr);
   gap: 1.5rem;
   align-items: stretch;
-  /* Fill the parent (.settings__content) so the right column has a real
-     height — a side sheet positioned within it can then stretch to the
-     same height instead of being bounded by its own short content. */
-  min-height: 100%;
+  height: 100%;
 }
 
 .settings-subnav__nav {
@@ -1437,6 +1474,484 @@ html {
   padding: 1rem 1.25rem 1.25rem;
 }
 
+/* ─── Picker dialog ───────────────────────────────────────────────── */
+
+/* Centered modal used by profile / future bean+grinder pickers.
+   The backdrop is also the centering host — flex centers the dialog
+   on screen. Pointer-events flow only to the backdrop and the dialog;
+   anything outside is unreachable while open. */
+.picker-dialog__backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Tight padding — the dialog should dominate the screen on tablet
+     (1280×800). 2rem on each side was 64px of unused space; 1rem reads
+     as "the modal is the foreground" instead of "the modal is a card
+     hovering over the page". */
+  padding: 1rem;
+  animation: backdrop-fade-in 180ms ease forwards;
+}
+
+.picker-dialog__backdrop[data-state='closing'] {
+  animation: backdrop-fade-out 200ms ease forwards;
+}
+
+.picker-dialog {
+  background: var(--bg-elev);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+  /* width:100% + max-width lets the JSX `maxWidthPx` style override widen
+     the dialog past the default cap. A bare `width: min(720px, 100%)`
+     would clamp at 720 regardless of inline max-width. */
+  width: 100%;
+  max-width: 720px;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: picker-dialog-in 200ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+
+.picker-dialog[data-state='closing'] {
+  animation: picker-dialog-out 200ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+
+@keyframes picker-dialog-in {
+  from { transform: translateY(20px) scale(0.97); opacity: 0; }
+  to   { transform: translateY(0) scale(1);       opacity: 1; }
+}
+
+@keyframes picker-dialog-out {
+  from { transform: translateY(0) scale(1);       opacity: 1; }
+  to   { transform: translateY(12px) scale(0.98); opacity: 0; }
+}
+
+.picker-dialog__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.1rem 1.25rem 0.85rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.picker-dialog__heading {
+  flex: 1;
+  min-width: 0;
+}
+
+.picker-dialog__title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.picker-dialog__description {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.picker-dialog__close {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  width: 2rem;
+  height: 2rem;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.picker-dialog__close:hover {
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.picker-dialog__body {
+  padding: 0;
+  /* Master-detail pickers manage their own internal scrolling per column;
+     hiding overflow here prevents a redundant outer scrollbar. Single-
+     scroll content (a Bean picker, say) still works because its inner
+     element can set overflow:auto if it wants. */
+  overflow: hidden;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.picker-dialog__footer {
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid var(--border);
+  background: var(--bg-elev);
+}
+
+/* ─── Profile picker ──────────────────────────────────────────────── */
+
+.profile-picker {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.profile-picker__status {
+  margin: 0;
+  padding: 1.5rem 1.25rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+  text-align: center;
+}
+
+.profile-picker__status--error {
+  color: var(--bad);
+}
+
+/* Master-detail split. Left column lists profiles, right column hosts
+   the preview pane. Each column scrolls independently so a long step
+   list doesn't push the chosen-profile row out of view.
+
+   `grid-template-rows: minmax(0, 1fr)` is load-bearing: without it the
+   grid's auto-row sizes to max item content, so the list grows to its
+   intrinsic height and the column's `overflow: auto` never triggers.
+   Setting an explicit fractional row forces the row to the grid
+   container's flex-allocated height. */
+.profile-picker__split {
+  display: grid;
+  grid-template-columns: minmax(220px, 38%) 1fr;
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+  flex: 1 1 auto;
+  border-top: 1px solid var(--border);
+}
+
+.profile-picker__detail {
+  min-width: 0;
+  /* min-height:0 is load-bearing on grid items — without it the item's
+     intrinsic content height wins and the column never scrolls. */
+  min-height: 0;
+  overflow: auto;
+  border-left: 1px solid var(--border);
+}
+
+.profile-picker__footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid var(--border);
+  background: var(--bg-elev);
+}
+
+.profile-picker__list {
+  list-style: none;
+  margin: 0;
+  padding: 0.5rem 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  min-height: 0;
+}
+
+.profile-row {
+  border-bottom: 1px solid var(--border);
+}
+
+.profile-row:last-child {
+  border-bottom: none;
+}
+
+.profile-row__button {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.profile-row__inner {
+  padding: 0.85rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  border-left: 3px solid transparent;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.profile-row__button:hover .profile-row__inner,
+.profile-row__button:focus-visible .profile-row__inner {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.profile-row[data-previewed] .profile-row__inner {
+  background: rgba(80, 130, 255, 0.08);
+  border-left-color: var(--accent, #5a8cff);
+}
+
+/* `selected` ≠ `previewed`: selected is what the Recipe has pinned
+   (shown by the ✓ in the row head). When the user is browsing a different
+   row, we keep a subtle pin indicator on the selected row even if it's
+   not highlighted — but the highlight goes to whatever's being previewed. */
+.profile-row[data-selected]:not([data-previewed]) .profile-row__inner {
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.profile-row__head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+
+.profile-row__title {
+  flex: 1;
+  font-size: 1.02rem;
+  font-weight: 600;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.profile-row__selected {
+  flex: 0 0 auto;
+  color: var(--accent, #5a8cff);
+  font-weight: 700;
+}
+
+.profile-row__chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.02);
+  white-space: nowrap;
+}
+
+.profile-row__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.profile-row__badge--default {
+  background: rgba(80, 130, 255, 0.15);
+  color: var(--accent, #5a8cff);
+}
+
+.profile-row__author {
+  font-size: 0.82rem;
+  color: var(--muted);
+  font-style: italic;
+  margin-top: 0.1rem;
+}
+
+.profile-row__inner--two-line {
+  padding-top: 0.65rem;
+  padding-bottom: 0.65rem;
+}
+
+/* ─── Profile preview pane ────────────────────────────────────────── */
+
+.profile-preview {
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-height: 0;
+}
+
+.profile-preview__placeholder {
+  margin: auto;
+  color: var(--muted);
+  font-style: italic;
+  text-align: center;
+}
+
+.profile-preview__header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.profile-preview__title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.profile-preview__title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.profile-preview__author {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.profile-preview__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.55rem;
+}
+
+.profile-preview__notes {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--fg);
+  line-height: 1.5;
+  opacity: 0.85;
+}
+
+.profile-preview__no-curve {
+  padding: 1rem;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.profile-preview__chart-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.profile-preview__chart {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.profile-preview__chart-plot {
+  fill: rgba(255, 255, 255, 0.02);
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.profile-preview__chart-grid {
+  stroke: var(--border);
+  stroke-width: 0.5;
+  opacity: 0.5;
+}
+
+.profile-preview__chart-tick {
+  font-size: 10px;
+  fill: var(--muted);
+}
+
+/* Single axis now — drop the per-trace tick colours (they implied
+   dual axes which is no longer the case). Keep the class slots so
+   any external override still has a hook. */
+.profile-preview__chart-tick--pressure,
+.profile-preview__chart-tick--flow {
+  fill: var(--muted);
+}
+
+.profile-preview__chart-line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.profile-preview__chart-legend {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem 1rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  flex-wrap: wrap;
+}
+
+.profile-preview__chart-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+  margin-right: 0.25rem;
+  vertical-align: middle;
+}
+
+.profile-preview__chart-swatch--pressure {
+  background: #3b82f6;
+}
+
+.profile-preview__chart-swatch--flow {
+  background: #f59e0b;
+}
+
+.profile-preview__chart-swatch--temperature {
+  background: #ef4444;
+}
+
+.profile-preview__steps {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.profile-preview__steps-title {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.profile-preview__step-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.profile-preview__step {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: var(--fg);
+  padding: 0.25rem 0;
+  border-bottom: 1px dashed var(--border);
+}
+
+.profile-preview__step:last-child {
+  border-bottom: none;
+}
+
+.profile-preview__step-time {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ─── Beverage editor ─────────────────────────────────────────────── */
 
 .beverage-editor__title {
@@ -1646,6 +2161,69 @@ html {
   white-space: nowrap;
   color: var(--fg-muted, #888);
   font-size: 0.85rem;
+}
+
+.recipe-editor__profile-field {
+  display: flex;
+  align-items: stretch;
+  gap: 0.4rem;
+}
+
+.recipe-editor__profile-button {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.9rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.recipe-editor__profile-button:hover,
+.recipe-editor__profile-button:focus-visible {
+  border-color: var(--border-strong);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.recipe-editor__profile-empty {
+  flex: 1;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.recipe-editor__profile-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recipe-editor__profile-chevron {
+  color: var(--muted);
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.recipe-editor__profile-clear {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  width: 2.2rem;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.recipe-editor__profile-clear:hover {
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .recipe-editor__stubs {

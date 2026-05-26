@@ -11,12 +11,25 @@ import { formatStepType } from '../../../../domain';
 import type { Beverage, Recipe } from '../../../../domain';
 import { useRepositories } from '../../../../RepositoriesContext';
 import { DebouncedNumberField } from './DebouncedNumberField';
+import { PickerDialog } from '../../../PickerDialog';
+import { ProfilePicker } from './ProfilePicker';
+import { api, type ProfileRecord } from '../../../../api';
 
 export interface RecipeEditorProps {
   recipeId: string;
   onClose: () => void;
   /** Debounce override for tests. */
   debounceMs?: number;
+  /** Profile-list fetcher seam (defaults to `api.profiles({})`). Used by
+   *  the dialog's ProfilePicker. Tests inject a fake to avoid the real
+   *  gateway round-trip. */
+  loadProfiles?: () => Promise<ProfileRecord[]>;
+  /** Single-profile fetcher used to render the collapsed "selected
+   *  profile" row. Returns null when the id no longer resolves (deleted /
+   *  hidden / gateway unavailable) so the editor renders a graceful
+   *  fallback instead of crashing the resource. Default mirrors that
+   *  null-on-error contract. */
+  loadProfileById?: (id: string) => Promise<ProfileRecord | null>;
 }
 
 /**
@@ -61,6 +74,33 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
     return steps.map((s) => formatStepType(s.type)).join(' → ');
   };
   const [confirmingDelete, setConfirmingDelete] = createSignal(false);
+  const [profileDialogOpen, setProfileDialogOpen] = createSignal(false);
+
+  // Resolve the currently-selected profile so we can render its title in
+  // the collapsed field. Keyed off the Recipe's `profileId`; refetches
+  // when it changes. The fetcher resolves to `null` on any failure
+  // (deleted, hidden, gateway offline) so we render a graceful "missing"
+  // affordance rather than blowing up the resource.
+  const loadProfileById = (id: string): Promise<ProfileRecord | null> =>
+    (p.loadProfileById ?? ((x) => api.profileById(x).catch(() => null)))(id);
+  const [selectedProfile] = createResource<ProfileRecord | null, string>(
+    () => recipe()?.profileId,
+    (id) => loadProfileById(id),
+  );
+
+  const handleProfileSelect = (profileId: string) => {
+    const r = recipe();
+    if (!r) return;
+    setProfileDialogOpen(false);
+    if (r.profileId === profileId) return;
+    void saveRecipe({ ...r, profileId });
+  };
+
+  const handleProfileClear = () => {
+    const r = recipe();
+    if (!r || r.profileId === undefined) return;
+    void saveRecipe({ ...r, profileId: undefined });
+  };
 
   const saveRecipe = async (next: Recipe) => {
     await repos.recipes.update(next);
@@ -181,6 +221,21 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
               </section>
 
               <section class="settings-section">
+                <h3>Espresso profile</h3>
+                <p class="settings-help">
+                  Which espresso profile the brew step uses. Profiles live
+                  on the gateway; pick from the library.
+                </p>
+                <ProfileFieldRow
+                  selectedId={r().profileId}
+                  selectedProfile={() => selectedProfile() ?? null}
+                  loading={selectedProfile.loading}
+                  onOpen={() => setProfileDialogOpen(true)}
+                  onClear={handleProfileClear}
+                />
+              </section>
+
+              <section class="settings-section">
                 <h3>Brewing</h3>
                 <div class="recipe-editor__field-row">
                   <label class="recipe-editor__field">
@@ -231,14 +286,6 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
                       Library not built yet
                     </span>
                   </li>
-                  <li>
-                    <span class="recipe-editor__stub-label">
-                      Espresso profile
-                    </span>
-                    <span class="recipe-editor__stub-note">
-                      Library not built yet
-                    </span>
-                  </li>
                 </ul>
               </section>
 
@@ -282,10 +329,90 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
                   </div>
                 </Show>
               </section>
+              <PickerDialog
+                open={profileDialogOpen()}
+                onClose={() => setProfileDialogOpen(false)}
+                title="Choose a profile"
+                description="Espresso profiles loaded on the gateway."
+                testId="recipe-profile-dialog"
+                maxWidthPx={1100}
+              >
+                <ProfilePicker
+                  selectedId={r().profileId}
+                  onSelect={handleProfileSelect}
+                  onCancel={() => setProfileDialogOpen(false)}
+                  loadProfiles={p.loadProfiles}
+                />
+              </PickerDialog>
             </>
           )}
         </Match>
       </Switch>
+    </div>
+  );
+};
+
+interface ProfileFieldRowProps {
+  selectedId: string | undefined;
+  selectedProfile: () => ProfileRecord | null;
+  loading: boolean;
+  onOpen: () => void;
+  onClear: () => void;
+}
+
+/**
+ * Collapsed display for the Recipe's chosen profile. Clicking opens the
+ * picker dialog. When a profileId is set but the gateway returns nothing
+ * (deleted, hidden, or offline), we fall back to showing the bare id so
+ * the user understands what's pinned and can re-pick. The clear button
+ * is rendered alongside so a Recipe can be returned to the "no profile"
+ * state without opening the dialog.
+ */
+const ProfileFieldRow: Component<ProfileFieldRowProps> = (p) => {
+  const hasId = (): boolean => !!p.selectedId;
+  const title = (): string => {
+    const rec = p.selectedProfile();
+    if (rec) return (rec.profile.title ?? '').trim() || '(untitled)';
+    if (p.loading) return 'Loading…';
+    return `(missing profile — ${p.selectedId})`;
+  };
+  return (
+    <div
+      class="recipe-editor__profile-field"
+      data-testid="recipe-editor-profile-field"
+    >
+      <button
+        type="button"
+        class="recipe-editor__profile-button"
+        data-testid="recipe-profile-open"
+        aria-haspopup="dialog"
+        onClick={p.onOpen}
+      >
+        <Show
+          when={hasId()}
+          fallback={
+            <span class="recipe-editor__profile-empty">
+              No profile selected — tap to choose
+            </span>
+          }
+        >
+          <span class="recipe-editor__profile-title">{title()}</span>
+        </Show>
+        <span class="recipe-editor__profile-chevron" aria-hidden="true">
+          ›
+        </span>
+      </button>
+      <Show when={hasId()}>
+        <button
+          type="button"
+          class="recipe-editor__profile-clear"
+          data-testid="recipe-profile-clear"
+          aria-label="Clear selected profile"
+          onClick={p.onClear}
+        >
+          ×
+        </button>
+      </Show>
     </div>
   );
 };

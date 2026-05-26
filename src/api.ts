@@ -163,6 +163,25 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(partial),
     }),
+
+  /**
+   * List profile records from the gateway. Defaults to `visibility=visible`
+   * — hidden / soft-deleted profiles are kept on the gateway but not
+   * surfaced to the picker. The library view will eventually offer a
+   * "show hidden" toggle (Phase B), but v1 only browses the visible set.
+   */
+  profiles: (params: { visibility?: ProfileVisibility } = {}) => {
+    const v = params.visibility ?? 'visible';
+    return fetchJson<ProfileRecord[]>(
+      `/api/v1/profiles?visibility=${encodeURIComponent(v)}`,
+    );
+  },
+
+  /** Get a single profile record by id (the content-based hash). */
+  profileById: (id: string) =>
+    fetchJson<ProfileRecord>(
+      `/api/v1/profiles/${encodeURIComponent(id)}`,
+    ),
 };
 
 /**
@@ -171,6 +190,56 @@ export const api = {
  * mutation pattern. Typed as required on GET because the gateway always
  * returns every key.
  */
+/**
+ * Profile, mirrored from reaprime's `/api/v1/profiles` schema. The gateway
+ * is authoritative for profile storage (Hive-backed); the skin only
+ * consumes records here. Fields beyond what the UI renders are kept loose
+ * to avoid coupling to the full v2 profile spec (Jeff Kletsky / DE1).
+ *
+ * See reaprime/assets/api/rest_v1.yml#/components/schemas/Profile and
+ * .../ProfileRecord — and reaprime/doc/Profiles.md for the architecture.
+ */
+export interface Profile {
+  /** Display title — what the user picks by. Always present in practice. */
+  title?: string;
+  author?: string;
+  notes?: string;
+  /** "espresso" / "pourover" / "cleaning". For DE1 the picker is effectively
+   *  espresso-only, so we don't filter; surface it as a chip when non-empty. */
+  beverage_type?: string;
+  /** Target weight in grams (Recipe metadata overrides this at brew time). */
+  target_weight?: number;
+  /** Target volume in mL. */
+  target_volume?: number;
+  /** Group-head water tank target temp in °C. */
+  tank_temperature?: number;
+  /** Profile step list. Each step is an opaque object in the spec; we
+   *  only count + iterate for the curve preview (deferred). */
+  steps?: unknown[];
+  /** v2 spec version string. */
+  version?: string;
+}
+
+export type ProfileVisibility = 'visible' | 'hidden' | 'deleted';
+
+/** Envelope around `Profile` with gateway-managed metadata. */
+export interface ProfileRecord {
+  /** Content-based hash. Stable across devices for identical profile content. */
+  id: string;
+  profile: Profile;
+  metadataHash: string;
+  compoundHash: string;
+  parentId?: string | null;
+  visibility: ProfileVisibility;
+  /** True for bundled defaults — UI surfaces a badge and we never allow
+   *  hard-delete (the gateway already enforces this; the badge is just a
+   *  cue so the user understands why "Delete" might not apply). */
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+  metadata?: Record<string, unknown> | null;
+}
+
 export interface MachineSettingsSnapshot {
   fan: number;
   usb: 'enable' | 'disable';

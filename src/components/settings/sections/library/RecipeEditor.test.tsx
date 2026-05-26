@@ -9,11 +9,31 @@ import {
 import { MemoryStorage } from '../../../../test/memoryStorage';
 import { beverageStep } from '../../../../domain';
 import type { Beverage, Recipe } from '../../../../domain';
+import type { ProfileRecord } from '../../../../api';
 
 interface SeedOpts {
   beverages?: Beverage[];
   recipes?: Recipe[];
+  /** Profile-list fetcher seam (default: no profiles). */
+  loadProfiles?: () => Promise<ProfileRecord[]>;
+  /** Single-profile fetcher seam (default: null for any id). */
+  loadProfileById?: (id: string) => Promise<ProfileRecord | null>;
 }
+
+const mkProfileRecord = (
+  over: Partial<ProfileRecord> = {},
+): ProfileRecord => ({
+  id: over.id ?? 'profile:abc',
+  profile: over.profile ?? { title: 'Best Practice C+', author: 'Decent' },
+  metadataHash: 'meta',
+  compoundHash: 'compound',
+  parentId: null,
+  visibility: 'visible',
+  isDefault: false,
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-01T00:00:00Z',
+  ...over,
+});
 
 const seedRepos = ({ beverages = [], recipes = [] }: SeedOpts) => {
   const bStore = new MemoryStorage();
@@ -53,9 +73,22 @@ const sampleRecipe = (over: Partial<Recipe> = {}): Recipe => ({
 const renderEditor = (opts: SeedOpts, recipeId = 'rec-1') => {
   const repos = seedRepos(opts);
   const onClose = vi.fn();
+  // Default profile fetchers return "no profiles" / null so RecipeEditor
+  // never hits the real api in tests. Callers that exercise the picker
+  // override these.
+  const loadProfiles =
+    opts.loadProfiles ?? (() => Promise.resolve<ProfileRecord[]>([]));
+  const loadProfileById =
+    opts.loadProfileById ?? (() => Promise.resolve<ProfileRecord | null>(null));
   render(() => (
     <WithRepositories beverages={repos.beverages} recipes={repos.recipes}>
-      <RecipeEditor recipeId={recipeId} onClose={onClose} debounceMs={0} />
+      <RecipeEditor
+        recipeId={recipeId}
+        onClose={onClose}
+        debounceMs={0}
+        loadProfiles={loadProfiles}
+        loadProfileById={loadProfileById}
+      />
     </WithRepositories>
   ));
   return { repos, onClose };
@@ -253,20 +286,171 @@ describe('RecipeEditor', () => {
     });
   });
 
+  describe('profile picker', () => {
+    it('shows "No profile selected" copy when the Recipe has no profileId', async () => {
+      renderEditor({
+        beverages: [cappuccinoBev()],
+        recipes: [sampleRecipe({ profileId: undefined })],
+      });
+      const field = await waitFor(() =>
+        screen.getByTestId('recipe-editor-profile-field'),
+      );
+      expect(field).toHaveTextContent(/no profile selected/i);
+      // No clear button when nothing is pinned.
+      expect(
+        screen.queryByTestId('recipe-profile-clear'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('renders the selected profile title once the by-id fetch resolves', async () => {
+      const profile = mkProfileRecord({
+        id: 'profile:cool',
+        profile: { title: 'Cool Profile' },
+      });
+      renderEditor({
+        beverages: [cappuccinoBev()],
+        recipes: [sampleRecipe({ profileId: profile.id })],
+        loadProfileById: () => Promise.resolve(profile),
+      });
+      await waitFor(() =>
+        expect(screen.getByTestId('recipe-profile-open')).toHaveTextContent(
+          'Cool Profile',
+        ),
+      );
+    });
+
+    it('falls back to "(missing profile — id)" when the by-id fetch returns null', async () => {
+      // Mirrors what the gateway does when a profile id no longer
+      // resolves (deleted, hidden, or offline): the loader resolves to
+      // null and we render a graceful fallback instead of the title.
+      renderEditor({
+        beverages: [cappuccinoBev()],
+        recipes: [sampleRecipe({ profileId: 'profile:ghost' })],
+        loadProfileById: () => Promise.resolve(null),
+      });
+      await waitFor(() =>
+        expect(screen.getByTestId('recipe-profile-open')).toHaveTextContent(
+          'missing profile — profile:ghost',
+        ),
+      );
+    });
+
+    it('opens the picker dialog when the field button is clicked', async () => {
+      renderEditor({
+        beverages: [cappuccinoBev()],
+        recipes: [sampleRecipe({ profileId: undefined })],
+      });
+      await waitFor(() => screen.getByTestId('recipe-profile-open'));
+      // Dialog is not mounted before the open.
+      expect(
+        screen.queryByTestId('recipe-profile-dialog'),
+      ).not.toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('recipe-profile-open'));
+      await waitFor(() =>
+        expect(
+          screen.getByTestId('recipe-profile-dialog'),
+        ).toBeInTheDocument(),
+      );
+    });
+
+    it('selecting a profile in the dialog persists the id and closes the dialog', async () => {
+      // Two-step commit: tap the row to preview it, then press Choose to
+      // commit. Tap-to-commit was the v1 behaviour and made browsing
+      // impossible — now the dialog is a real picker with a deliberate
+      // Choose action.
+      const profile = mkProfileRecord({
+        id: 'profile:newly-picked',
+        profile: { title: 'Newly Picked' },
+      });
+      const { repos } = renderEditor({
+        beverages: [cappuccinoBev()],
+        recipes: [sampleRecipe({ profileId: undefined })],
+        loadProfiles: () => Promise.resolve([profile]),
+      });
+      await waitFor(() => screen.getByTestId('recipe-profile-open'));
+      fireEvent.click(screen.getByTestId('recipe-profile-open'));
+      const row = await waitFor(() =>
+        screen.getByTestId(`profile-row-${profile.id}-button`),
+      );
+      fireEvent.click(row);
+      // Row click alone doesn't commit — Choose does.
+      fireEvent.click(screen.getByTestId('profile-picker-choose'));
+
+      await waitFor(async () => {
+        const r = await repos.recipes.get('rec-1');
+        expect(r?.profileId).toBe(profile.id);
+      });
+      // Dialog gone after Choose.
+      await waitFor(() =>
+        expect(
+          screen.queryByTestId('recipe-profile-dialog'),
+        ).not.toBeInTheDocument(),
+      );
+    });
+
+    it('Cancel in the dialog closes it without changing the Recipe', async () => {
+      const profile = mkProfileRecord({
+        id: 'profile:other',
+        profile: { title: 'Other' },
+      });
+      const { repos } = renderEditor({
+        beverages: [cappuccinoBev()],
+        recipes: [sampleRecipe({ profileId: undefined })],
+        loadProfiles: () => Promise.resolve([profile]),
+      });
+      await waitFor(() => screen.getByTestId('recipe-profile-open'));
+      fireEvent.click(screen.getByTestId('recipe-profile-open'));
+      const row = await waitFor(() =>
+        screen.getByTestId(`profile-row-${profile.id}-button`),
+      );
+      fireEvent.click(row);
+      fireEvent.click(screen.getByTestId('profile-picker-cancel'));
+
+      await waitFor(() =>
+        expect(
+          screen.queryByTestId('recipe-profile-dialog'),
+        ).not.toBeInTheDocument(),
+      );
+      const r = await repos.recipes.get('rec-1');
+      expect(r?.profileId).toBeUndefined();
+    });
+
+    it('clear button removes the profile from the Recipe', async () => {
+      const profile = mkProfileRecord({
+        id: 'profile:to-clear',
+        profile: { title: 'To Clear' },
+      });
+      const { repos } = renderEditor({
+        beverages: [cappuccinoBev()],
+        recipes: [sampleRecipe({ profileId: profile.id })],
+        loadProfileById: () => Promise.resolve(profile),
+      });
+      const clear = await waitFor(() =>
+        screen.getByTestId('recipe-profile-clear'),
+      );
+      fireEvent.click(clear);
+      await waitFor(async () => {
+        const r = await repos.recipes.get('rec-1');
+        expect(r?.profileId).toBeUndefined();
+      });
+    });
+  });
+
   describe('coming-soon stubs', () => {
-    it('renders disabled placeholders for Bean / Grinder / Profile', async () => {
+    it('renders disabled placeholders for Bean and Grinder', async () => {
+      // Espresso profile graduated out of "Coming soon" in 2026-05-26 — the
+      // picker is wired in its own section above Brewing. Bean and Grinder
+      // are still stubs.
       renderEditor({
         beverages: [cappuccinoBev()],
         recipes: [sampleRecipe()],
       });
       const heading = await waitFor(() => screen.getByText('Coming soon'));
-      // The stubs are siblings in the same section.
       const section = heading.parentElement!;
       expect(section).toHaveTextContent('Bean');
       expect(section).toHaveTextContent('Grinder');
-      expect(section).toHaveTextContent('Espresso profile');
-      // All three carry the "library not built" note.
-      expect(section.textContent?.match(/library not built/gi) ?? []).toHaveLength(3);
+      expect(section).not.toHaveTextContent('Espresso profile');
+      expect(section.textContent?.match(/library not built/gi) ?? []).toHaveLength(2);
     });
   });
 
