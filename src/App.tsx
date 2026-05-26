@@ -119,6 +119,9 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
               onExit={onExitBrew}
               machineStream={() => p.streams.machine}
               requestState={api.requestState}
+              fetchLatestShot={api.shotsLatest}
+              fetchShot={api.shotById}
+              optimisticShot={optimisticShot}
             />
           }
         >

@@ -10,6 +10,14 @@ import {
 } from 'solid-js';
 import type { GatewayShotRecord, GatewayShotSummary } from '../api';
 import { ShotMiniChart } from './ShotMiniChart';
+import {
+  shotDoseG,
+  shotDurationSec,
+  shotHeadline,
+  shotSubtitle,
+  shotYieldG,
+  shotTargetYieldG,
+} from '../shotStats';
 
 const fmtAgo = (timestamp: string, now: Date = new Date()): string => {
   const then = new Date(timestamp);
@@ -21,13 +29,6 @@ const fmtAgo = (timestamp: string, now: Date = new Date()): string => {
   if (hours < 24) return `${hours} h ago`;
   const days = Math.round(hours / 24);
   return `${days} d ago`;
-};
-
-const shotDurationSec = (rec: GatewayShotRecord | null | undefined): number | null => {
-  if (!rec || rec.measurements.length < 2) return null;
-  const first = rec.measurements[0]!.machine.timestamp;
-  const last = rec.measurements[rec.measurements.length - 1]!.machine.timestamp;
-  return Math.round((Date.parse(last) - Date.parse(first)) / 1000);
 };
 
 /**
@@ -127,70 +128,16 @@ export const LastShotCard: Component<LastShotCardProps> = (p) => {
   const displayedFull = (): GatewayShotRecord | null =>
     usingOptimistic() ? p.optimisticShot!() : full() ?? null;
 
-  /**
-   * Dose / yield fallback chain. Reaprime only populates
-   * `annotations.actualDoseWeight/actualYield` via import parsers or
-   * manual history edits — freshly-recorded shots leave them null. The
-   * configured values live in `workflow.context.target*` and that's where
-   * we have to read them for any shot the gateway just persisted. Order:
-   * user-entered actual → workflow target → last scale weight (yield only).
-   */
-  const lastScaleWeight = (): number | null => {
-    const ms = displayedFull()?.measurements;
-    if (!ms?.length) return null;
-    for (let i = ms.length - 1; i >= 0; i--) {
-      const w = ms[i]?.scale?.weight;
-      if (typeof w === 'number' && !Number.isNaN(w)) return w;
-    }
-    return null;
-  };
-
-  const dose = () =>
-    displayedSummary()?.annotations?.actualDoseWeight ??
-    displayedSummary()?.workflow?.context?.targetDoseWeight ??
-    null;
+  // Dose / yield / headline / subtitle come from the shared shotStats
+  // helpers so this card and the post-brew summary never drift. The card
+  // shows a single yield value, so it collapses actual→target (measured
+  // value if present, else the configured target).
+  const dose = () => shotDoseG(displayedSummary());
   const yieldG = () =>
-    displayedSummary()?.annotations?.actualYield ??
-    lastScaleWeight() ??
-    displayedSummary()?.workflow?.context?.targetYield ??
-    null;
-  /**
-   * Headline = profile title (`Gentle and Sweet`) when present; otherwise
-   * fall back to the workflow's user-facing name (`Cappuccino`), then to
-   * a generic `Shot`. The profile name is what tells you "*how* this shot
-   * was pulled"; the workflow name is just the recipe slot.
-   */
-  const headlineName = () =>
-    displayedSummary()?.workflow?.profile?.title ??
-    displayedSummary()?.workflow?.name ??
-    displayedSummary()?.workflow?.context?.coffeeName ??
-    'Shot';
-
-  /**
-   * Subtitle = recipe slot + bean name when the headline is the profile.
-   * Without this the recipe/bean info gets dropped from the card entirely
-   * once a shot has profile metadata. Returns the empty string when there's
-   * nothing useful to add (the headline is already the recipe name, or
-   * neither recipe nor bean is set).
-   */
-  const subtitleLine = (): string => {
-    const s = displayedSummary();
-    if (!s?.workflow) return '';
-    const profileTitle = s.workflow.profile?.title ?? '';
-    const recipeName = s.workflow.name ?? '';
-    const coffeeName = s.workflow.context?.coffeeName ?? '';
-    // Headline is already the recipe name (profile missing) — nothing to
-    // add unless bean is interesting.
-    if (!profileTitle) {
-      return recipeName && coffeeName && coffeeName !== recipeName
-        ? coffeeName
-        : '';
-    }
-    const parts: string[] = [];
-    if (recipeName) parts.push(recipeName);
-    if (coffeeName && coffeeName !== recipeName) parts.push(coffeeName);
-    return parts.join(' · ');
-  };
+    shotYieldG(displayedSummary(), displayedFull()) ??
+    shotTargetYieldG(displayedSummary());
+  const headlineName = () => shotHeadline(displayedSummary());
+  const subtitleLine = () => shotSubtitle(displayedSummary());
 
   return (
     <section class="card last-shot">

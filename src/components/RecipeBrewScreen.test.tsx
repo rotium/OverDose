@@ -11,7 +11,12 @@ import { MemoryStorage } from '../test/memoryStorage';
 import { beverageStep } from '../domain';
 import type { Beverage, Recipe } from '../domain';
 import type { MachineSnapshot, MachineState } from '../snapshot';
-import type { ProfileRecord } from '../api';
+import type {
+  GatewayShotMeasurement,
+  GatewayShotRecord,
+  GatewayShotSummary,
+  ProfileRecord,
+} from '../api';
 import type { WsStream } from '../streams';
 
 interface SeedOpts {
@@ -68,6 +73,9 @@ const renderScreen = (
     recipeId?: string;
     loadProfileById?: (id: string) => Promise<ProfileRecord | null>;
     loadProfiles?: () => Promise<ProfileRecord[]>;
+    optimisticShot?: GatewayShotRecord | null;
+    fetchLatestShot?: () => Promise<GatewayShotSummary>;
+    fetchShot?: (id: string) => Promise<GatewayShotRecord>;
   },
 ): ReturnType<typeof mkSetup> & {
   onApplyWorkflow: ReturnType<typeof vi.fn>;
@@ -81,6 +89,14 @@ const renderScreen = (
   const loadProfiles =
     opts.loadProfiles ?? (() => Promise.resolve<ProfileRecord[]>([]));
   const onApplyWorkflow = vi.fn(async () => {});
+  // Post-brew shot fetchers default to a rejection so the summary resolves
+  // to null (post-brew shows empty/optimistic). Callers exercising the
+  // result screen pass their own.
+  const fetchLatestShot =
+    opts.fetchLatestShot ?? (() => Promise.reject(new Error('no shot')));
+  const fetchShot =
+    opts.fetchShot ?? (() => Promise.reject(new Error('no shot')));
+  const optimisticShot = () => opts.optimisticShot ?? null;
   render(() => (
     <WithRepositories beverages={env.repos.beverages} recipes={env.repos.recipes}>
       <RecipeBrewScreen
@@ -91,6 +107,9 @@ const renderScreen = (
         loadProfileById={loadProfileById}
         loadProfiles={loadProfiles}
         onApplyWorkflow={onApplyWorkflow}
+        fetchLatestShot={fetchLatestShot}
+        fetchShot={fetchShot}
+        optimisticShot={optimisticShot}
       />
     </WithRepositories>
   ));
@@ -661,6 +680,160 @@ describe('RecipeBrewScreen', () => {
 
       fireEvent.click(screen.getByTestId('post-brew-done'));
       expect(env.onExit).toHaveBeenCalledOnce();
+    });
+
+    it('shows empty copy when no shot data is available', async () => {
+      const env = renderScreen({
+        beverages: [
+          {
+            id: 'bev-cap',
+            name: 'Cappuccino',
+            steps: [beverageStep('brew', {}, 'step-brew')],
+          },
+        ],
+        recipes: [sampleRecipe()],
+        // no optimisticShot, fetchers reject → null
+      });
+      fireEvent.click(await waitFor(() => screen.getByTestId('prep-card-start')));
+      env.setMachineSnap(snapshotWithState('espresso'));
+      env.setMachineSnap(snapshotWithState('idle'));
+      await waitFor(() => screen.getByTestId('post-brew-view'));
+      await waitFor(() =>
+        expect(screen.getByTestId('post-brew-empty')).toBeInTheDocument(),
+      );
+    });
+
+    it('renders the result summary (headline, stats, targets) from the shot', async () => {
+      const mkMeas = (
+        tSec: number,
+        flow: number,
+        pressure: number,
+        weight: number,
+      ): GatewayShotMeasurement => ({
+        machine: {
+          timestamp: new Date(
+            Date.UTC(2026, 4, 27, 8, 0, tSec),
+          ).toISOString(),
+          flow,
+          pressure,
+          mixTemperature: 92,
+          groupTemperature: 92,
+        },
+        scale: { weight },
+      });
+      const shot: GatewayShotRecord = {
+        id: 'shot-xyz',
+        timestamp: '2026-05-27T08:00:10.000Z',
+        workflow: {
+          name: 'Cappuccino',
+          profile: { title: 'Best Practice C+', target_volume: 50 },
+          context: {
+            targetDoseWeight: 18,
+            targetYield: 36,
+            coffeeName: 'Brazil',
+          },
+        },
+        measurements: [
+          mkMeas(0, 0.5, 2, 0),
+          mkMeas(1, 2.5, 9.1, 20),
+          mkMeas(2, 2.0, 8.0, 35.8),
+        ],
+      };
+      const env = renderScreen({
+        beverages: [
+          {
+            id: 'bev-cap',
+            name: 'Cappuccino',
+            steps: [beverageStep('brew', {}, 'step-brew')],
+          },
+        ],
+        recipes: [sampleRecipe()],
+        // optimistic record paints immediately; fetchers reject → stays optimistic
+        optimisticShot: shot,
+      });
+      fireEvent.click(await waitFor(() => screen.getByTestId('prep-card-start')));
+      env.setMachineSnap(snapshotWithState('espresso'));
+      env.setMachineSnap(snapshotWithState('idle'));
+      await waitFor(() => screen.getByTestId('post-brew-view'));
+
+      const headline = await waitFor(() =>
+        screen.getByTestId('post-brew-headline'),
+      );
+      expect(headline).toHaveTextContent('Best Practice C+');
+      expect(screen.getByTestId('post-brew-subtitle')).toHaveTextContent(
+        'Cappuccino · Brazil',
+      );
+      expect(screen.getByTestId('post-brew-stat-dose')).toHaveTextContent('18');
+      // Yield = measured last scale weight 35.8; target shown separately.
+      expect(screen.getByTestId('post-brew-stat-yield')).toHaveTextContent('35.8');
+      expect(
+        screen.getByTestId('post-brew-stat-yield-target'),
+      ).toHaveTextContent('target 36');
+      // Time is the header hero now, not a readout cell.
+      expect(screen.getByTestId('post-brew-time')).toHaveTextContent('2');
+      expect(
+        screen.getByTestId('post-brew-stat-peak-pressure'),
+      ).toHaveTextContent('9.1 bar');
+      expect(
+        screen.getByTestId('post-brew-stat-peak-flow'),
+      ).toHaveTextContent('2.5 mL/s');
+      // Volume = 2.5 + 2.0 = 4.5 → "4 mL" (0 digits). Target 50 mL shown.
+      expect(screen.getByTestId('post-brew-stat-volume')).toHaveTextContent(
+        'mL',
+      );
+      expect(
+        screen.getByTestId('post-brew-stat-volume-target'),
+      ).toHaveTextContent('target 50 mL');
+    });
+
+    it('legend toggles trace visibility (aria-pressed flips)', async () => {
+      const shot: GatewayShotRecord = {
+        id: 'shot-leg',
+        timestamp: '2026-05-27T08:00:10.000Z',
+        workflow: { name: 'Cappuccino', profile: { title: 'C+' } },
+        measurements: [
+          {
+            machine: {
+              timestamp: '2026-05-27T08:00:00.000Z',
+              flow: 2,
+              pressure: 9,
+              mixTemperature: 92,
+              groupTemperature: 92,
+            },
+            scale: { weight: 30 },
+          },
+          {
+            machine: {
+              timestamp: '2026-05-27T08:00:02.000Z',
+              flow: 2,
+              pressure: 9,
+              mixTemperature: 92,
+              groupTemperature: 92,
+            },
+            scale: { weight: 36 },
+          },
+        ],
+      };
+      const env = renderScreen({
+        beverages: [
+          {
+            id: 'bev-cap',
+            name: 'Cappuccino',
+            steps: [beverageStep('brew', {}, 'step-brew')],
+          },
+        ],
+        recipes: [sampleRecipe()],
+        optimisticShot: shot,
+      });
+      fireEvent.click(await waitFor(() => screen.getByTestId('prep-card-start')));
+      env.setMachineSnap(snapshotWithState('espresso'));
+      env.setMachineSnap(snapshotWithState('idle'));
+      const toggle = await waitFor(() =>
+        screen.getByTestId('post-brew-legend-pressure'),
+      );
+      expect(toggle).toHaveAttribute('aria-pressed', 'true');
+      fireEvent.click(toggle);
+      expect(toggle).toHaveAttribute('aria-pressed', 'false');
     });
   });
 

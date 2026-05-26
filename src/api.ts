@@ -86,6 +86,10 @@ export interface ProfileStepSnapshot {
 export interface ProfileSnapshot {
   title: string;
   steps?: ProfileStepSnapshot[];
+  /** Volume stop target (mL) baked into the profile. Surfaced on the
+   *  post-brew summary as the target alongside the actual dispensed
+   *  volume. May be absent on older payloads. */
+  target_volume?: number;
 }
 
 /** Gateway's current workflow envelope. */

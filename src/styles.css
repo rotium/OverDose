@@ -415,7 +415,8 @@ html {
 
 .mini-chart {
   width: 100%;
-  height: 100px;
+  /* Height is driven by uPlot (via the `height` prop); the container just
+     wraps the canvas rather than clamping it to the compact default. */
 }
 
 .live-shot-chart {
@@ -2709,6 +2710,52 @@ html {
   font-style: italic;
   font-size: 0.95rem;
   margin: 0;
+}
+
+/* ─── Brew complete (post-brew result) ────────────────────────────── */
+
+/* Mirrors the live view's skeleton (header → legend → filling chart →
+   readouts) so the result reads as a continuation of the live brew.
+   Fills `.brew-screen__body` (flex:1, column); the chart takes the slack. */
+.post-brew {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 0.75rem;
+}
+
+.post-brew__empty {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Chart fills the flex chart area (ShotMiniChart fill mode reads this
+   element's measured height). */
+.mini-chart--fill {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Result readouts: 5 even columns, no trailing STOP button (unlike the
+   live view's `repeat(6,1fr) auto`). */
+.live-view__readouts--result {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+/* Muted target sub-line beneath a readout value (yield / volume). */
+.readout__sub {
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  margin-top: 0.15rem;
+}
+
+.post-brew__actions {
+  margin-top: 0.25rem;
 }
 
 .btn--primary {

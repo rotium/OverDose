@@ -1,0 +1,171 @@
+import type { GatewayShotRecord, GatewayShotSummary } from './api';
+
+/**
+ * Pure derivations over a completed shot — shared by LastShotCard (compact)
+ * and the RecipeBrewScreen post-brew summary (full). Keeping these in one
+ * place means the two surfaces never drift on, e.g., the yield fallback
+ * chain or how peak pressure is computed.
+ *
+ * Split into summary-derived (headline, targets, dose) and measurement-
+ * derived (yield, duration, peaks, volume) because the two arrive on
+ * different fetches and at different times — the caller passes whichever
+ * it has.
+ *
+ * **Actual vs target are kept distinct** (e.g. `yieldG` is the measured
+ * value, `targetYieldG` the configured one) so a consumer can show both
+ * without conflating them. LastShotCard collapses them (`yieldG ?? targetYieldG`)
+ * for its single-line display; the post-brew screen shows them separately.
+ */
+
+const num = (v: unknown): number | null =>
+  typeof v === 'number' && !Number.isNaN(v) ? v : null;
+
+/** Profile title → workflow name → coffee name → "Shot". */
+export const shotHeadline = (summary: GatewayShotSummary | null): string =>
+  summary?.workflow?.profile?.title ??
+  summary?.workflow?.name ??
+  summary?.workflow?.context?.coffeeName ??
+  'Shot';
+
+/**
+ * Muted second line: recipe slot + bean, when the headline is the profile.
+ * Empty when there's nothing distinct to add (headline already the recipe
+ * name, or no recipe/bean set).
+ */
+export const shotSubtitle = (summary: GatewayShotSummary | null): string => {
+  const wf = summary?.workflow;
+  if (!wf) return '';
+  const profileTitle = wf.profile?.title ?? '';
+  const recipeName = wf.name ?? '';
+  const coffeeName = wf.context?.coffeeName ?? '';
+  if (!profileTitle) {
+    return recipeName && coffeeName && coffeeName !== recipeName
+      ? coffeeName
+      : '';
+  }
+  const parts: string[] = [];
+  if (recipeName) parts.push(recipeName);
+  if (coffeeName && coffeeName !== recipeName) parts.push(coffeeName);
+  return parts.join(' · ');
+};
+
+/** Dose (g): measured actual if present, else the configured target. */
+export const shotDoseG = (summary: GatewayShotSummary | null): number | null =>
+  num(summary?.annotations?.actualDoseWeight) ??
+  num(summary?.workflow?.context?.targetDoseWeight);
+
+/** Last non-NaN scale weight in the record — the measured final yield. */
+export const shotLastScaleWeight = (
+  full: GatewayShotRecord | null,
+): number | null => {
+  const ms = full?.measurements;
+  if (!ms?.length) return null;
+  for (let i = ms.length - 1; i >= 0; i--) {
+    const w = ms[i]?.scale?.weight;
+    if (typeof w === 'number' && !Number.isNaN(w)) return w;
+  }
+  return null;
+};
+
+/** Measured yield (g): user-entered actual, else last scale weight. Does
+ *  NOT fall back to the target — that's `shotTargetYieldG`. */
+export const shotYieldG = (
+  summary: GatewayShotSummary | null,
+  full: GatewayShotRecord | null,
+): number | null =>
+  num(summary?.annotations?.actualYield) ?? shotLastScaleWeight(full);
+
+/** Configured stop-at-weight target (g). */
+export const shotTargetYieldG = (
+  summary: GatewayShotSummary | null,
+): number | null => num(summary?.workflow?.context?.targetYield);
+
+/** Shot duration (s) from first→last measurement. */
+export const shotDurationSec = (
+  full: GatewayShotRecord | null,
+): number | null => {
+  const ms = full?.measurements;
+  if (!ms || ms.length < 2) return null;
+  const first = ms[0]!.machine.timestamp;
+  const last = ms[ms.length - 1]!.machine.timestamp;
+  return Math.round((Date.parse(last) - Date.parse(first)) / 1000);
+};
+
+/** Peak group pressure (bar) across the shot. */
+export const shotPeakPressureBar = (
+  full: GatewayShotRecord | null,
+): number | null => {
+  const ms = full?.measurements;
+  if (!ms?.length) return null;
+  let max = -Infinity;
+  for (const m of ms) if (m.machine.pressure > max) max = m.machine.pressure;
+  return max === -Infinity ? null : max;
+};
+
+/** Peak group flow (mL/s) across the shot. */
+export const shotPeakFlowMlS = (
+  full: GatewayShotRecord | null,
+): number | null => {
+  const ms = full?.measurements;
+  if (!ms?.length) return null;
+  let max = -Infinity;
+  for (const m of ms) if (m.machine.flow > max) max = m.machine.flow;
+  return max === -Infinity ? null : max;
+};
+
+/**
+ * Dispensed volume (mL): flow integrated over the measurements
+ * (left-Riemann, matching the gateway + the live accumulator). The
+ * persisted measurements may carry a `volume` field, but integrating from
+ * flow works for both gateway records and the in-memory optimistic record
+ * (which has no volume field).
+ */
+export const shotVolumeMl = (
+  full: GatewayShotRecord | null,
+): number | null => {
+  const ms = full?.measurements;
+  if (!ms || ms.length < 2) return null;
+  let vol = 0;
+  for (let i = 1; i < ms.length; i++) {
+    const dtSec =
+      (Date.parse(ms[i]!.machine.timestamp) -
+        Date.parse(ms[i - 1]!.machine.timestamp)) /
+      1000;
+    if (dtSec > 0) vol += ms[i]!.machine.flow * dtSec;
+  }
+  return vol;
+};
+
+/** Configured volume target (mL) from the profile. */
+export const shotTargetVolumeMl = (
+  summary: GatewayShotSummary | null,
+): number | null => num(summary?.workflow?.profile?.target_volume);
+
+export interface ShotStats {
+  headline: string;
+  subtitle: string;
+  doseG: number | null;
+  yieldG: number | null;
+  targetYieldG: number | null;
+  durationSec: number | null;
+  peakPressureBar: number | null;
+  peakFlowMlS: number | null;
+  volumeMl: number | null;
+  targetVolumeMl: number | null;
+}
+
+export const deriveShotStats = (
+  summary: GatewayShotSummary | null,
+  full: GatewayShotRecord | null,
+): ShotStats => ({
+  headline: shotHeadline(summary),
+  subtitle: shotSubtitle(summary),
+  doseG: shotDoseG(summary),
+  yieldG: shotYieldG(summary, full),
+  targetYieldG: shotTargetYieldG(summary),
+  durationSec: shotDurationSec(full),
+  peakPressureBar: shotPeakPressureBar(full),
+  peakFlowMlS: shotPeakFlowMlS(full),
+  volumeMl: shotVolumeMl(full),
+  targetVolumeMl: shotTargetVolumeMl(summary),
+});

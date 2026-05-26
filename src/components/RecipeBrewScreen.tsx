@@ -20,8 +20,22 @@ import {
 import { useRepositories } from '../RepositoriesContext';
 import type { MachineSnapshot, MachineState } from '../snapshot';
 import type { WsStream } from '../streams';
-import { api, type ProfileRecord, type WorkflowUpdate } from '../api';
+import {
+  api,
+  type GatewayShotRecord,
+  type GatewayShotSummary,
+  type ProfileRecord,
+  type WorkflowUpdate,
+} from '../api';
 import { buildProfileCurve } from '../profile/curve';
+import { ShotMiniChart } from './ShotMiniChart';
+import { deriveShotStats } from '../shotStats';
+import { TRACE_COLOR } from './chartTraces';
+import {
+  DEFAULT_TRACE_VISIBILITY,
+  type TraceKey,
+  type TraceVisibility,
+} from '../prefs';
 import { ProfileCurveChart } from './settings/sections/library/ProfileCurveChart';
 import { ProfilePicker } from './settings/sections/library/ProfilePicker';
 import { PickerDialog } from './PickerDialog';
@@ -94,6 +108,15 @@ export interface RecipeBrewScreenProps {
    *  Defaults to `api.setWorkflow`. Injected so tests can capture the
    *  payload without hitting the network. */
   onApplyWorkflow?: (body: WorkflowUpdate) => Promise<void> | void;
+  /** Latest shot summary fetcher for the post-brew result (defaults to
+   *  `api.shotsLatest`). */
+  fetchLatestShot?: () => Promise<GatewayShotSummary>;
+  /** Full shot record fetcher (measurements) for the result chart +
+   *  stats (defaults to `api.shotById`). */
+  fetchShot?: (id: string) => Promise<GatewayShotRecord>;
+  /** In-memory optimistic shot from the live accumulator — paints the
+   *  result instantly while `/shots/latest` catches up. */
+  optimisticShot?: Accessor<GatewayShotRecord | null>;
 }
 
 /**
@@ -318,12 +341,16 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
           </p>
         </Match>
         <Match when={recipe() && beverage() && steps().length > 0}>
-          <StepBar
-            steps={steps}
-            statuses={statuses}
-            currentIdx={currentIdx}
-            onJump={jumpToStep}
-          />
+          {/* Step bar is a progress indicator for an in-progress recipe —
+              hidden on the result screen to give the chart the full height. */}
+          <Show when={!isFinished()}>
+            <StepBar
+              steps={steps}
+              statuses={statuses}
+              currentIdx={currentIdx}
+              onJump={jumpToStep}
+            />
+          </Show>
 
           <section class="brew-screen__body">
             <Show
@@ -332,6 +359,9 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
                 <PostBrewView
                   onDone={p.onExit}
                   onBrewAgain={resetForBrewAgain}
+                  fetchLatestShot={p.fetchLatestShot}
+                  fetchShot={p.fetchShot}
+                  optimisticShot={p.optimisticShot}
                 />
               }
             >
@@ -700,39 +730,253 @@ const BrewPrep: Component<{
   );
 };
 
+const fmtStat = (
+  n: number | null | undefined,
+  digits: number,
+  unit: string,
+): string =>
+  n === null || n === undefined || Number.isNaN(n)
+    ? '—'
+    : `${n.toFixed(digits)}${unit}`;
+
+/** Legend trace declarations for the post-brew chart — mirrors the live
+ *  view's legend (minus the dashed-targets entry, which the frozen record
+ *  can't supply). Colours come from `chartTraces.ts` so they never drift. */
+const RESULT_LEGEND: Array<{
+  key: TraceKey;
+  name: string;
+  color: string;
+  suffix?: string;
+}> = [
+  { key: 'pressure', name: 'pressure', color: TRACE_COLOR.pressure },
+  { key: 'flow', name: 'flow', color: TRACE_COLOR.flow },
+  { key: 'weightFlow', name: 'weight flow', color: TRACE_COLOR.weightFlow },
+  { key: 'weight', name: 'weight', color: TRACE_COLOR.weight, suffix: '÷10' },
+  { key: 'mixTemp', name: 'mix temp', color: TRACE_COLOR.mixTemperature, suffix: '÷10' },
+];
+
+/**
+ * Post-brew result — mirrors the LiveEspressoView skeleton (header with a
+ * hero timer, clickable trace legend, big filling chart, readouts row) so
+ * the result reads as a natural continuation of the live view. The step
+ * bar is hidden at this stage (handled by the parent) to give the chart
+ * room. No dashed targets (the frozen record doesn't carry per-frame
+ * target data — deferred).
+ */
 const PostBrewView: Component<{
   onDone: () => void;
   onBrewAgain: () => void;
+  fetchLatestShot?: () => Promise<GatewayShotSummary>;
+  fetchShot?: (id: string) => Promise<GatewayShotRecord>;
+  optimisticShot?: Accessor<GatewayShotRecord | null>;
+}> = (p) => {
+  // Fetch the persisted espresso shot once on mount. Both fetchers resolve
+  // to null on failure so a gateway hiccup degrades to the optimistic
+  // record (or an empty state) rather than throwing.
+  const [summary] = createResource<GatewayShotSummary | null>(() =>
+    (p.fetchLatestShot ?? api.shotsLatest)().catch(() => null),
+  );
+  const [full] = createResource<GatewayShotRecord | null, string>(
+    () => summary()?.id,
+    (id) => (p.fetchShot ?? api.shotById)(id).catch(() => null),
+  );
+
+  // Prefer the optimistic in-memory record until the gateway summary
+  // catches up (timestamp ≥ optimistic). Same hand-off as LastShotCard.
+  const usingOptimistic = (): boolean => {
+    const opt = p.optimisticShot?.();
+    if (!opt) return false;
+    const s = summary();
+    if (!s) return true;
+    return Date.parse(s.timestamp) < Date.parse(opt.timestamp);
+  };
+  const displayedSummary = (): GatewayShotSummary | null =>
+    usingOptimistic() ? p.optimisticShot!() : (summary() ?? null);
+  const displayedFull = (): GatewayShotRecord | null =>
+    usingOptimistic() ? p.optimisticShot!() : (full() ?? null);
+
+  const stats = createMemo(() =>
+    deriveShotStats(displayedSummary(), displayedFull()),
+  );
+  const hasShot = (): boolean => displayedSummary() !== null;
+
+  // Per-session trace visibility for the legend show/hide. Starts all-on
+  // (DEFAULT_TRACE_VISIBILITY) — independent of the live view's prefs to
+  // keep the result self-contained.
+  const [visibility, setVisibility] =
+    createSignal<TraceVisibility>(DEFAULT_TRACE_VISIBILITY);
+  const toggleTrace = (key: TraceKey): void => {
+    setVisibility({ ...visibility(), [key]: !visibility()[key] });
+  };
+
+  return (
+    <section class="post-brew" data-testid="post-brew-view">
+      <Show
+        when={hasShot()}
+        fallback={
+          <div class="post-brew__empty">
+            <p class="prep__no-params" data-testid="post-brew-empty">
+              <Show when={summary.loading} fallback="No shot data recorded.">
+                Loading shot…
+              </Show>
+            </p>
+          </div>
+        }
+      >
+        <header class="live-view__header">
+          <div class="live-view__title">
+            <div class="live-view__title-row">
+              <div
+                class="live-view__profile"
+                data-testid="post-brew-headline"
+              >
+                {stats().headline}
+              </div>
+            </div>
+            <Show when={stats().subtitle}>
+              <div class="live-view__subtitle">
+                <span
+                  class="live-view__operation"
+                  data-testid="post-brew-subtitle"
+                >
+                  {stats().subtitle}
+                </span>
+              </div>
+            </Show>
+          </div>
+          <div
+            class="live-view__timer"
+            data-testid="post-brew-time"
+            aria-label={`Shot time ${fmtStat(stats().durationSec, 0, '')} seconds`}
+          >
+            <span class="live-view__timer-num">
+              {stats().durationSec ?? '—'}
+            </span>
+            <span class="live-view__timer-unit">s</span>
+          </div>
+        </header>
+
+        <ul
+          class="live-view__legend"
+          aria-label="Chart legend"
+          data-testid="post-brew-legend"
+        >
+          <For each={RESULT_LEGEND}>
+            {(item) => {
+              const isOn = createMemo(() => visibility()[item.key]);
+              return (
+                <li>
+                  <button
+                    type="button"
+                    class="legend-item"
+                    classList={{ 'legend-item--hidden': !isOn() }}
+                    aria-pressed={isOn()}
+                    aria-label={`Toggle ${item.name} trace`}
+                    data-testid={`post-brew-legend-${item.key}`}
+                    onClick={() => toggleTrace(item.key)}
+                  >
+                    <span
+                      class="legend-swatch"
+                      style={{ background: item.color }}
+                      aria-hidden="true"
+                    />
+                    <span class="legend-label">{item.name}</span>
+                    <Show when={item.suffix}>
+                      <span class="legend-suffix">{item.suffix}</span>
+                    </Show>
+                  </button>
+                </li>
+              );
+            }}
+          </For>
+        </ul>
+
+        <div class="live-view__chart" data-testid="post-brew-chart">
+          <ShotMiniChart
+            shot={displayedFull}
+            fill={true}
+            showAxes={true}
+            visibility={visibility}
+          />
+        </div>
+
+        <footer class="live-view__readouts live-view__readouts--result">
+          <Readout
+            label="DOSE"
+            value={fmtStat(stats().doseG, 1, ' g')}
+            testId="post-brew-stat-dose"
+          />
+          <Readout
+            label="YIELD"
+            value={fmtStat(stats().yieldG, 1, ' g')}
+            sub={
+              stats().targetYieldG != null
+                ? `target ${fmtStat(stats().targetYieldG, 1, ' g')}`
+                : undefined
+            }
+            testId="post-brew-stat-yield"
+          />
+          <Readout
+            label="PEAK P"
+            value={fmtStat(stats().peakPressureBar, 1, ' bar')}
+            testId="post-brew-stat-peak-pressure"
+          />
+          <Readout
+            label="PEAK FLOW"
+            value={fmtStat(stats().peakFlowMlS, 1, ' mL/s')}
+            testId="post-brew-stat-peak-flow"
+          />
+          <Readout
+            label="VOLUME"
+            value={fmtStat(stats().volumeMl, 0, ' mL')}
+            sub={
+              stats().targetVolumeMl != null
+                ? `target ${fmtStat(stats().targetVolumeMl, 0, ' mL')}`
+                : undefined
+            }
+            testId="post-brew-stat-volume"
+          />
+        </footer>
+      </Show>
+
+      <footer class="prep__action prep__action--row post-brew__actions">
+        <button
+          type="button"
+          class="btn prep__secondary"
+          data-testid="post-brew-brew-again"
+          onClick={p.onBrewAgain}
+        >
+          Brew again
+        </button>
+        <button
+          type="button"
+          class="btn btn--primary prep__start"
+          data-testid="post-brew-done"
+          onClick={p.onDone}
+        >
+          Done
+        </button>
+      </footer>
+    </section>
+  );
+};
+
+/** A readout cell in the result row — reuses the live-view `.readout`
+ *  styling, with an optional muted target sub-line beneath the value
+ *  (shown as a separate value, not an actual/target fraction). */
+const Readout: Component<{
+  label: string;
+  value: string;
+  sub?: string;
+  testId: string;
 }> = (p) => (
-  <section class="prep" data-testid="post-brew-view">
-    <header class="prep__heading">
-      <span class="prep__eyebrow">Result</span>
-      <h2 class="prep__title">Brew complete</h2>
-    </header>
-    <div class="prep__body">
-      <p class="prep__no-params">
-        Result summary (yield, time, peak pressure, mini chart) will land
-        here in the next pass — for now you can repeat the recipe or
-        return Home.
-      </p>
-    </div>
-    <footer class="prep__action prep__action--row">
-      <button
-        type="button"
-        class="btn prep__secondary"
-        data-testid="post-brew-brew-again"
-        onClick={p.onBrewAgain}
-      >
-        Brew again
-      </button>
-      <button
-        type="button"
-        class="btn btn--primary prep__start"
-        data-testid="post-brew-done"
-        onClick={p.onDone}
-      >
-        Done
-      </button>
-    </footer>
-  </section>
+  <div class="readout" data-testid={p.testId}>
+    <div class="readout__label">{p.label}</div>
+    <div class="readout__value">{p.value}</div>
+    <Show when={p.sub}>
+      <div class="readout__sub" data-testid={`${p.testId}-target`}>
+        {p.sub}
+      </div>
+    </Show>
+  </div>
 );
