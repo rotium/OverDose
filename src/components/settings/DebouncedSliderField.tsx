@@ -46,10 +46,22 @@ export const DebouncedSliderField: Component<DebouncedSliderFieldProps> = (p) =>
   const [local, setLocal] = createSignal<number>(p.value ?? fallback());
   let timer: ReturnType<typeof setTimeout> | undefined;
   let interacting = false;
+  // Last value actually pushed via onCommit. A range input fires BOTH
+  // `pointerup` and `change` on release (and a debounced `input` may have
+  // already committed the same value), so a single drag would otherwise fire
+  // onCommit two or three times — and every commit here is a gateway write.
+  // Dedupe consecutive identical commits so one adjustment = one write.
+  let lastCommitted = p.value;
 
   createEffect(() => {
     const v = p.value;
-    if (!interacting && v !== undefined) setLocal(v);
+    if (!interacting && v !== undefined) {
+      setLocal(v);
+      // Keep the dedupe baseline in sync with confirmed external values
+      // (e.g. a post-write refetch) so re-selecting that value later still
+      // commits when intended.
+      lastCommitted = v;
+    }
   });
 
   const clearTimer = () => {
@@ -59,22 +71,28 @@ export const DebouncedSliderField: Component<DebouncedSliderFieldProps> = (p) =>
     }
   };
 
+  const commit = (n: number) => {
+    if (n === lastCommitted) return;
+    lastCommitted = n;
+    p.onCommit(n);
+  };
+
   const schedule = (n: number) => {
     clearTimer();
     const delay = p.debounceMs ?? 250;
     if (delay <= 0) {
-      p.onCommit(n);
+      commit(n);
       return;
     }
     timer = setTimeout(() => {
       timer = undefined;
-      p.onCommit(n);
+      commit(n);
     }, delay);
   };
 
   const flush = (n: number) => {
     clearTimer();
-    p.onCommit(n);
+    commit(n);
   };
 
   onCleanup(clearTimer);

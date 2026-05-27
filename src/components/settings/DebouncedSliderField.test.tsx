@@ -116,6 +116,37 @@ describe('DebouncedSliderField', () => {
     }
   });
 
+  it('commits once when a drag release fires both pointerup and change', () => {
+    // Real range inputs dispatch both `pointerup` AND `change` on mouse/touch
+    // release — without dedupe that doubles the gateway write. (The other
+    // tests never fire `change`, which is why they missed it.)
+    const onCommit = vi.fn();
+    vi.useFakeTimers();
+    try {
+      render(() => (
+        <DebouncedSliderField
+          testId="slider"
+          value={1.0}
+          onCommit={onCommit}
+          min={0.4}
+          max={2.0}
+          step={0.1}
+          debounceMs={250}
+        />
+      ));
+      const input = screen.getByTestId('slider') as HTMLInputElement;
+      fireEvent.pointerDown(input);
+      input.value = '1.6';
+      fireEvent.input(input);
+      fireEvent.pointerUp(input);
+      fireEvent.change(input);
+      expect(onCommit).toHaveBeenCalledTimes(1);
+      expect(onCommit).toHaveBeenCalledWith(1.6);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('does NOT snap to external value while the user is dragging', () => {
     const [value, setValue] = createSignal<number | undefined>(1.0);
     render(() => (
