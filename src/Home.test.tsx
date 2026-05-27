@@ -13,6 +13,7 @@ vi.mock('./components/ShotMiniChart', () => ({
 }));
 
 import { Home } from './Home';
+import type { ExploreOp } from './components/ExploreTray';
 import type { Recipe } from './domain';
 import type { RecipeRepository } from './repositories';
 import type {
@@ -72,6 +73,7 @@ const buildHome = (overrides: Partial<{
   onMenu: () => void;
   onUpdate: (s: ShotSettingsSnapshot) => void;
   onSelect: (r: Recipe) => void;
+  onExplore: (op: ExploreOp) => void;
   onSeeAll: () => void;
 }> = {}) => {
   const stubs = overrides.stubs ?? {};
@@ -96,6 +98,7 @@ const buildHome = (overrides: Partial<{
       onUpdateShotSettings={overrides.onUpdate ?? vi.fn()}
       onMenu={overrides.onMenu ?? vi.fn()}
       onSelectRecipe={overrides.onSelect ?? vi.fn()}
+      onExplore={overrides.onExplore ?? vi.fn()}
       onSeeAllShots={overrides.onSeeAll ?? vi.fn()}
     />
   );
@@ -281,6 +284,7 @@ describe('Home', () => {
         onUpdateShotSettings={vi.fn()}
         onMenu={vi.fn()}
         onSelectRecipe={vi.fn()}
+        onExplore={vi.fn()}
         onSeeAllShots={vi.fn()}
       />
     ));

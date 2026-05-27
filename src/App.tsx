@@ -1,10 +1,21 @@
-import { Show, createEffect, createSignal, onMount, type Component } from 'solid-js';
+import {
+  Show,
+  Switch,
+  Match,
+  createEffect,
+  createResource,
+  createSignal,
+  onMount,
+  type Component,
+} from 'solid-js';
 import { api, type GatewayShotRecord } from './api';
 import { Home, defaultStreams } from './Home';
 import { LiveBrewDrawer } from './components/LiveBrewDrawer';
 import { RecipeBrewScreen } from './components/RecipeBrewScreen';
 import { SleepOverlay } from './components/SleepOverlay';
 import { Settings } from './components/settings/Settings';
+import type { ExploreOp } from './components/ExploreTray';
+import { buildExploreBrewBundle, EXPLORE_BREW_RECIPE_ID } from './exploreBrew';
 import { LiveShotProvider, useLiveShot } from './LiveShotContext';
 import { frozenToGatewayShotRecord } from './liveShotAdapter';
 import {
@@ -17,6 +28,7 @@ import { UserPrefsProvider } from './UserPrefsContext';
 import type { Recipe } from './domain';
 import type {
   MachineSnapshot,
+  MachineState,
   ScaleMessage,
   ShotSettingsSnapshot,
   WaterLevelsSnapshot,
@@ -76,6 +88,28 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
   );
   const onSelectRecipe = (r: Recipe) => setActiveBrewRecipeId(r.id);
   const onExitBrew = () => setActiveBrewRecipeId(null);
+
+  // Explore tray: run a machine op directly, no recipe. Steam/water/flush
+  // just request the state — the LiveBrewDrawer shows the live view and
+  // closes on idle. Brew opens an ad-hoc prep→live→summary built from the
+  // gateway's current workflow (fetched fresh each time the flow opens).
+  const [exploreBrewing, setExploreBrewing] = createSignal(false);
+  const [exploreBundle] = createResource(exploreBrewing, async () => {
+    const [workflow, profiles] = await Promise.all([
+      api.workflow().catch(() => null),
+      api.profiles({}).catch(() => []),
+    ]);
+    return buildExploreBrewBundle(workflow, profiles);
+  });
+  const onExplore = (op: ExploreOp) => {
+    if (op === 'brew') {
+      setExploreBrewing(true);
+      return;
+    }
+    const state: MachineState =
+      op === 'steam' ? 'steam' : op === 'water' ? 'hotWater' : 'flush';
+    void api.requestState(state).catch((e) => console.warn(`explore ${op} failed`, e));
+  };
   // Frozen-shot hand-off to LastShotCard. The signal is *sticky*: it's set
   // once on each freeze and persists until the next brew overwrites it.
   //
@@ -122,9 +156,30 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
           <Settings onBack={onCloseSettings} onClose={onCloseSettings} />
         }
       >
-        <Show
-          when={activeBrewRecipeId() === null}
+        <Switch
           fallback={
+            <div class="home-host" inert={homeInert()} data-testid="home-host">
+              <Home
+                recipeRepository={recipeRepository}
+                machineStream={() => p.streams.machine}
+                scaleStream={() => p.streams.scale}
+                shotSettingsStream={() => p.streams.shotSettings}
+                waterLevelsStream={() => p.streams.waterLevels}
+                fetchLatestShot={api.shotsLatest}
+                fetchShot={api.shotById}
+                onSleep={onSleep}
+                onWake={onWake}
+                onUpdateShotSettings={onUpdateShotSettings}
+                onMenu={onMenu}
+                onSelectRecipe={onSelectRecipe}
+                onExplore={onExplore}
+                onSeeAllShots={onSeeAllShots}
+                optimisticShot={optimisticShot}
+              />
+            </div>
+          }
+        >
+          <Match when={activeBrewRecipeId() !== null}>
             <RecipeBrewScreen
               recipeId={activeBrewRecipeId()!}
               onExit={onExitBrew}
@@ -134,27 +189,27 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
               fetchShot={api.shotById}
               optimisticShot={optimisticShot}
             />
-          }
-        >
-          <div class="home-host" inert={homeInert()} data-testid="home-host">
-            <Home
-              recipeRepository={recipeRepository}
-              machineStream={() => p.streams.machine}
-              scaleStream={() => p.streams.scale}
-              shotSettingsStream={() => p.streams.shotSettings}
-              waterLevelsStream={() => p.streams.waterLevels}
-              fetchLatestShot={api.shotsLatest}
-              fetchShot={api.shotById}
-              onSleep={onSleep}
-              onWake={onWake}
-              onUpdateShotSettings={onUpdateShotSettings}
-              onMenu={onMenu}
-              onSelectRecipe={onSelectRecipe}
-              onSeeAllShots={onSeeAllShots}
-              optimisticShot={optimisticShot}
-            />
-          </div>
-        </Show>
+          </Match>
+          <Match when={exploreBrewing()}>
+            <Show
+              when={!exploreBundle.loading && exploreBundle()}
+              fallback={
+                <p class="muted brew-screen__loading">preparing brew…</p>
+              }
+            >
+              <RecipeBrewScreen
+                recipeId={EXPLORE_BREW_RECIPE_ID}
+                bundleOverride={exploreBundle()!}
+                onExit={() => setExploreBrewing(false)}
+                machineStream={() => p.streams.machine}
+                requestState={api.requestState}
+                fetchLatestShot={api.shotsLatest}
+                fetchShot={api.shotById}
+                optimisticShot={optimisticShot}
+              />
+            </Show>
+          </Match>
+        </Switch>
       </Show>
       <LiveBrewDrawer />
       {/* Always mounted; it owns its own enter/leave fade off `active`. */}

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
-import { RecipeBrewScreen, stepToGatewayState } from './RecipeBrewScreen';
+import { RecipeBrewScreen, stepToGatewayState, type BrewBundle } from './RecipeBrewScreen';
 import { WithRepositories } from '../test/repositories';
 import {
   LocalRoutineRepository,
@@ -79,6 +79,7 @@ const renderScreen = (
     fetchShot?: (id: string) => Promise<GatewayShotRecord>;
     updateShot?: (id: string, patch: ShotAnnotationsPatch) => Promise<void>;
     saveDebounceMs?: number;
+    bundleOverride?: BrewBundle;
   },
 ): ReturnType<typeof mkSetup> & {
   onApplyWorkflow: ReturnType<typeof vi.fn>;
@@ -108,6 +109,7 @@ const renderScreen = (
     <WithRepositories routines={env.repos.routines} recipes={env.repos.recipes}>
       <RecipeBrewScreen
         recipeId={opts.recipeId ?? 'rec-1'}
+        bundleOverride={opts.bundleOverride}
         onExit={env.onExit}
         machineStream={() => env.machineStream}
         requestState={env.requestState}
@@ -171,6 +173,34 @@ describe('stepToGatewayState', () => {
 
 describe('RecipeBrewScreen', () => {
   describe('mounting', () => {
+    it('uses bundleOverride (ad-hoc Explore brew) without a seeded recipe', async () => {
+      // Repos are empty — the screen must run entirely off the injected
+      // bundle, which is how the Explore "Brew" tile drives an ad-hoc brew.
+      renderScreen({
+        routines: [],
+        recipes: [],
+        bundleOverride: {
+          recipe: {
+            id: 'explore-brew',
+            name: 'Espresso',
+            routineId: 'explore-brew-routine',
+            doseGrams: 18,
+            targetYieldGrams: 36,
+            overrides: {},
+          },
+          routine: {
+            id: 'explore-brew-routine',
+            name: 'Brew',
+            steps: [routineStep('brew', {}, 'explore-brew-step')],
+          },
+        },
+      });
+      // Prep renders (the brew step), seeded from the override's dose.
+      const dose = await waitFor(() => screen.getByTestId('prep-card-dose-input'));
+      expect(dose).toHaveValue(18);
+      expect(screen.getByTestId('prep-card-start')).toBeInTheDocument();
+    });
+
     it('renders header with recipe and routine names', async () => {
       renderScreen({ routines: [cappuccino()], recipes: [sampleRecipe()] });
       await waitFor(() =>

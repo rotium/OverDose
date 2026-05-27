@@ -95,6 +95,11 @@ export const stepToGatewayState = (t: StepType): MachineState => {
 
 export interface RecipeBrewScreenProps {
   recipeId: string;
+  /** Ad-hoc bundle override — when provided, the screen uses this
+   *  recipe+routine directly instead of looking `recipeId` up in the
+   *  repositories. Used by the Explore "Brew" flow, which builds a one-off
+   *  brew from the gateway's current workflow (no saved Recipe). */
+  bundleOverride?: BrewBundle;
   /** Returns the user to Home; called by the back arrow and Done. */
   onExit: () => void;
   /** Streams the machine snapshot — used to detect step-end transitions. */
@@ -146,7 +151,7 @@ interface ShotDraft {
   targetVolumeMl?: number;
 }
 
-interface BrewBundle {
+export interface BrewBundle {
   recipe: Recipe | null;
   routine: Routine | null;
 }
@@ -161,6 +166,8 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
   const [bundle] = createResource<BrewBundle, string>(
     () => p.recipeId,
     async (id): Promise<BrewBundle> => {
+      // Ad-hoc Explore brew: use the injected bundle, skip the repo lookup.
+      if (p.bundleOverride) return p.bundleOverride;
       const recipe = await repos.recipes.get(id);
       if (!recipe) return { recipe: null, routine: null };
       const routine = await repos.routines.get(recipe.routineId);

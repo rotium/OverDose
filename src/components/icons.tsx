@@ -32,6 +32,24 @@ const strokedSvgProps = (p: IconProps): JSX.SvgSVGAttributes<SVGSVGElement> => (
   'stroke-linejoin': 'round',
 });
 
+/** Coffee cup — Explore "Brew" tile. */
+export const CupIcon: Component<IconProps> = (p) => (
+  <svg {...strokedSvgProps(p)}>
+    <path d="M4 8h12v5a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8z" />
+    <path d="M16 9h2.5a2.5 2.5 0 0 1 0 5H16" />
+    <path d="M6 20h12" />
+  </svg>
+);
+
+/** Shower-head rinse — Explore "Flush" tile. */
+export const FlushIcon: Component<IconProps> = (p) => (
+  <svg {...strokedSvgProps(p)}>
+    <path d="M5 7h14" />
+    <path d="M12 7V3.5" />
+    <path d="M8 11v2.5M12 11v3.5M16 11v2.5" />
+  </svg>
+);
+
 /** Machine-state ("State" row) — power button glyph. */
 export const PowerIcon: Component<IconProps> = (p) => (
   <svg {...strokedSvgProps(p)}>

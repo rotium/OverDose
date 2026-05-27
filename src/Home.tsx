@@ -5,6 +5,7 @@ import { LastShotCard } from './components/LastShotCard';
 import { StatusPanel } from './components/StatusPanel';
 import { WaterAlertBanner } from './components/WaterAlertBanner';
 import { RecipePicker } from './components/RecipePicker';
+import { ExploreTray, type ExploreOp } from './components/ExploreTray';
 import type { DisabledReason } from './components/RecipeTile';
 import type { Recipe } from './domain';
 import type { RecipeRepository } from './repositories';
@@ -44,6 +45,9 @@ export interface HomeProps {
   onUpdateShotSettings: (settings: ShotSettingsSnapshot) => void;
   onMenu: () => void;
   onSelectRecipe: (r: Recipe) => void;
+  /** Run a machine op directly from the Explore tray. `brew` opens the
+   *  ad-hoc prep flow; steam/water/flush start immediately. */
+  onExplore: (op: ExploreOp) => void;
   onSeeAllShots: () => void;
   /**
    * Optimistic in-memory shot for the LastShotCard hand-off (populated by
@@ -137,11 +141,17 @@ export const Home: Component<HomeProps> = (p) => {
         onToggleSleep={handleToggleSleep}
       />
       <main class="home__main">
-        <div class="home__picker">
-          <RecipePicker
-            repository={p.recipeRepository}
-            onSelect={p.onSelectRecipe}
-            disabledReason={disabledReason}
+        <div class="home__left">
+          <div class="home__picker">
+            <RecipePicker
+              repository={p.recipeRepository}
+              onSelect={p.onSelectRecipe}
+              disabledReason={disabledReason}
+            />
+          </div>
+          <ExploreTray
+            onSelect={p.onExplore}
+            disabled={() => disabledReason() !== null}
           />
         </div>
         <aside class="home__sidebar">
