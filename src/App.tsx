@@ -1,4 +1,4 @@
-import { Show, createEffect, createSignal, type Component } from 'solid-js';
+import { Show, createEffect, createSignal, onMount, type Component } from 'solid-js';
 import { api, type GatewayShotRecord } from './api';
 import { Home, defaultStreams } from './Home';
 import { LiveBrewDrawer } from './components/LiveBrewDrawer';
@@ -7,7 +7,11 @@ import { SleepOverlay } from './components/SleepOverlay';
 import { Settings } from './components/settings/Settings';
 import { LiveShotProvider, useLiveShot } from './LiveShotContext';
 import { frozenToGatewayShotRecord } from './liveShotAdapter';
-import { LocalRoutineRepository, LocalRecipeRepository } from './repositories';
+import {
+  LocalRoutineRepository,
+  LocalRecipeRepository,
+  linkSeedRecipeProfiles,
+} from './repositories';
 import { RepositoriesProvider } from './RepositoriesContext';
 import { UserPrefsProvider } from './UserPrefsContext';
 import type { Recipe } from './domain';
@@ -166,6 +170,17 @@ export const App: Component = () => {
     shotSettings: defaultStreams.shotSettings(),
     waterLevels: defaultStreams.waterLevels(),
   };
+
+  // Link the seed Recipes to their intended profiles by title, once the
+  // gateway's profile list is available. Fire-and-forget + non-destructive
+  // (only fills an empty profileId), so a gateway hiccup just leaves them
+  // unlinked until the next launch and a user's own pick is never clobbered.
+  onMount(() => {
+    void api
+      .profiles({})
+      .then((profiles) => linkSeedRecipeProfiles(recipeRepository, profiles))
+      .catch((e) => console.warn('link seed profiles failed', e));
+  });
 
   return (
     <UserPrefsProvider>

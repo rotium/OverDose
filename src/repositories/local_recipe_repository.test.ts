@@ -7,7 +7,7 @@ import { MemoryStorage } from '../test/memoryStorage';
 const sampleRecipe = (id: string): Recipe => ({
   id,
   name: `Recipe ${id}`,
-  routineId: 'seed-bev-espresso',
+  routineId: 'seed-routine-brew',
   overrides: {},
 });
 
