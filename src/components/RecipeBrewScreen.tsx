@@ -7,8 +7,11 @@ import {
   createMemo,
   createResource,
   createSignal,
+  onCleanup,
+  untrack,
   type Accessor,
   type Component,
+  type JSX,
 } from 'solid-js';
 import {
   formatStepType,
@@ -25,8 +28,10 @@ import {
   type GatewayShotRecord,
   type GatewayShotSummary,
   type ProfileRecord,
+  type ShotAnnotationsPatch,
   type WorkflowUpdate,
 } from '../api';
+import { ShotRatingFace } from './ShotRatingFace';
 import { buildProfileCurve } from '../profile/curve';
 import { ShotMiniChart } from './ShotMiniChart';
 import { deriveShotStats } from '../shotStats';
@@ -117,6 +122,12 @@ export interface RecipeBrewScreenProps {
   /** In-memory optimistic shot from the live accumulator — paints the
    *  result instantly while `/shots/latest` catches up. */
   optimisticShot?: Accessor<GatewayShotRecord | null>;
+  /** Persists post-shot annotations (rating, notes, corrected dose) from
+   *  the result screen. Defaults to `api.updateShotAnnotations`. */
+  updateShot?: (id: string, patch: ShotAnnotationsPatch) => Promise<void>;
+  /** Auto-save debounce for the annotation capture (ms). Default 700;
+   *  tests pass 0 for synchronous saves. */
+  saveDebounceMs?: number;
 }
 
 /**
@@ -362,6 +373,8 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
                   fetchLatestShot={p.fetchLatestShot}
                   fetchShot={p.fetchShot}
                   optimisticShot={p.optimisticShot}
+                  updateShot={p.updateShot}
+                  saveDebounceMs={p.saveDebounceMs}
                 />
               }
             >
@@ -769,13 +782,16 @@ const PostBrewView: Component<{
   fetchLatestShot?: () => Promise<GatewayShotSummary>;
   fetchShot?: (id: string) => Promise<GatewayShotRecord>;
   optimisticShot?: Accessor<GatewayShotRecord | null>;
+  updateShot?: (id: string, patch: ShotAnnotationsPatch) => Promise<void>;
+  saveDebounceMs?: number;
 }> = (p) => {
-  // Fetch the persisted espresso shot once on mount. Both fetchers resolve
-  // to null on failure so a gateway hiccup degrades to the optimistic
-  // record (or an empty state) rather than throwing.
-  const [summary] = createResource<GatewayShotSummary | null>(() =>
-    (p.fetchLatestShot ?? api.shotsLatest)().catch(() => null),
-  );
+  // Fetch the persisted espresso shot. Both fetchers resolve to null on
+  // failure so a gateway hiccup degrades to the optimistic record (or an
+  // empty state) rather than throwing.
+  const [summary, { refetch: refetchSummary }] =
+    createResource<GatewayShotSummary | null>(() =>
+      (p.fetchLatestShot ?? api.shotsLatest)().catch(() => null),
+    );
   const [full] = createResource<GatewayShotRecord | null, string>(
     () => summary()?.id,
     (id) => (p.fetchShot ?? api.shotById)(id).catch(() => null),
@@ -790,6 +806,23 @@ const PostBrewView: Component<{
     if (!s) return true;
     return Date.parse(s.timestamp) < Date.parse(opt.timestamp);
   };
+
+  // The gateway persists the shot asynchronously on shot-end, so the
+  // mount-time /shots/latest can return the *previous* record. While the
+  // optimistic stand-in is still on screen, poll until the gateway catches
+  // up — this lands the real shot id (the annotation save target) and the
+  // real record for the chart. Bounded so a permanently-stale gateway can't
+  // spin forever.
+  const SUMMARY_POLL_MS = 600;
+  let summaryPolls = 0;
+  createEffect(() => {
+    if (!usingOptimistic() || summaryPolls >= 8) return;
+    const t = setTimeout(() => {
+      summaryPolls++;
+      void refetchSummary();
+    }, SUMMARY_POLL_MS);
+    onCleanup(() => clearTimeout(t));
+  });
   const displayedSummary = (): GatewayShotSummary | null =>
     usingOptimistic() ? p.optimisticShot!() : (summary() ?? null);
   const displayedFull = (): GatewayShotRecord | null =>
@@ -809,135 +842,291 @@ const PostBrewView: Component<{
     setVisibility({ ...visibility(), [key]: !visibility()[key] });
   };
 
+  // ── Post-shot annotation capture (rating · notes · corrected dose) ──
+  const [enjoyment, setEnjoyment] = createSignal<number | null>(null);
+  const [notes, setNotes] = createSignal('');
+  const [actualDose, setActualDose] = createSignal<number | undefined>();
+  const [saveState, setSaveState] = createSignal<
+    'idle' | 'saving' | 'saved' | 'error'
+  >('idle');
+
+  // Seed the editable fields once, from whichever record paints first. A
+  // just-finished shot carries no annotations, so this mostly just defaults
+  // the dose to the derived actual-or-target value.
+  let seeded = false;
+  createEffect(() => {
+    const s = displayedSummary();
+    if (!s || seeded) return;
+    seeded = true;
+    const a = s.annotations;
+    setEnjoyment(typeof a?.enjoyment === 'number' ? a.enjoyment : null);
+    setNotes(a?.espressoNotes ?? '');
+    setActualDose(untrack(() => stats().doseG ?? undefined));
+  });
+
+  // Persist target: the *real* gateway id, and only once the gateway record
+  // is the one on screen. While the optimistic record shows, summary() may
+  // still point at the PREVIOUS shot — saving then would annotate the wrong
+  // record, so edits are held until the hand-off lands.
+  const saveTargetId = (): string | null =>
+    usingOptimistic() ? null : summary()?.id ?? null;
+
+  let saveTimer: ReturnType<typeof setTimeout> | undefined;
+  let pending = false;
+  // The dose field is *seeded* from the derived dose (actual ?? target), so
+  // only persist it once the user has actually edited it — otherwise a
+  // rating-only save would write the target back as the measured actual.
+  let doseTouched = false;
+
+  const doSave = async (): Promise<void> => {
+    if (!pending) return;
+    const id = saveTargetId();
+    if (!id) return; // no target yet; stays pending, flushed on hand-off
+    pending = false;
+    const patch = untrack<ShotAnnotationsPatch>(() => {
+      const out: ShotAnnotationsPatch = { espressoNotes: notes().trim() };
+      const e = enjoyment();
+      if (e != null) out.enjoyment = e;
+      const d = actualDose();
+      if (doseTouched && d != null) out.actualDoseWeight = d;
+      return out;
+    });
+    setSaveState('saving');
+    try {
+      await (p.updateShot ?? api.updateShotAnnotations)(id, patch);
+      setSaveState('saved');
+    } catch {
+      pending = true; // let a later edit retry
+      setSaveState('error');
+    }
+  };
+
+  const scheduleSave = (): void => {
+    pending = true;
+    setSaveState('saving');
+    clearTimeout(saveTimer);
+    const delay = p.saveDebounceMs ?? 700;
+    if (delay <= 0) {
+      void doSave();
+      return;
+    }
+    saveTimer = setTimeout(() => void doSave(), delay);
+  };
+
+  // Flush held edits the instant a real persist target appears (the
+  // optimistic→gateway hand-off).
+  createEffect(() => {
+    if (saveTargetId() && pending) void doSave();
+  });
+  onCleanup(() => clearTimeout(saveTimer));
+
   return (
-    <section class="post-brew" data-testid="post-brew-view">
-      <Show
-        when={hasShot()}
-        fallback={
-          <div class="post-brew__empty">
-            <p class="prep__no-params" data-testid="post-brew-empty">
-              <Show when={summary.loading} fallback="No shot data recorded.">
-                Loading shot…
-              </Show>
-            </p>
-          </div>
-        }
-      >
-        <header class="live-view__header">
-          <div class="live-view__title">
-            <div class="live-view__title-row">
-              <div
-                class="live-view__profile"
+    <section class="shot-review" data-testid="post-brew-view">
+      <div class="shot-review__scroll">
+        <Show
+          when={hasShot()}
+          fallback={
+            <div class="post-brew__empty">
+              <p class="prep__no-params" data-testid="post-brew-empty">
+                <Show when={summary.loading} fallback="No shot data recorded.">
+                  Loading shot…
+                </Show>
+              </p>
+            </div>
+          }
+        >
+          <header class="shot-review__head">
+            <div class="shot-review__title">
+              <span
+                class="shot-review__profile"
                 data-testid="post-brew-headline"
               >
                 {stats().headline}
-              </div>
-            </div>
-            <Show when={stats().subtitle}>
-              <div class="live-view__subtitle">
+              </span>
+              <Show when={stats().subtitle}>
                 <span
-                  class="live-view__operation"
+                  class="shot-review__subtitle"
                   data-testid="post-brew-subtitle"
                 >
                   {stats().subtitle}
                 </span>
-              </div>
-            </Show>
-          </div>
-          <div
-            class="live-view__timer"
-            data-testid="post-brew-time"
-            aria-label={`Shot time ${fmtStat(stats().durationSec, 0, '')} seconds`}
-          >
-            <span class="live-view__timer-num">
-              {stats().durationSec ?? '—'}
+              </Show>
+            </div>
+            <span
+              class="post-brew__save"
+              data-testid="post-brew-save-state"
+              data-state={saveState()}
+              aria-live="polite"
+            >
+              <Switch>
+                <Match when={saveState() === 'saving'}>Saving…</Match>
+                <Match when={saveState() === 'saved'}>Saved ✓</Match>
+                <Match when={saveState() === 'error'}>Couldn’t save</Match>
+              </Switch>
             </span>
-            <span class="live-view__timer-unit">s</span>
+          </header>
+
+          {/* Data · Rate · Notes — three columns; the chart sits below. */}
+          <div class="shot-review__cols" data-testid="post-brew-capture">
+            <dl class="shot-review__stats" data-testid="post-brew-stats">
+              <ReviewStat label="Dose" testId="post-brew-stat-dose">
+                <span class="rstat__edit">
+                  <DebouncedNumberField
+                    value={actualDose()}
+                    onCommit={(v) => {
+                      setActualDose(v);
+                      doseTouched = true;
+                      scheduleSave();
+                    }}
+                    min={0}
+                    step={0.1}
+                    ariaLabel="Actual dose, grams"
+                    testId="post-brew-dose-input"
+                    class="rstat__input"
+                    debounceMs={p.saveDebounceMs}
+                  />
+                  <span class="rstat__unit">g</span>
+                </span>
+              </ReviewStat>
+              <ReviewStat
+                label="Yield"
+                testId="post-brew-stat-yield"
+                sub={
+                  stats().targetYieldG != null
+                    ? `target ${fmtStat(stats().targetYieldG, 1, ' g')}`
+                    : undefined
+                }
+              >
+                {fmtStat(stats().yieldG, 1, ' g')}
+              </ReviewStat>
+              <ReviewStat label="Time" testId="post-brew-time">
+                {fmtStat(stats().durationSec, 0, ' s')}
+              </ReviewStat>
+              <ReviewStat label="Peak P" testId="post-brew-stat-peak-pressure">
+                {fmtStat(stats().peakPressureBar, 1, ' bar')}
+              </ReviewStat>
+              <ReviewStat label="Peak flow" testId="post-brew-stat-peak-flow">
+                {fmtStat(stats().peakFlowMlS, 1, ' mL/s')}
+              </ReviewStat>
+              <ReviewStat
+                label="Volume"
+                testId="post-brew-stat-volume"
+                sub={
+                  stats().targetVolumeMl != null
+                    ? `target ${fmtStat(stats().targetVolumeMl, 0, ' mL')}`
+                    : undefined
+                }
+              >
+                {fmtStat(stats().volumeMl, 0, ' mL')}
+              </ReviewStat>
+            </dl>
+
+            {/* Divider: objective shot data (left) vs. user feedback (right). */}
+            <div class="shot-review__divider" aria-hidden="true" />
+
+            <div class="review-col review-col--rate">
+              <span class="review-field__label">Rate</span>
+              <div class="rating">
+                <ShotRatingFace value={enjoyment()} />
+                <input
+                  type="range"
+                  class="rating__slider"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={enjoyment() ?? 50}
+                  classList={{ 'rating__slider--unset': enjoyment() == null }}
+                  aria-label="Enjoyment rating, 0 to 100"
+                  data-testid="post-brew-rating"
+                  onInput={(e) => {
+                    setEnjoyment(Number(e.currentTarget.value));
+                    scheduleSave();
+                  }}
+                />
+                <div class="rating__value" data-testid="post-brew-rating-value">
+                  <Show when={enjoyment() != null} fallback="Drag to rate">
+                    <span class="rating__num">{enjoyment()}</span>
+                    <span class="rating__den"> / 100</span>
+                  </Show>
+                </div>
+              </div>
+            </div>
+
+            <div class="review-col review-col--notes">
+              <label class="review-field">
+                <span class="review-field__label">Notes</span>
+                <textarea
+                  class="post-brew__notes"
+                  rows="4"
+                  placeholder="Bright, jammy, a little sharp on the finish…"
+                  data-testid="post-brew-notes"
+                  value={notes()}
+                  onInput={(e) => {
+                    setNotes(e.currentTarget.value);
+                    scheduleSave();
+                  }}
+                />
+              </label>
+              <button
+                type="button"
+                class="btn shot-review__viz"
+                data-testid="post-brew-visualizer"
+                disabled
+                title="Coming soon"
+              >
+                Upload to Visualizer
+              </button>
+            </div>
           </div>
-        </header>
 
-        <ul
-          class="live-view__legend"
-          aria-label="Chart legend"
-          data-testid="post-brew-legend"
-        >
-          <For each={RESULT_LEGEND}>
-            {(item) => {
-              const isOn = createMemo(() => visibility()[item.key]);
-              return (
-                <li>
-                  <button
-                    type="button"
-                    class="legend-item"
-                    classList={{ 'legend-item--hidden': !isOn() }}
-                    aria-pressed={isOn()}
-                    aria-label={`Toggle ${item.name} trace`}
-                    data-testid={`post-brew-legend-${item.key}`}
-                    onClick={() => toggleTrace(item.key)}
-                  >
-                    <span
-                      class="legend-swatch"
-                      style={{ background: item.color }}
-                      aria-hidden="true"
-                    />
-                    <span class="legend-label">{item.name}</span>
-                    <Show when={item.suffix}>
-                      <span class="legend-suffix">{item.suffix}</span>
-                    </Show>
-                  </button>
-                </li>
-              );
-            }}
-          </For>
-        </ul>
-
-        <div class="live-view__chart" data-testid="post-brew-chart">
-          <ShotMiniChart
-            shot={displayedFull}
-            fill={true}
-            showAxes={true}
-            visibility={visibility}
-          />
-        </div>
-
-        <footer class="live-view__readouts live-view__readouts--result">
-          <Readout
-            label="DOSE"
-            value={fmtStat(stats().doseG, 1, ' g')}
-            testId="post-brew-stat-dose"
-          />
-          <Readout
-            label="YIELD"
-            value={fmtStat(stats().yieldG, 1, ' g')}
-            sub={
-              stats().targetYieldG != null
-                ? `target ${fmtStat(stats().targetYieldG, 1, ' g')}`
-                : undefined
-            }
-            testId="post-brew-stat-yield"
-          />
-          <Readout
-            label="PEAK P"
-            value={fmtStat(stats().peakPressureBar, 1, ' bar')}
-            testId="post-brew-stat-peak-pressure"
-          />
-          <Readout
-            label="PEAK FLOW"
-            value={fmtStat(stats().peakFlowMlS, 1, ' mL/s')}
-            testId="post-brew-stat-peak-flow"
-          />
-          <Readout
-            label="VOLUME"
-            value={fmtStat(stats().volumeMl, 0, ' mL')}
-            sub={
-              stats().targetVolumeMl != null
-                ? `target ${fmtStat(stats().targetVolumeMl, 0, ' mL')}`
-                : undefined
-            }
-            testId="post-brew-stat-volume"
-          />
-        </footer>
-      </Show>
+          {/* Supporting curve — full width, below the data; grows with the
+              scroll area. */}
+          <div class="shot-review__chart-wrap">
+            <ul
+              class="live-view__legend shot-review__legend"
+              aria-label="Chart legend"
+              data-testid="post-brew-legend"
+            >
+              <For each={RESULT_LEGEND}>
+                {(item) => {
+                  const isOn = createMemo(() => visibility()[item.key]);
+                  return (
+                    <li>
+                      <button
+                        type="button"
+                        class="legend-item"
+                        classList={{ 'legend-item--hidden': !isOn() }}
+                        aria-pressed={isOn()}
+                        aria-label={`Toggle ${item.name} trace`}
+                        data-testid={`post-brew-legend-${item.key}`}
+                        onClick={() => toggleTrace(item.key)}
+                      >
+                        <span
+                          class="legend-swatch"
+                          style={{ background: item.color }}
+                          aria-hidden="true"
+                        />
+                        <span class="legend-label">{item.name}</span>
+                        <Show when={item.suffix}>
+                          <span class="legend-suffix">{item.suffix}</span>
+                        </Show>
+                      </button>
+                    </li>
+                  );
+                }}
+              </For>
+            </ul>
+            <div class="shot-review__chart" data-testid="post-brew-chart">
+              <ShotMiniChart
+                shot={displayedFull}
+                fill={true}
+                showAxes={true}
+                visibility={visibility}
+              />
+            </div>
+          </div>
+        </Show>
+      </div>
 
       <footer class="prep__action prep__action--row post-brew__actions">
         <button
@@ -961,22 +1150,21 @@ const PostBrewView: Component<{
   );
 };
 
-/** A readout cell in the result row — reuses the live-view `.readout`
- *  styling, with an optional muted target sub-line beneath the value
- *  (shown as a separate value, not an actual/target fraction). */
-const Readout: Component<{
+/** A compact stat row on the Shot Review rail: a small label with its value
+ *  (string or custom content, e.g. the editable dose field) and an optional
+ *  muted target sub-line — actual and target shown as separate values, never
+ *  an `actual/target` fraction (per the agreed result-screen treatment). */
+const ReviewStat: Component<{
   label: string;
-  value: string;
-  sub?: string;
   testId: string;
+  sub?: string;
+  children: JSX.Element;
 }> = (p) => (
-  <div class="readout" data-testid={p.testId}>
-    <div class="readout__label">{p.label}</div>
-    <div class="readout__value">{p.value}</div>
+  <div class="rstat" data-testid={p.testId}>
+    <dt class="rstat__label">{p.label}</dt>
+    <dd class="rstat__value">{p.children}</dd>
     <Show when={p.sub}>
-      <div class="readout__sub" data-testid={`${p.testId}-target`}>
-        {p.sub}
-      </div>
+      <dd class="rstat__sub" data-testid={`${p.testId}-target`}>{p.sub}</dd>
     </Show>
   </div>
 );

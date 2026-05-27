@@ -35,8 +35,22 @@ export interface GatewayShotSummary {
   annotations?: {
     actualDoseWeight?: number | null;
     actualYield?: number | null;
+    /** 0–100 enjoyment rating (de1app's `espresso_enjoyment` scale). */
+    enjoyment?: number | null;
     espressoNotes?: string | null;
   };
+}
+
+/**
+ * Partial post-shot annotations written back via `PUT /api/v1/shots/{id}`.
+ * The gateway deep-merges this onto the stored record's `annotations`, so
+ * only the included fields change — omit a field to leave it untouched.
+ */
+export interface ShotAnnotationsPatch {
+  enjoyment?: number;
+  espressoNotes?: string;
+  actualDoseWeight?: number;
+  actualYield?: number;
 }
 
 export interface GatewayShotMeasurement {
@@ -141,6 +155,18 @@ export const api = {
   /** Full shot record including measurements (for the mini chart). */
   shotById: (id: string) =>
     fetchJson<GatewayShotRecord>(`/api/v1/shots/${encodeURIComponent(id)}`),
+
+  /**
+   * Write post-shot annotations (rating, notes, corrected dose) back to a
+   * recorded shot. Sent as a partial `{ annotations }` body — the gateway
+   * deep-merges, preserving annotation fields not included here.
+   */
+  updateShotAnnotations: (id: string, annotations: ShotAnnotationsPatch) =>
+    fetchEmpty(`/api/v1/shots/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ annotations }),
+    }),
 
   /**
    * Current workflow context — used by the live brew drawer to read the

@@ -16,6 +16,7 @@ import type {
   GatewayShotRecord,
   GatewayShotSummary,
   ProfileRecord,
+  ShotAnnotationsPatch,
 } from '../api';
 import type { WsStream } from '../streams';
 
@@ -76,9 +77,12 @@ const renderScreen = (
     optimisticShot?: GatewayShotRecord | null;
     fetchLatestShot?: () => Promise<GatewayShotSummary>;
     fetchShot?: (id: string) => Promise<GatewayShotRecord>;
+    updateShot?: (id: string, patch: ShotAnnotationsPatch) => Promise<void>;
+    saveDebounceMs?: number;
   },
 ): ReturnType<typeof mkSetup> & {
   onApplyWorkflow: ReturnType<typeof vi.fn>;
+  updateShot: ReturnType<typeof vi.fn>;
 } => {
   const env = mkSetup({ beverages: opts.beverages, recipes: opts.recipes });
   // Default profile fetchers return empty/null so the brew-step prep card
@@ -97,6 +101,9 @@ const renderScreen = (
   const fetchShot =
     opts.fetchShot ?? (() => Promise.reject(new Error('no shot')));
   const optimisticShot = () => opts.optimisticShot ?? null;
+  const updateShot = vi.fn(
+    opts.updateShot ?? (async (_id: string, _patch: ShotAnnotationsPatch) => {}),
+  );
   render(() => (
     <WithRepositories beverages={env.repos.beverages} recipes={env.repos.recipes}>
       <RecipeBrewScreen
@@ -110,10 +117,12 @@ const renderScreen = (
         fetchLatestShot={fetchLatestShot}
         fetchShot={fetchShot}
         optimisticShot={optimisticShot}
+        updateShot={updateShot}
+        saveDebounceMs={opts.saveDebounceMs ?? 0}
       />
     </WithRepositories>
   ));
-  return { ...env, onApplyWorkflow };
+  return { ...env, onApplyWorkflow, updateShot };
 };
 
 const mkProfileRecord = (
@@ -756,6 +765,12 @@ describe('RecipeBrewScreen', () => {
       env.setMachineSnap(snapshotWithState('idle'));
       await waitFor(() => screen.getByTestId('post-brew-view'));
 
+      // Review identity: the distinct review surface (stats rail + rating +
+      // Visualizer placeholder) is what marks this as the completed shot, not
+      // a live-view clone.
+      expect(screen.getByTestId('post-brew-stats')).toBeInTheDocument();
+      expect(screen.getByTestId('post-brew-rating')).toBeInTheDocument();
+      expect(screen.getByTestId('post-brew-visualizer')).toBeInTheDocument();
       const headline = await waitFor(() =>
         screen.getByTestId('post-brew-headline'),
       );
@@ -763,7 +778,8 @@ describe('RecipeBrewScreen', () => {
       expect(screen.getByTestId('post-brew-subtitle')).toHaveTextContent(
         'Cappuccino · Brazil',
       );
-      expect(screen.getByTestId('post-brew-stat-dose')).toHaveTextContent('18');
+      // Dose is now an inline-editable field, seeded from the derived dose.
+      expect(screen.getByTestId('post-brew-dose-input')).toHaveValue(18);
       // Yield = measured last scale weight 35.8; target shown separately.
       expect(screen.getByTestId('post-brew-stat-yield')).toHaveTextContent('35.8');
       expect(
@@ -834,6 +850,156 @@ describe('RecipeBrewScreen', () => {
       expect(toggle).toHaveAttribute('aria-pressed', 'true');
       fireEvent.click(toggle);
       expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    });
+  });
+
+  describe('post-brew annotations', () => {
+    const brewOnly = () => [
+      {
+        id: 'bev-cap',
+        name: 'Cappuccino',
+        steps: [beverageStep('brew', {}, 'step-brew')],
+      },
+    ];
+
+    const gatewaySummary = (
+      over: Partial<GatewayShotSummary> = {},
+    ): GatewayShotSummary => ({
+      id: 'shot-real',
+      timestamp: '2026-05-27T08:00:10.000Z',
+      workflow: {
+        name: 'Cappuccino',
+        profile: { title: 'Best Practice C+' },
+        context: { targetDoseWeight: 18 },
+      },
+      ...over,
+    });
+
+    const driveToResult = async (
+      env: ReturnType<typeof renderScreen>,
+    ): Promise<void> => {
+      fireEvent.click(
+        await waitFor(() => screen.getByTestId('prep-card-start')),
+      );
+      env.setMachineSnap(snapshotWithState('espresso'));
+      env.setMachineSnap(snapshotWithState('idle'));
+      await waitFor(() => screen.getByTestId('post-brew-view'));
+    };
+
+    it('auto-saves the enjoyment rating against the real gateway shot id', async () => {
+      const env = renderScreen({
+        beverages: brewOnly(),
+        recipes: [sampleRecipe()],
+        fetchLatestShot: () => Promise.resolve(gatewaySummary()),
+      });
+      await driveToResult(env);
+
+      const slider = await waitFor(() => screen.getByTestId('post-brew-rating'));
+      fireEvent.input(slider, { target: { value: '80' } });
+
+      await waitFor(() =>
+        expect(env.updateShot).toHaveBeenCalledWith(
+          'shot-real',
+          expect.objectContaining({ enjoyment: 80 }),
+        ),
+      );
+      // Rating-only save must not assert a measured dose it never captured.
+      expect(env.updateShot).not.toHaveBeenCalledWith(
+        'shot-real',
+        expect.objectContaining({ actualDoseWeight: expect.anything() }),
+      );
+    });
+
+    it('auto-saves tasting notes', async () => {
+      const env = renderScreen({
+        beverages: brewOnly(),
+        recipes: [sampleRecipe()],
+        fetchLatestShot: () => Promise.resolve(gatewaySummary()),
+      });
+      await driveToResult(env);
+
+      const notes = await waitFor(() => screen.getByTestId('post-brew-notes'));
+      fireEvent.input(notes, { target: { value: 'Bright, jammy' } });
+
+      await waitFor(() =>
+        expect(env.updateShot).toHaveBeenCalledWith(
+          'shot-real',
+          expect.objectContaining({ espressoNotes: 'Bright, jammy' }),
+        ),
+      );
+    });
+
+    it('saves a corrected actual dose only after it is edited', async () => {
+      const env = renderScreen({
+        beverages: brewOnly(),
+        recipes: [sampleRecipe()],
+        fetchLatestShot: () => Promise.resolve(gatewaySummary()),
+      });
+      await driveToResult(env);
+
+      const dose = await waitFor(() =>
+        screen.getByTestId('post-brew-dose-input'),
+      );
+      // Seeded from the target dose (18) for display.
+      expect(dose).toHaveValue(18);
+      fireEvent.input(dose, { target: { value: '18.4' } });
+      fireEvent.blur(dose);
+
+      await waitFor(() =>
+        expect(env.updateShot).toHaveBeenCalledWith(
+          'shot-real',
+          expect.objectContaining({ actualDoseWeight: 18.4 }),
+        ),
+      );
+    });
+
+    it('marks the capture Saved after a successful write', async () => {
+      const env = renderScreen({
+        beverages: brewOnly(),
+        recipes: [sampleRecipe()],
+        fetchLatestShot: () => Promise.resolve(gatewaySummary()),
+      });
+      await driveToResult(env);
+
+      const slider = await waitFor(() => screen.getByTestId('post-brew-rating'));
+      fireEvent.input(slider, { target: { value: '60' } });
+
+      await waitFor(() =>
+        expect(screen.getByTestId('post-brew-save-state')).toHaveAttribute(
+          'data-state',
+          'saved',
+        ),
+      );
+    });
+
+    it('holds the save while only the optimistic record is on screen', async () => {
+      const optimistic: GatewayShotRecord = {
+        id: 'optimistic-synthetic',
+        timestamp: '2026-05-27T08:00:10.000Z',
+        workflow: { name: 'Cappuccino', profile: { title: 'C+' } },
+        measurements: [],
+      };
+      const env = renderScreen({
+        beverages: brewOnly(),
+        recipes: [sampleRecipe()],
+        optimisticShot: optimistic,
+        // fetchLatestShot rejects (default) → gateway never catches up, so
+        // there is no real id to annotate.
+      });
+      await driveToResult(env);
+
+      const slider = await waitFor(() => screen.getByTestId('post-brew-rating'));
+      fireEvent.input(slider, { target: { value: '70' } });
+
+      // Let the (zero-delay) debounce + bounded poll churn.
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(env.updateShot).not.toHaveBeenCalled();
+      expect(screen.getByTestId('post-brew-save-state')).toHaveAttribute(
+        'data-state',
+        'saving',
+      );
     });
   });
 
