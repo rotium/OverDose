@@ -360,11 +360,11 @@ export const LiveSteamView: Component<LiveSteamViewProps> = (p) => {
 
       <Show when={p.showSlider && p.onChangeSteamFlow}>
         <section
-          class="steam-flow-control"
+          class="live-flow-control"
           data-testid="steam-flow-slider-row"
           aria-label="Steam flow"
         >
-          <span class="steam-flow-control__label">Steam flow</span>
+          <span class="live-flow-control__label">Steam flow</span>
           <DebouncedSliderField
             testId="steam-flow-slider"
             value={p.steamFlow ? p.steamFlow() : undefined}
@@ -374,7 +374,7 @@ export const LiveSteamView: Component<LiveSteamViewProps> = (p) => {
             step={STEAM_FLOW_STEP}
             ariaLabel="Steam flow in millilitres per second"
             formatValue={(v) => `${v.toFixed(1)} mL/s`}
-            class="steam-flow-control__slider"
+            class="live-flow-control__slider"
           />
         </section>
       </Show>

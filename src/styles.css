@@ -962,11 +962,11 @@ html {
   grid-template-columns: repeat(5, 1fr) auto;
 }
 
-/* In-session steam-flow slider — only renders when the user pref
-   `showSteamFlowSlider` is on. Sits between hero + readouts, with a
-   left-side label and the slider filling the rest of the row. Kept compact
-   (single line) so it doesn't dominate the view. */
-.steam-flow-control {
+/* In-session flow slider, shared by the steam / hot-water / flush views —
+   only renders when the matching `show*FlowSlider` pref is on. Sits between
+   hero + readouts, with a left-side label and the slider filling the rest of
+   the row. Kept compact (single line) so it doesn't dominate the view. */
+.live-flow-control {
   display: grid;
   grid-template-columns: auto 1fr;
   align-items: center;
@@ -977,7 +977,7 @@ html {
   background: rgba(255, 255, 255, 0.02);
 }
 
-.steam-flow-control__label {
+.live-flow-control__label {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-size: 0.75rem;
@@ -985,8 +985,117 @@ html {
   white-space: nowrap;
 }
 
-.steam-flow-control__slider {
+.live-flow-control__slider {
   width: 100%;
+}
+
+/* ─── Live op hero (hot water · flush) ────────────────────────────────
+   A simpler sibling of the steam hero: one big number, an optional muted
+   target sub-line, and an optional progress bar. Hot water shows grams/target
+   (scale) or elapsed time (no scale); flush shows a seconds countdown. Shares
+   the steam hero's vertical rhythm (fills the chart slot). */
+.op-hero {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0 0.5rem;
+}
+
+/* The big number row — tabular nums so digits don't jitter as they tick. */
+.op-hero__primary {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  line-height: 1;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+  transition: color 200ms ease;
+}
+
+.op-hero__num {
+  font-size: 8rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.op-hero__unit {
+  font-size: 1.75rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+/* Severity tints mirror the STOP fill: amber near the target, red past it. */
+.op-hero__primary[data-severity='near'] .op-hero__num {
+  color: var(--warn);
+}
+
+.op-hero__primary[data-severity='over'] .op-hero__num {
+  color: var(--bad);
+}
+
+/* Muted "/ 150 g" or "target 150 mL" line under the number. */
+.op-hero__target {
+  font-size: 1.5rem;
+  font-weight: 500;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+/* Progress bar under the hero — grams/target (water) or elapsed/timeout
+   (flush). Width set inline by the component. */
+.op-hero__bar {
+  width: min(360px, 70%);
+  height: 10px;
+  background: #2a2a2a;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.op-hero__bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 200ms linear;
+}
+
+.op-hero__bar[data-severity='near'] .op-hero__bar-fill {
+  background: var(--warn);
+}
+
+.op-hero__bar[data-severity='over'] .op-hero__bar-fill {
+  background: var(--bad);
+}
+
+/* De-emphasized "what's going on" hint (flush): live flow + temp, sized down
+   and muted so it reads as a footnote to the countdown, not a peer readout. */
+.op-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.op-hint__sep {
+  color: var(--muted-2);
+}
+
+/* Hot-water readouts row — 4 columns + STOP (TEMP / TARGET / FLOW / TIME). */
+.live-view__readouts--water {
+  grid-template-columns: repeat(4, 1fr) auto;
+}
+
+/* Flush footer holds only the STOP button (time is the hero, flow/temp are
+   the hint). Right-align it to match the other views' STOP placement. */
+.live-view__readouts--flush {
+  display: flex;
+  justify-content: flex-end;
 }
 
 /* ─── Water alert banner (bottom of Home) ─────────────────────────── */

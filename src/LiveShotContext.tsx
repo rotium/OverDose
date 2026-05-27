@@ -15,6 +15,7 @@ import {
 import {
   isScaleStatusFrame,
   type MachineSnapshot,
+  type MachineState,
   type ScaleMessage,
   type ShotSettingsSnapshot,
 } from './snapshot';
@@ -52,33 +53,49 @@ export interface LiveShotProviderProps {
 }
 
 /**
- * Per-operation session for the non-espresso live views (steam today; water
- * and flush will reuse this). Lightweight on purpose — no ring buffers, just
- * "we're in this state, here's when it started". The drawer's open/close
- * lifecycle is driven by `status`, and the view computes elapsed from
- * `startedAtMs` against the latest machine timestamp.
+ * Per-operation session for the non-espresso live views (steam, hot water,
+ * flush). Lightweight on purpose — no ring buffers, just "we're in this
+ * operation, here's when it started". The drawer's open/close lifecycle is
+ * driven by `status`, the body it shows is driven by `kind`, and each view
+ * computes elapsed from `startedAtMs` against the latest machine timestamp.
  *
- * `phase` distinguishes the active-steaming window from the trailing wand
- * purge that the firmware runs autonomously after steam ends. The DE1
- * sequences `steam` → (brief gateway-hidden puffing) → `airPurge` → `idle`;
- * the session stays active across both `steam` and `airPurge` so the drawer
- * keeps showing what the machine is doing for the full ~5s purge. The
- * view swaps its hero copy when phase flips to `'purging'`.
+ * `phase` is steam-specific: it distinguishes the active-steaming window from
+ * the trailing wand purge the firmware runs autonomously after steam ends.
+ * The DE1 sequences `steam` → (brief gateway-hidden puffing) → `airPurge` →
+ * `idle`; the session stays active across both `steam` and `airPurge` so the
+ * drawer keeps showing what the machine is doing for the full ~5s purge, and
+ * the steam view swaps its hero copy when phase flips to `'purging'`. Water
+ * and flush have no purge — their phase stays `'idle'` throughout.
  */
-export type SteamSessionStatus = 'idle' | 'active';
-export type SteamSessionPhase = 'steaming' | 'purging' | 'idle';
+export type LiveOpKind = 'steam' | 'water' | 'flush';
+export type OperationSessionStatus = 'idle' | 'active';
+export type OperationSessionPhase = 'steaming' | 'purging' | 'idle';
 
-export interface SteamSession {
-  status: Accessor<SteamSessionStatus>;
-  phase: Accessor<SteamSessionPhase>;
-  /** Epoch ms of the first snapshot where state === 'steam'. 0 when idle. */
+export interface OperationSession {
+  status: Accessor<OperationSessionStatus>;
+  /** Which operation is live — picks the drawer body. Null when idle. */
+  kind: Accessor<LiveOpKind | null>;
+  /** Steam-only sub-phase (steaming/purging). Always `'idle'` for water/flush. */
+  phase: Accessor<OperationSessionPhase>;
+  /** Epoch ms of the first snapshot of the operation. 0 when idle. */
   startedAtMs: Accessor<number>;
 }
 
+/** Map a machine state onto the live-operation it represents (or null). The
+ *  firmware's trailing `airPurge` folds into the steam session. */
+const opKindForState = (s: MachineState | undefined): LiveOpKind | null => {
+  if (s === 'steam' || s === 'airPurge') return 'steam';
+  if (s === 'hotWater') return 'water';
+  if (s === 'flush') return 'flush';
+  return null;
+};
+
 export interface LiveShotContextValue {
   accumulator: LiveShotAccumulator;
-  steamSession: SteamSession;
+  operationSession: OperationSession;
   machineStream: WsStream<MachineSnapshot>;
+  /** Scale frames — the water view reads live cup weight for its hero. */
+  scaleStream: WsStream<ScaleMessage>;
   shotSettingsStream: WsStream<ShotSettingsSnapshot> | null;
   stop: () => Promise<void>;
   /**
@@ -122,14 +139,16 @@ const Ctx = createContext<LiveShotContextValue>();
 export const LiveShotProvider: Component<LiveShotProviderProps> = (p) => {
   const accumulator = createLiveShotAccumulator();
 
-  // Steam-session lifecycle — independent of the espresso accumulator. The
-  // drawer opens when either is active; the per-op view picks itself based
-  // on machine.state.state.
-  const [steamStatus, setSteamStatus] = createSignal<SteamSessionStatus>('idle');
-  const [steamPhase, setSteamPhase] = createSignal<SteamSessionPhase>('idle');
-  const [steamStartedAtMs, setSteamStartedAtMs] = createSignal(0);
+  // Operation-session lifecycle — independent of the espresso accumulator.
+  // The drawer opens when either is active; `opKind` picks which per-op view
+  // to render. `opPhase` is steam-only (steaming/purging); water/flush leave
+  // it at 'idle'.
+  const [opStatus, setOpStatus] = createSignal<OperationSessionStatus>('idle');
+  const [opKind, setOpKind] = createSignal<LiveOpKind | null>(null);
+  const [opPhase, setOpPhase] = createSignal<OperationSessionPhase>('idle');
+  const [opStartedAtMs, setOpStartedAtMs] = createSignal(0);
 
-  // Cached machine-settings blob. Fetched on each steam-session start; an
+  // Cached machine-settings blob. Fetched on each operation-session start; an
   // in-flight session can refetch via the optimistic merge in
   // `updateMachineSettings`. Cleared only on provider unmount.
   const [machineSettings, setMachineSettings] =
@@ -184,61 +203,80 @@ export const LiveShotProvider: Component<LiveShotProviderProps> = (p) => {
       });
     }
 
-    // Steam-session transitions. The session spans the DE1's full end-of-
-    // steam sequence: `steam` (active) → `airPurge` (firmware-driven ~5 s
-    // wand purge) → idle. Either of those user-visible states keeps the
-    // session active and the drawer open; the view distinguishes them via
-    // `phase` ('steaming' vs 'purging'). The gateway folds the brief
-    // `puffing` substate (between steam-end and airPurge) into
-    // `state=steam, substate=idle`, so we don't see it directly — but
-    // we're still in 'steam' for the whole window, so no extra handling
-    // needed.
-    const inSession = state === 'steam' || state === 'airPurge';
-    const wasInSession = prevState === 'steam' || prevState === 'airPurge';
+    // Operation-session transitions (steam / hot water / flush). The steam
+    // session spans the DE1's full end-of-steam sequence: `steam` (active) →
+    // `airPurge` (firmware-driven ~5 s wand purge) → idle. Both map to the
+    // 'steam' op so the session stays active across them; the steam view
+    // distinguishes them via `phase`. (The gateway folds the brief `puffing`
+    // substate into `state=steam`, so we never see it directly.) Water and
+    // flush are single-state operations with no purge.
+    const op = opKindForState(state);
+    const prevOp = opKindForState(prevState as MachineState | undefined);
+    const inSession = op !== null;
+    const wasInSession = prevOp !== null;
+
+    // Fire-and-forget fetch of machine-settings on any op start — supplies
+    // the flow sliders (steamFlow / hotWaterFlow / flushFlow) and flush's
+    // countdown target (flushTimeout). If it fails or no fetcher is wired,
+    // the views just fall back to em-dashes / count-up.
+    const fetchMachineSettings = (): void => {
+      if (!p.onFetchMachineSettings) return;
+      void p
+        .onFetchMachineSettings()
+        .then((s) => {
+          if (s) setMachineSettings(s);
+        })
+        .catch((e) => console.warn('fetch machineSettings failed', e));
+    };
 
     if (inSession && !wasInSession) {
-      // Session start. Always starts on `steam` in practice — `airPurge`
-      // without a preceding `steam` would be unusual, but we still cover it
-      // so a cold subscribe (page-load mid-purge) renders sensibly.
-      setSteamStartedAtMs(Date.parse(snap.timestamp));
-      setSteamStatus('active');
-      setSteamPhase(state === 'steam' ? 'steaming' : 'purging');
-      // Snapshot the saved steam duration before any mid-session edits, so
-      // we can restore it on session-end. `null` if shotSettings hasn't
-      // arrived yet — restore is then skipped (we don't know what to put
-      // back).
-      const curSettings = p.shotSettingsStream?.latest();
-      originalSteamDurationSec = curSettings?.targetSteamDuration ?? null;
-      // Fire-and-forget fetch of machine-settings (for steam-flow). If it
-      // fails or no fetcher is wired, the live view just doesn't render a
-      // value — which is the same outcome as the WS never having pushed it.
-      if (p.onFetchMachineSettings) {
-        void p
-          .onFetchMachineSettings()
-          .then((s) => {
-            if (s) setMachineSettings(s);
-          })
-          .catch((e) => console.warn('fetch machineSettings failed', e));
+      // Session start. Steam always starts on `steam` in practice —
+      // `airPurge` without a preceding `steam` would be unusual, but we still
+      // cover it so a cold subscribe (page-load mid-purge) renders sensibly.
+      setOpStartedAtMs(Date.parse(snap.timestamp));
+      setOpStatus('active');
+      setOpKind(op);
+      setOpPhase(op === 'steam' ? (state === 'steam' ? 'steaming' : 'purging') : 'idle');
+      // Steam-only: snapshot the saved duration before any mid-session edits,
+      // so we can restore it on session-end. `null` if shotSettings hasn't
+      // arrived yet — restore is then skipped (nothing to put back).
+      if (op === 'steam') {
+        originalSteamDurationSec =
+          p.shotSettingsStream?.latest()?.targetSteamDuration ?? null;
       }
+      fetchMachineSettings();
     } else if (inSession && wasInSession) {
-      // Within-session transition. The only interesting one is
-      // `steam` → `airPurge` (start of the firmware purge). Flip phase
-      // without resetting `startedAtMs` — the readouts row keeps its
-      // TIME counter running through the purge, which honestly reflects
-      // how long the session has been open.
-      if (state === 'airPurge' && prevState !== 'airPurge') {
-        setSteamPhase('purging');
-      } else if (state === 'steam' && prevState === 'airPurge') {
-        // Defensive — if the firmware ever bounced back to steam, return
-        // to 'steaming'. Not expected on real hardware.
-        setSteamPhase('steaming');
+      if (op !== prevOp) {
+        // Operation changed without passing through idle — unexpected on real
+        // hardware (the machine returns to idle between operations), but
+        // restart the session cleanly so the view + `startedAtMs` match.
+        setOpStartedAtMs(Date.parse(snap.timestamp));
+        setOpKind(op);
+        setOpPhase(op === 'steam' ? 'steaming' : 'idle');
+        originalSteamDurationSec =
+          op === 'steam'
+            ? (p.shotSettingsStream?.latest()?.targetSteamDuration ?? null)
+            : null;
+        fetchMachineSettings();
+      } else if (op === 'steam') {
+        // Within steam: the only interesting transition is `steam` →
+        // `airPurge` (start of the firmware purge). Flip phase without
+        // resetting `startedAtMs` — the readouts TIME counter keeps running
+        // through the purge, which honestly reflects how long we've been open.
+        if (state === 'airPurge' && prevState !== 'airPurge') {
+          setOpPhase('purging');
+        } else if (state === 'steam' && prevState === 'airPurge') {
+          // Defensive — if the firmware ever bounced back to steam. Not
+          // expected on real hardware.
+          setOpPhase('steaming');
+        }
       }
     } else if (!inSession && wasInSession) {
-      // Session end (purge finished, or steam ended without a purge in the
-      // two-tap stop case). Restore the saved steam duration if we (or the
-      // user) bumped it during the session. Only writes when the current
+      // Session end. Steam-only: restore the saved steam duration if we (or
+      // the user) bumped it during the session. Only writes when the current
       // firmware value differs from what we captured at start — avoids a
-      // redundant POST when no extend happened.
+      // redundant POST when no extend happened. (Guarded by
+      // `originalSteamDurationSec !== null`, which is only set for steam.)
       const cur = p.shotSettingsStream?.latest();
       if (
         originalSteamDurationSec !== null &&
@@ -250,9 +288,9 @@ export const LiveShotProvider: Component<LiveShotProviderProps> = (p) => {
           ...cur,
           targetSteamDuration: originalSteamDurationSec,
         };
-        // Fire-and-forget — the user has already moved on from the steam
-        // session, so we don't gate the UI on the round-trip. If the POST
-        // fails the saved value stays bumped; user can fix in Settings.
+        // Fire-and-forget — the user has already moved on from the session,
+        // so we don't gate the UI on the round-trip. If the POST fails the
+        // saved value stays bumped; user can fix in Settings.
         try {
           const r = p.onUpdateShotSettings(restored);
           if (r && typeof (r as Promise<void>).catch === 'function') {
@@ -265,9 +303,10 @@ export const LiveShotProvider: Component<LiveShotProviderProps> = (p) => {
         }
       }
       originalSteamDurationSec = null;
-      setSteamStatus('idle');
-      setSteamPhase('idle');
-      setSteamStartedAtMs(0);
+      setOpStatus('idle');
+      setOpKind(null);
+      setOpPhase('idle');
+      setOpStartedAtMs(0);
     }
 
     if (prevState === 'espresso' && state !== 'espresso') {
@@ -338,12 +377,14 @@ export const LiveShotProvider: Component<LiveShotProviderProps> = (p) => {
 
   const value: LiveShotContextValue = {
     accumulator,
-    steamSession: {
-      status: steamStatus,
-      phase: steamPhase,
-      startedAtMs: steamStartedAtMs,
+    operationSession: {
+      status: opStatus,
+      kind: opKind,
+      phase: opPhase,
+      startedAtMs: opStartedAtMs,
     },
     machineStream: p.machineStream,
+    scaleStream: p.scaleStream,
     shotSettingsStream: p.shotSettingsStream ?? null,
     stop: () => p.onStop(),
     extendSteam,

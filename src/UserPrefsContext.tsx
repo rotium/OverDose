@@ -31,6 +31,8 @@ interface PersistedPrefs {
   chartSmoothing?: ChartSmoothing;
   traceVisibility?: TraceVisibility;
   showSteamFlowSlider?: boolean;
+  showWaterFlowSlider?: boolean;
+  showFlushFlowSlider?: boolean;
 }
 
 export interface UserPrefsContextValue {
@@ -54,6 +56,14 @@ export interface UserPrefsContextValue {
    */
   showSteamFlowSlider: Accessor<boolean>;
   setShowSteamFlowSlider: (v: boolean) => void;
+  /** Whether the live hot-water view exposes a mid-pour flow slider. Default
+   *  off; the flow value always shows in the readouts row regardless. */
+  showWaterFlowSlider: Accessor<boolean>;
+  setShowWaterFlowSlider: (v: boolean) => void;
+  /** Whether the live flush view exposes a mid-flush flow slider. Default
+   *  off. */
+  showFlushFlowSlider: Accessor<boolean>;
+  setShowFlushFlowSlider: (v: boolean) => void;
 }
 
 const Ctx = createContext<UserPrefsContextValue>();
@@ -97,6 +107,12 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
   const [showSteamFlowSlider, setShowSteamFlowSlider] = createSignal<boolean>(
     initial.showSteamFlowSlider ?? false,
   );
+  const [showWaterFlowSlider, setShowWaterFlowSlider] = createSignal<boolean>(
+    initial.showWaterFlowSlider ?? false,
+  );
+  const [showFlushFlowSlider, setShowFlushFlowSlider] = createSignal<boolean>(
+    initial.showFlushFlowSlider ?? false,
+  );
 
   const setTraceVisible = (k: keyof TraceVisibility, v: boolean) =>
     setTraceVisibility({ ...traceVisibility(), [k]: v });
@@ -111,6 +127,8 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
       chartSmoothing: chartSmoothing(),
       traceVisibility: traceVisibility(),
       showSteamFlowSlider: showSteamFlowSlider(),
+      showWaterFlowSlider: showWaterFlowSlider(),
+      showFlushFlowSlider: showFlushFlowSlider(),
     };
     storage.setItem(STORAGE_KEY, JSON.stringify(shape));
   });
@@ -129,6 +147,10 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
     setTraceVisible,
     showSteamFlowSlider,
     setShowSteamFlowSlider,
+    showWaterFlowSlider,
+    setShowWaterFlowSlider,
+    showFlushFlowSlider,
+    setShowFlushFlowSlider,
   };
 
   return <Ctx.Provider value={value}>{p.children}</Ctx.Provider>;

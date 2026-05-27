@@ -311,8 +311,8 @@ describe('LiveShotProvider', () => {
     it('starts idle and stays idle while the machine is not in steam', () => {
       const rig = buildRig({ machine: mkSnap({ state: { state: 'idle', substate: 'idle' } }) });
       mount(rig);
-      expect(liveCtx().steamSession.status()).toBe('idle');
-      expect(liveCtx().steamSession.startedAtMs()).toBe(0);
+      expect(liveCtx().operationSession.status()).toBe('idle');
+      expect(liveCtx().operationSession.startedAtMs()).toBe(0);
     });
 
     it('flips to "active" when machine state enters steam and records the timestamp', () => {
@@ -324,8 +324,9 @@ describe('LiveShotProvider', () => {
           state: { state: 'steam', substate: 'idle' },
         }),
       );
-      expect(liveCtx().steamSession.status()).toBe('active');
-      expect(liveCtx().steamSession.startedAtMs()).toBe(
+      expect(liveCtx().operationSession.status()).toBe('active');
+      expect(liveCtx().operationSession.kind()).toBe('steam');
+      expect(liveCtx().operationSession.startedAtMs()).toBe(
         Date.parse('2026-05-25T08:00:00.000Z'),
       );
     });
@@ -339,15 +340,15 @@ describe('LiveShotProvider', () => {
           state: { state: 'steam', substate: 'idle' },
         }),
       );
-      expect(liveCtx().steamSession.status()).toBe('active');
+      expect(liveCtx().operationSession.status()).toBe('active');
       rig.setMachine(
         mkSnap({
           timestamp: '2026-05-25T08:00:30.000Z',
           state: { state: 'idle', substate: 'idle' },
         }),
       );
-      expect(liveCtx().steamSession.status()).toBe('idle');
-      expect(liveCtx().steamSession.startedAtMs()).toBe(0);
+      expect(liveCtx().operationSession.status()).toBe('idle');
+      expect(liveCtx().operationSession.startedAtMs()).toBe(0);
     });
 
     it('does not affect the espresso accumulator', () => {
@@ -370,7 +371,7 @@ describe('LiveShotProvider', () => {
       // whole window before the airPurge state, so no extra handling.
       const rig = buildRig();
       mount(rig);
-      expect(liveCtx().steamSession.phase()).toBe('idle');
+      expect(liveCtx().operationSession.phase()).toBe('idle');
 
       rig.setMachine(
         mkSnap({
@@ -378,8 +379,8 @@ describe('LiveShotProvider', () => {
           state: { state: 'steam', substate: 'idle' },
         }),
       );
-      expect(liveCtx().steamSession.status()).toBe('active');
-      expect(liveCtx().steamSession.phase()).toBe('steaming');
+      expect(liveCtx().operationSession.status()).toBe('active');
+      expect(liveCtx().operationSession.phase()).toBe('steaming');
 
       rig.setMachine(
         mkSnap({
@@ -387,12 +388,12 @@ describe('LiveShotProvider', () => {
           state: { state: 'airPurge', substate: 'idle' },
         }),
       );
-      expect(liveCtx().steamSession.status()).toBe('active');
-      expect(liveCtx().steamSession.phase()).toBe('purging');
+      expect(liveCtx().operationSession.status()).toBe('active');
+      expect(liveCtx().operationSession.phase()).toBe('purging');
       // startedAtMs should still be the steam-entry timestamp so the
       // TIME readout keeps counting from session start, not from
       // purge start.
-      expect(liveCtx().steamSession.startedAtMs()).toBe(
+      expect(liveCtx().operationSession.startedAtMs()).toBe(
         Date.parse('2026-05-25T08:00:00.000Z'),
       );
 
@@ -402,9 +403,9 @@ describe('LiveShotProvider', () => {
           state: { state: 'idle', substate: 'idle' },
         }),
       );
-      expect(liveCtx().steamSession.status()).toBe('idle');
-      expect(liveCtx().steamSession.phase()).toBe('idle');
-      expect(liveCtx().steamSession.startedAtMs()).toBe(0);
+      expect(liveCtx().operationSession.status()).toBe('idle');
+      expect(liveCtx().operationSession.phase()).toBe('idle');
+      expect(liveCtx().operationSession.startedAtMs()).toBe(0);
     });
 
     it('two-tap-stop path: steam → idle (no airPurge) ends the session immediately', () => {
@@ -417,12 +418,111 @@ describe('LiveShotProvider', () => {
       rig.setMachine(
         mkSnap({ state: { state: 'steam', substate: 'idle' } }),
       );
-      expect(liveCtx().steamSession.phase()).toBe('steaming');
+      expect(liveCtx().operationSession.phase()).toBe('steaming');
       rig.setMachine(
         mkSnap({ state: { state: 'idle', substate: 'idle' } }),
       );
-      expect(liveCtx().steamSession.status()).toBe('idle');
-      expect(liveCtx().steamSession.phase()).toBe('idle');
+      expect(liveCtx().operationSession.status()).toBe('idle');
+      expect(liveCtx().operationSession.phase()).toBe('idle');
+    });
+  });
+
+  describe('water + flush sessions', () => {
+    const baseMachineSettings: MachineSettingsSnapshot = {
+      fan: 50,
+      usb: 'disable',
+      flushTemp: 90,
+      flushTimeout: 5,
+      flushFlow: 4,
+      hotWaterFlow: 4,
+      steamFlow: 1.0,
+      tankTemp: 25,
+      steamPurgeMode: 0,
+    };
+
+    it('hot water flips to active with kind="water" and no purge phase', () => {
+      const rig = buildRig();
+      mount(rig);
+      rig.setMachine(
+        mkSnap({
+          timestamp: '2026-05-27T08:00:00.000Z',
+          state: { state: 'hotWater', substate: 'idle' },
+        }),
+      );
+      expect(liveCtx().operationSession.status()).toBe('active');
+      expect(liveCtx().operationSession.kind()).toBe('water');
+      expect(liveCtx().operationSession.phase()).toBe('idle');
+      expect(liveCtx().operationSession.startedAtMs()).toBe(
+        Date.parse('2026-05-27T08:00:00.000Z'),
+      );
+    });
+
+    it('flush flips to active with kind="flush"', () => {
+      const rig = buildRig();
+      mount(rig);
+      rig.setMachine(mkSnap({ state: { state: 'flush', substate: 'idle' } }));
+      expect(liveCtx().operationSession.status()).toBe('active');
+      expect(liveCtx().operationSession.kind()).toBe('flush');
+    });
+
+    it('returns to idle with kind=null when the machine leaves the operation', () => {
+      const rig = buildRig();
+      mount(rig);
+      rig.setMachine(mkSnap({ state: { state: 'hotWater', substate: 'idle' } }));
+      expect(liveCtx().operationSession.kind()).toBe('water');
+      rig.setMachine(
+        mkSnap({
+          timestamp: '2026-05-27T08:00:30.000Z',
+          state: { state: 'idle', substate: 'idle' },
+        }),
+      );
+      expect(liveCtx().operationSession.status()).toBe('idle');
+      expect(liveCtx().operationSession.kind()).toBeNull();
+      expect(liveCtx().operationSession.startedAtMs()).toBe(0);
+    });
+
+    it('fetches machine-settings on hot-water start (for the flow slider)', async () => {
+      const rig = buildRig({ machineSettings: baseMachineSettings });
+      mount(rig);
+      rig.setMachine(mkSnap({ state: { state: 'hotWater', substate: 'idle' } }));
+      expect(rig.onFetchMachineSettings).toHaveBeenCalledTimes(1);
+      await waitFor(() =>
+        expect(liveCtx().machineSettings()?.hotWaterFlow).toBe(4),
+      );
+    });
+
+    it('fetches machine-settings on flush start (for flushTimeout + flow)', async () => {
+      const rig = buildRig({ machineSettings: baseMachineSettings });
+      mount(rig);
+      rig.setMachine(mkSnap({ state: { state: 'flush', substate: 'idle' } }));
+      expect(rig.onFetchMachineSettings).toHaveBeenCalledTimes(1);
+      await waitFor(() =>
+        expect(liveCtx().machineSettings()?.flushTimeout).toBe(5),
+      );
+    });
+
+    it('does not write shotSettings when a non-steam operation ends (no steam restore)', () => {
+      const shotSettings: ShotSettingsSnapshot = {
+        steamSetting: 0,
+        targetSteamTemp: 145,
+        targetSteamDuration: 30,
+        targetHotWaterTemp: 90,
+        targetHotWaterVolume: 150,
+        targetHotWaterDuration: 30,
+        targetShotVolume: 36,
+        groupTemp: 92,
+      };
+      const rig = buildRig({ shotSettings });
+      mount(rig);
+      rig.setMachine(mkSnap({ state: { state: 'hotWater', substate: 'idle' } }));
+      const before = rig.onUpdateShotSettings.mock.calls.length;
+      rig.setMachine(
+        mkSnap({
+          timestamp: '2026-05-27T08:00:30.000Z',
+          state: { state: 'idle', substate: 'idle' },
+        }),
+      );
+      expect(rig.onUpdateShotSettings.mock.calls.length).toBe(before);
     });
   });
 

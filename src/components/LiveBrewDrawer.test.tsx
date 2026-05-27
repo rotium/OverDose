@@ -9,7 +9,7 @@ import type {
   ScaleMessage,
   ShotSettingsSnapshot,
 } from '../snapshot';
-import type { WorkflowSnapshot } from '../api';
+import type { MachineSettingsSnapshot, WorkflowSnapshot } from '../api';
 import type { WsStatus, WsStream } from '../streams';
 
 // Mock the chart — jsdom has no canvas, and chart correctness isn't this test's concern.
@@ -36,9 +36,10 @@ const mkSnap = (over: Partial<MachineSnapshot> = {}): MachineSnapshot => ({
 const setupDrawer = (initial?: {
   workflow?: WorkflowSnapshot;
   shotSettings?: ShotSettingsSnapshot;
+  machineSettings?: MachineSettingsSnapshot;
 }) => {
   const [machine, setMachine] = createSignal<MachineSnapshot | null>(null);
-  const [scale] = createSignal<ScaleMessage | null>(null);
+  const [scale, setScale] = createSignal<ScaleMessage | null>(null);
   const [shotSettings, setShotSettings] = createSignal<ShotSettingsSnapshot | null>(
     initial?.shotSettings ?? null,
   );
@@ -53,6 +54,12 @@ const setupDrawer = (initial?: {
     .fn<() => Promise<WorkflowSnapshot>>()
     .mockResolvedValue(initial?.workflow ?? { context: {} });
   const onStop = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+  const onFetchMachineSettings = vi
+    .fn<() => Promise<MachineSettingsSnapshot | null>>()
+    .mockResolvedValue(initial?.machineSettings ?? null);
+  const onUpdateMachineSettings = vi
+    .fn<(p: Partial<MachineSettingsSnapshot>) => Promise<void>>()
+    .mockResolvedValue(undefined);
 
   render(() => (
     <WithPrefs>
@@ -62,13 +69,15 @@ const setupDrawer = (initial?: {
         shotSettingsStream={shotSettingsStream}
         fetchWorkflow={fetchWorkflow}
         onStop={onStop}
+        onFetchMachineSettings={onFetchMachineSettings}
+        onUpdateMachineSettings={onUpdateMachineSettings}
       >
         <LiveBrewDrawer />
       </LiveShotProvider>
     </WithPrefs>
   ));
 
-  return { setMachine, setShotSettings, onStop };
+  return { setMachine, setScale, setShotSettings, onStop, onFetchMachineSettings };
 };
 
 describe('LiveBrewDrawer', () => {
@@ -242,6 +251,99 @@ describe('LiveBrewDrawer', () => {
       expect(timer).toHaveAttribute('data-mode', 'countdown');
       expect(timer).toHaveTextContent('20');
       expect(timer).toHaveTextContent('s left');
+    });
+  });
+
+  describe('hot water operation', () => {
+    const mkWaterSettings = (): ShotSettingsSnapshot => ({
+      steamSetting: 0,
+      targetSteamTemp: 145,
+      targetSteamDuration: 30,
+      targetHotWaterTemp: 90,
+      targetHotWaterVolume: 150,
+      targetHotWaterDuration: 30,
+      targetShotVolume: 36,
+      groupTemp: 92,
+    });
+
+    it('opens with the water view when machine state enters hotWater', () => {
+      const { setMachine } = setupDrawer({ shotSettings: mkWaterSettings() });
+      setMachine(
+        mkSnap({
+          timestamp: '2026-05-27T08:00:00.000Z',
+          state: { state: 'hotWater', substate: 'idle' },
+        }),
+      );
+      expect(screen.getByTestId('live-brew-drawer')).toHaveAttribute('data-state', 'open');
+      expect(screen.getByTestId('live-water-view')).toBeInTheDocument();
+      expect(screen.queryByTestId('live-steam-view')).not.toBeInTheDocument();
+    });
+
+    it('with a scale connected, the hero shows grams toward the target volume', () => {
+      const { setMachine, setScale } = setupDrawer({ shotSettings: mkWaterSettings() });
+      setScale({
+        timestamp: '2026-05-27T08:00:01.000Z',
+        weight: 75,
+        weightFlow: 3,
+        batteryLevel: 90,
+      });
+      setMachine(
+        mkSnap({
+          timestamp: '2026-05-27T08:00:01.000Z',
+          state: { state: 'hotWater', substate: 'idle' },
+        }),
+      );
+      expect(screen.getByTestId('water-hero')).toHaveAttribute('data-mode', 'scale');
+      expect(screen.getByTestId('water-hero-value')).toHaveTextContent('75');
+      expect(screen.getByTestId('water-hero-target')).toHaveTextContent('/ 150 g');
+    });
+
+    it('slides out and unmounts when the machine leaves hotWater', async () => {
+      const { setMachine } = setupDrawer({ shotSettings: mkWaterSettings() });
+      setMachine(
+        mkSnap({
+          timestamp: '2026-05-27T08:00:00.000Z',
+          state: { state: 'hotWater', substate: 'idle' },
+        }),
+      );
+      expect(screen.getByTestId('live-brew-drawer')).toHaveAttribute('data-state', 'open');
+      setMachine(
+        mkSnap({
+          timestamp: '2026-05-27T08:00:30.000Z',
+          state: { state: 'idle', substate: 'idle' },
+        }),
+      );
+      expect(screen.getByTestId('live-brew-drawer')).toHaveAttribute('data-state', 'closing');
+      vi.advanceTimersByTime(280);
+      await waitFor(() =>
+        expect(screen.queryByTestId('live-brew-drawer')).not.toBeInTheDocument(),
+      );
+    });
+  });
+
+  describe('flush operation', () => {
+    it('opens with the flush view when machine state enters flush', () => {
+      const { setMachine } = setupDrawer();
+      setMachine(
+        mkSnap({
+          timestamp: '2026-05-27T08:00:00.000Z',
+          state: { state: 'flush', substate: 'idle' },
+        }),
+      );
+      expect(screen.getByTestId('live-brew-drawer')).toHaveAttribute('data-state', 'open');
+      expect(screen.getByTestId('live-flush-view')).toBeInTheDocument();
+    });
+
+    it('STOP in the flush view calls the injected onStop side-effect', () => {
+      const { setMachine, onStop } = setupDrawer();
+      setMachine(
+        mkSnap({
+          timestamp: '2026-05-27T08:00:00.000Z',
+          state: { state: 'flush', substate: 'idle' },
+        }),
+      );
+      fireEvent.click(screen.getByTestId('live-view-stop'));
+      expect(onStop).toHaveBeenCalledTimes(1);
     });
   });
 });

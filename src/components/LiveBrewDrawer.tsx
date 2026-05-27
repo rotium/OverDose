@@ -10,18 +10,25 @@ import {
 } from 'solid-js';
 import { useLiveShot } from '../LiveShotContext';
 import { useUserPrefs } from '../UserPrefsContext';
-import type { MachineState, ShotSettingsSnapshot } from '../snapshot';
+import {
+  isScaleStatusFrame,
+  type MachineState,
+  type ScaleMessage,
+  type ShotSettingsSnapshot,
+} from '../snapshot';
 import { LiveEspressoView } from './operations/LiveEspressoView';
 import { LiveSteamView } from './operations/LiveSteamView';
+import { LiveWaterView } from './operations/LiveWaterView';
+import { LiveFlushView } from './operations/LiveFlushView';
 
 /**
- * Bottom drawer that overlays Home during a live operation (brew today,
- * steam now, water/flush later). "Smart progress bar" — fully machine-driven,
- * no manual close button. STOP requests idle.
+ * Bottom drawer that overlays Home during a live operation (espresso, steam,
+ * hot water, flush). "Smart progress bar" — fully machine-driven, no manual
+ * close button. STOP requests idle.
  *
  * Open conditions are the union of per-operation lifecycles:
- *   - accumulator.status() !== 'idle'   → espresso shot in progress / freezing
- *   - steamSession.status() === 'active' → machine is in steam state
+ *   - accumulator.status() !== 'idle'        → espresso shot in progress / freezing
+ *   - operationSession.status() === 'active' → machine is steaming / dispensing / flushing
  *
  * Either entering opens the drawer; both leaving closes it (with a 280 ms
  * slide-out, after which the accumulator is reset so LastShotCard can pick
@@ -30,13 +37,16 @@ import { LiveSteamView } from './operations/LiveSteamView';
 
 const SLIDE_OUT_MS = 280;
 
-/** Which per-operation view to render for a given machine state. */
-const operationFor = (s: MachineState | undefined): 'espresso' | 'steam' | null => {
-  if (s === 'espresso') return 'espresso';
-  // `airPurge` is the firmware's trailing wand-purge state after steam.
-  // The steam session stays active across it (see LiveShotContext), so
-  // the steam view keeps rendering and just swaps its hero to "purging".
+/** Which non-espresso view to render for a given machine state. `airPurge`
+ *  is the firmware's trailing wand-purge after steam — the steam session
+ *  stays active across it (see LiveShotContext), so the steam view keeps
+ *  rendering and just swaps its hero to "purging". */
+const operationFor = (
+  s: MachineState | undefined,
+): 'steam' | 'water' | 'flush' | null => {
   if (s === 'steam' || s === 'airPurge') return 'steam';
+  if (s === 'hotWater') return 'water';
+  if (s === 'flush') return 'flush';
   return null;
 };
 
@@ -45,8 +55,9 @@ export const LiveBrewDrawer: Component = () => {
   const prefs = useUserPrefs();
   const {
     accumulator,
-    steamSession,
+    operationSession,
     machineStream,
+    scaleStream,
     shotSettingsStream,
     stop,
     extendSteam,
@@ -60,9 +71,12 @@ export const LiveBrewDrawer: Component = () => {
   // Composite "should this drawer be open" — any live-op lifecycle being
   // non-idle counts. The espresso accumulator gets two open-states
   // ('recording' + 'frozen'), so its slide-out window covers the hand-off
-  // to LastShotCard. Steam has a simpler 'active' → 'idle' transition.
+  // to LastShotCard. Steam/water/flush have a simpler 'active' → 'idle'
+  // transition.
   const isOpenSource = createMemo<boolean>(
-    () => accumulator.status() === 'recording' || steamSession.status() === 'active',
+    () =>
+      accumulator.status() === 'recording' ||
+      operationSession.status() === 'active',
   );
   const isClosingSource = createMemo<boolean>(
     () => accumulator.status() === 'frozen',
@@ -71,15 +85,29 @@ export const LiveBrewDrawer: Component = () => {
   // Choose which view to render. Prefer espresso while the accumulator
   // is non-idle (covers the slide-out animation after a shot completes,
   // when the machine state has already gone to idle but we still want to
-  // show the espresso view as it animates out). Otherwise switch by
-  // current machine state.
-  const activeView = createMemo<'espresso' | 'steam' | null>(() => {
-    if (accumulator.status() !== 'idle') return 'espresso';
-    if (steamSession.status() === 'active') return 'steam';
-    // Final frame after machine leaves a live state: keep the last view
-    // mounted briefly via the animatingOut flag.
-    return operationFor(machineStream.latest()?.state.state);
-  });
+  // show the espresso view as it animates out). Otherwise the active
+  // operation session names the body; the machine-state fallback keeps the
+  // last view mounted during the slide-out after the session goes idle.
+  const activeView = createMemo<'espresso' | 'steam' | 'water' | 'flush' | null>(
+    () => {
+      if (accumulator.status() !== 'idle') return 'espresso';
+      if (operationSession.status() === 'active') return operationSession.kind();
+      return operationFor(machineStream.latest()?.state.state);
+    },
+  );
+
+  // Live scale state for the water hero. A status frame carries connectedness
+  // without a weight; a data frame implies connected and carries the weight.
+  const scaleConnected = (): boolean => {
+    const m = scaleStream.latest();
+    if (!m) return false;
+    return isScaleStatusFrame(m) ? m.status === 'connected' : true;
+  };
+  const scaleWeight = (): number | undefined => {
+    const m: ScaleMessage | null = scaleStream.latest() ?? null;
+    if (!m || isScaleStatusFrame(m)) return undefined;
+    return m.weight;
+  };
 
   // Single effect driving the open/close + reset. Tracks the per-op
   // signals only — the per-frame heat is consumed by each view, not this.
@@ -139,8 +167,8 @@ export const LiveBrewDrawer: Component = () => {
             <LiveSteamView
               machineSnapshot={() => machineStream.latest() ?? null}
               shotSettings={shotSettingsAccessor}
-              startedAtMs={steamSession.startedAtMs}
-              phase={steamSession.phase}
+              startedAtMs={operationSession.startedAtMs}
+              phase={operationSession.phase}
               onStop={() => void stop()}
               onExtend={(delta) => void extendSteam(delta)}
               steamFlow={() => machineSettings()?.steamFlow}
@@ -148,6 +176,34 @@ export const LiveBrewDrawer: Component = () => {
                 void updateMachineSettings({ steamFlow: v })
               }
               showSlider={prefs.showSteamFlowSlider()}
+            />
+          </Match>
+          <Match when={activeView() === 'water'}>
+            <LiveWaterView
+              machineSnapshot={() => machineStream.latest() ?? null}
+              shotSettings={shotSettingsAccessor}
+              startedAtMs={operationSession.startedAtMs}
+              scaleWeight={scaleWeight}
+              scaleConnected={scaleConnected}
+              onStop={() => void stop()}
+              flow={() => machineSettings()?.hotWaterFlow}
+              onChangeFlow={(v) =>
+                void updateMachineSettings({ hotWaterFlow: v })
+              }
+              showSlider={prefs.showWaterFlowSlider()}
+            />
+          </Match>
+          <Match when={activeView() === 'flush'}>
+            <LiveFlushView
+              machineSnapshot={() => machineStream.latest() ?? null}
+              startedAtMs={operationSession.startedAtMs}
+              targetDurationSec={() => machineSettings()?.flushTimeout}
+              onStop={() => void stop()}
+              flow={() => machineSettings()?.flushFlow}
+              onChangeFlow={(v) =>
+                void updateMachineSettings({ flushFlow: v })
+              }
+              showSlider={prefs.showFlushFlowSlider()}
             />
           </Match>
         </Switch>

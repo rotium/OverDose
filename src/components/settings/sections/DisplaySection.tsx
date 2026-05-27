@@ -97,8 +97,8 @@ export const DisplaySection: Component = () => {
         </div>
       </section>
 
-      <section class="settings-section" aria-labelledby="display-steam-heading">
-        <h2 id="display-steam-heading">Live steam view</h2>
+      <section class="settings-section" aria-labelledby="display-liveop-heading">
+        <h2 id="display-liveop-heading">Live operation views</h2>
         <label class="settings-checkbox">
           <input
             type="checkbox"
@@ -110,10 +110,32 @@ export const DisplaySection: Component = () => {
           />
           <span>Show steam-flow slider during steaming</span>
         </label>
+        <label class="settings-checkbox">
+          <input
+            type="checkbox"
+            data-testid="pref-show-water-flow-slider"
+            checked={prefs.showWaterFlowSlider()}
+            onChange={(e) =>
+              prefs.setShowWaterFlowSlider(e.currentTarget.checked)
+            }
+          />
+          <span>Show flow slider during hot water</span>
+        </label>
+        <label class="settings-checkbox">
+          <input
+            type="checkbox"
+            data-testid="pref-show-flush-flow-slider"
+            checked={prefs.showFlushFlowSlider()}
+            onChange={(e) =>
+              prefs.setShowFlushFlowSlider(e.currentTarget.checked)
+            }
+          />
+          <span>Show flow slider during flush</span>
+        </label>
         <p class="settings-help">
-          The current flow value always appears in the readouts row. Enable
-          this to also expose a slider that lets you tune the flow
-          mid-session (mirrors Decent.app's own steam screen).
+          The current flow value always shows in the live view regardless.
+          Enable these to also expose a slider that lets you tune the flow
+          mid-operation (mirrors Decent.app's own screens).
         </p>
       </section>
     </div>
