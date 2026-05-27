@@ -38,7 +38,7 @@ const setup = (
 describe('Header', () => {
   it('renders the title', () => {
     setup();
-    expect(screen.getByText('Decent.app')).toBeInTheDocument();
+    expect(screen.getByText('OverDose')).toBeInTheDocument();
   });
 
   it('renders both connection pills with status data attributes', () => {

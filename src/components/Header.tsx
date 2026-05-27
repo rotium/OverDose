@@ -38,7 +38,7 @@ const WATER_PILL_LABEL: Record<Exclude<WaterSeverity, 'normal'>, string> = {
 
 export const Header: Component<HeaderProps> = (p) => (
   <header class="app-header">
-    <h1 class="app-title">Decent.app</h1>
+    <h1 class="app-title">OverDose</h1>
     <div class="app-header__pills">
       <span class="conn" data-state={p.machineStatus()}>
         machine · {PILL_LABEL[p.machineStatus()]}

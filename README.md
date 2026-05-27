@@ -1,9 +1,8 @@
-# starter-skin
+# OverDose
 
-Minimal SolidJS skin for [Decent.app](https://github.com/tadelv/reaprime).
-Subscribes to the gateway's machine and scale snapshot WebSockets and renders
-live state with fine-grained reactivity. Useful as a starting point — fork,
-rename, and grow it into a real skin.
+A SolidJS skin for [Decent.app](https://github.com/tadelv/reaprime) espresso
+gateways. Subscribes to the gateway's machine and scale snapshot WebSockets and
+renders live state with fine-grained reactivity.
 
 ## Why SolidJS
 

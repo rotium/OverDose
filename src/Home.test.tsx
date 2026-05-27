@@ -108,7 +108,7 @@ describe('Home', () => {
   it('composes Header, RecipePicker, StatusPanel, and LastShotCard', async () => {
     render(() => buildHome());
     // Header
-    expect(screen.getByText('Decent.app')).toBeInTheDocument();
+    expect(screen.getByText('OverDose')).toBeInTheDocument();
     // Picker
     await waitFor(() => screen.getByTestId('recipe-tile-seed-espresso'));
     // StatusPanel
