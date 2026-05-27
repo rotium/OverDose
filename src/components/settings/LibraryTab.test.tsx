@@ -13,18 +13,18 @@ const renderLibrary = () =>
 describe('LibraryTab', () => {
   it('renders all five subsection tabs', () => {
     renderLibrary();
-    for (const label of ['Beverages', 'Recipes', 'Beans', 'Profiles', 'Equipment']) {
+    for (const label of ['Routines', 'Recipes', 'Beans', 'Profiles', 'Equipment']) {
       expect(screen.getByRole('tab', { name: label })).toBeInTheDocument();
     }
   });
 
-  it('defaults to Beverages subsection', async () => {
+  it('defaults to Routines subsection', async () => {
     renderLibrary();
-    expect(screen.getByRole('tab', { name: 'Beverages' })).toHaveAttribute(
+    expect(screen.getByRole('tab', { name: 'Routines' })).toHaveAttribute(
       'aria-selected',
       'true',
     );
-    await waitFor(() => screen.getByTestId('beverages-list'));
+    await waitFor(() => screen.getByTestId('routines-list'));
   });
 
   it('switches subsections when a tab is clicked', async () => {

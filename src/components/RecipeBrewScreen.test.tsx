@@ -4,12 +4,12 @@ import { createSignal } from 'solid-js';
 import { RecipeBrewScreen, stepToGatewayState } from './RecipeBrewScreen';
 import { WithRepositories } from '../test/repositories';
 import {
-  LocalBeverageRepository,
+  LocalRoutineRepository,
   LocalRecipeRepository,
 } from '../repositories';
 import { MemoryStorage } from '../test/memoryStorage';
-import { beverageStep } from '../domain';
-import type { Beverage, Recipe } from '../domain';
+import { routineStep } from '../domain';
+import type { Routine, Recipe } from '../domain';
 import type { MachineSnapshot, MachineState } from '../snapshot';
 import type {
   GatewayShotMeasurement,
@@ -21,19 +21,19 @@ import type {
 import type { WsStream } from '../streams';
 
 interface SeedOpts {
-  beverages: Beverage[];
+  routines: Routine[];
   recipes: Recipe[];
 }
 
-const seedRepos = ({ beverages, recipes }: SeedOpts) => {
+const seedRepos = ({ routines, recipes }: SeedOpts) => {
   const bStore = new MemoryStorage();
-  bStore.setItem('starter-skin.beverages.v1', JSON.stringify(beverages));
-  bStore.setItem('starter-skin.beverages.seeded.v1', '1');
+  bStore.setItem('starter-skin.routines.v1', JSON.stringify(routines));
+  bStore.setItem('starter-skin.routines.seeded.v1', '1');
   const rStore = new MemoryStorage();
   rStore.setItem('starter-skin.recipes.v1', JSON.stringify(recipes));
   rStore.setItem('starter-skin.recipes.seeded.v1', '1');
   return {
-    beverages: new LocalBeverageRepository(bStore),
+    routines: new LocalRoutineRepository(bStore),
     recipes: new LocalRecipeRepository(rStore),
   };
 };
@@ -84,7 +84,7 @@ const renderScreen = (
   onApplyWorkflow: ReturnType<typeof vi.fn>;
   updateShot: ReturnType<typeof vi.fn>;
 } => {
-  const env = mkSetup({ beverages: opts.beverages, recipes: opts.recipes });
+  const env = mkSetup({ routines: opts.routines, recipes: opts.recipes });
   // Default profile fetchers return empty/null so the brew-step prep card
   // never hits the real api in tests; callers that need a profile-loaded
   // assertion pass their own.
@@ -105,7 +105,7 @@ const renderScreen = (
     opts.updateShot ?? (async (_id: string, _patch: ShotAnnotationsPatch) => {}),
   );
   render(() => (
-    <WithRepositories beverages={env.repos.beverages} recipes={env.repos.recipes}>
+    <WithRepositories routines={env.repos.routines} recipes={env.repos.recipes}>
       <RecipeBrewScreen
         recipeId={opts.recipeId ?? 'rec-1'}
         onExit={env.onExit}
@@ -140,20 +140,20 @@ const mkProfileRecord = (
   ...over,
 });
 
-const cappuccino = (): Beverage => ({
+const cappuccino = (): Routine => ({
   id: 'bev-cap',
   name: 'Cappuccino',
   steps: [
-    beverageStep('brew', {}, 'step-brew'),
-    beverageStep('flush', {}, 'step-flush'),
-    beverageStep('steam', {}, 'step-steam'),
+    routineStep('brew', {}, 'step-brew'),
+    routineStep('flush', {}, 'step-flush'),
+    routineStep('steam', {}, 'step-steam'),
   ],
 });
 
 const sampleRecipe = (over: Partial<Recipe> = {}): Recipe => ({
   id: 'rec-1',
   name: "Wife's",
-  beverageId: 'bev-cap',
+  routineId: 'bev-cap',
   overrides: {},
   doseGrams: 18,
   grinderSetting: 4.5,
@@ -171,10 +171,10 @@ describe('stepToGatewayState', () => {
 
 describe('RecipeBrewScreen', () => {
   describe('mounting', () => {
-    it('renders header with recipe and beverage names', async () => {
-      renderScreen({ beverages: [cappuccino()], recipes: [sampleRecipe()] });
+    it('renders header with recipe and routine names', async () => {
+      renderScreen({ routines: [cappuccino()], recipes: [sampleRecipe()] });
       await waitFor(() =>
-        expect(screen.getByTestId('brew-beverage-name')).toHaveTextContent(
+        expect(screen.getByTestId('brew-routine-name')).toHaveTextContent(
           'Cappuccino',
         ),
       );
@@ -185,7 +185,7 @@ describe('RecipeBrewScreen', () => {
 
     it('renders not-found state for a missing recipe', async () => {
       renderScreen({
-        beverages: [],
+        routines: [],
         recipes: [],
         recipeId: 'missing',
       });
@@ -196,7 +196,7 @@ describe('RecipeBrewScreen', () => {
 
   describe('step bar', () => {
     it('marks step 1 current, the rest as future', async () => {
-      renderScreen({ beverages: [cappuccino()], recipes: [sampleRecipe()] });
+      renderScreen({ routines: [cappuccino()], recipes: [sampleRecipe()] });
       await waitFor(() => screen.getByTestId('step-bar'));
       expect(screen.getByTestId('step-bar-item-0')).toHaveAttribute(
         'data-variant',
@@ -213,7 +213,7 @@ describe('RecipeBrewScreen', () => {
     });
 
     it('the current step button is not clickable but future ones are', async () => {
-      renderScreen({ beverages: [cappuccino()], recipes: [sampleRecipe()] });
+      renderScreen({ routines: [cappuccino()], recipes: [sampleRecipe()] });
       await waitFor(() => screen.getByTestId('step-bar'));
       expect(screen.getByTestId('step-bar-button-0')).toBeDisabled();
       expect(screen.getByTestId('step-bar-button-1')).not.toBeDisabled();
@@ -224,7 +224,7 @@ describe('RecipeBrewScreen', () => {
   describe('prep card per step type', () => {
     it('seeds the editable dose/grinder inputs from the Recipe; profile shows the Choose prompt when none is pinned', async () => {
       renderScreen({
-        beverages: [cappuccino()],
+        routines: [cappuccino()],
         recipes: [sampleRecipe({ profileId: undefined })],
       });
       await waitFor(() => screen.getByTestId('prep-card'));
@@ -242,7 +242,7 @@ describe('RecipeBrewScreen', () => {
 
     it('target yield + volume inputs are empty when the Recipe doesn’t set them', async () => {
       renderScreen({
-        beverages: [cappuccino()],
+        routines: [cappuccino()],
         recipes: [sampleRecipe()],
       });
       await waitFor(() => screen.getByTestId('prep-card'));
@@ -261,7 +261,7 @@ describe('RecipeBrewScreen', () => {
 
     it('seeds target yield + volume inputs from the Recipe when present', async () => {
       renderScreen({
-        beverages: [cappuccino()],
+        routines: [cappuccino()],
         recipes: [
           sampleRecipe({ targetYieldGrams: 36, targetVolumeMl: 40 }),
         ],
@@ -282,7 +282,7 @@ describe('RecipeBrewScreen', () => {
 
     it('editing a prep-card field overrides for this shot only — the saved Recipe is untouched', async () => {
       const { repos } = renderScreen({
-        beverages: [cappuccino()],
+        routines: [cappuccino()],
         recipes: [sampleRecipe({ doseGrams: 18 })],
       });
       const dose = (await waitFor(() =>
@@ -310,7 +310,7 @@ describe('RecipeBrewScreen', () => {
         isDefault: true,
       });
       renderScreen({
-        beverages: [cappuccino()],
+        routines: [cappuccino()],
         recipes: [sampleRecipe({ profileId: profile.id })],
         loadProfileById: () => Promise.resolve(profile),
       });
@@ -334,7 +334,7 @@ describe('RecipeBrewScreen', () => {
 
     it('falls back to "(missing profile — id)" when the loader returns null', async () => {
       renderScreen({
-        beverages: [cappuccino()],
+        routines: [cappuccino()],
         recipes: [sampleRecipe({ profileId: 'profile:ghost' })],
         loadProfileById: () => Promise.resolve(null),
       });
@@ -360,7 +360,7 @@ describe('RecipeBrewScreen', () => {
         'profile:swap': swapped,
       };
       const { repos } = renderScreen({
-        beverages: [cappuccino()],
+        routines: [cappuccino()],
         recipes: [sampleRecipe({ profileId: 'profile:orig' })],
         loadProfileById: (id) => Promise.resolve(byId[id] ?? null),
         loadProfiles: () => Promise.resolve([original, swapped]),
@@ -402,7 +402,7 @@ describe('RecipeBrewScreen', () => {
 
     it('pushes profile + context to the gateway once the profile resolves', async () => {
       const { onApplyWorkflow } = renderScreen({
-        beverages: [cappuccino()],
+        routines: [cappuccino()],
         recipes: [
           sampleRecipe({
             name: 'Wife’s',
@@ -427,7 +427,7 @@ describe('RecipeBrewScreen', () => {
 
     it('overrides the pushed profile target_volume from the draft', async () => {
       const { onApplyWorkflow } = renderScreen({
-        beverages: [cappuccino()],
+        routines: [cappuccino()],
         recipes: [
           sampleRecipe({
             profileId: profileWithSteps.id,
@@ -444,7 +444,7 @@ describe('RecipeBrewScreen', () => {
 
     it('sends the profile target_volume unchanged when the draft has no override', async () => {
       const { onApplyWorkflow } = renderScreen({
-        beverages: [cappuccino()],
+        routines: [cappuccino()],
         recipes: [sampleRecipe({ profileId: profileWithSteps.id })],
         loadProfileById: () => Promise.resolve(profileWithSteps),
       });
@@ -455,7 +455,7 @@ describe('RecipeBrewScreen', () => {
 
     it('does NOT push when the recipe has no profile', async () => {
       const { onApplyWorkflow } = renderScreen({
-        beverages: [cappuccino()],
+        routines: [cappuccino()],
         recipes: [sampleRecipe({ profileId: undefined })],
       });
       // Give the screen a beat to settle (resource + effects).
@@ -466,7 +466,7 @@ describe('RecipeBrewScreen', () => {
 
     it('re-pushes after an in-prep edit, syncing the new value (Recipe untouched)', async () => {
       const { onApplyWorkflow, repos } = renderScreen({
-        beverages: [cappuccino()],
+        routines: [cappuccino()],
         recipes: [
           sampleRecipe({ profileId: profileWithSteps.id, doseGrams: 18 }),
         ],
@@ -488,16 +488,16 @@ describe('RecipeBrewScreen', () => {
   });
 
   describe('non-brew prep', () => {
-    it('steam prep has no Beverage-level parameters today', async () => {
-      // No SteamConfig fields ship at the Beverage layer (purge is firmware-
+    it('steam prep has no Routine-level parameters today', async () => {
+      // No SteamConfig fields ship at the Routine layer (purge is firmware-
       // driven, not Recipe-level). The prep card falls through to the
       // generic "no prep needed" copy, like water and flush.
       renderScreen({
-        beverages: [
+        routines: [
           {
             id: 'bev-cap',
             name: 'Cappuccino',
-            steps: [beverageStep('steam', {}, 'step-steam')],
+            steps: [routineStep('steam', {}, 'step-steam')],
           },
         ],
         recipes: [sampleRecipe()],
@@ -508,11 +508,11 @@ describe('RecipeBrewScreen', () => {
 
     it('shows a "no prep needed" caption for water and flush', async () => {
       renderScreen({
-        beverages: [
+        routines: [
           {
             id: 'bev-cap',
             name: 'Cappuccino',
-            steps: [beverageStep('flush', {}, 'step-flush')],
+            steps: [routineStep('flush', {}, 'step-flush')],
           },
         ],
         recipes: [sampleRecipe()],
@@ -525,11 +525,11 @@ describe('RecipeBrewScreen', () => {
   describe('state machine — single step', () => {
     it('Start fires requestState with the matching gateway state', async () => {
       const env = renderScreen({
-        beverages: [
+        routines: [
           {
             id: 'bev-cap',
             name: 'Cappuccino',
-            steps: [beverageStep('brew', {}, 'step-brew')],
+            steps: [routineStep('brew', {}, 'step-brew')],
           },
         ],
         recipes: [sampleRecipe()],
@@ -540,11 +540,11 @@ describe('RecipeBrewScreen', () => {
 
     it('prep card shows "in progress" once Start is tapped', async () => {
       renderScreen({
-        beverages: [
+        routines: [
           {
             id: 'bev-cap',
             name: 'Cappuccino',
-            steps: [beverageStep('brew', {}, 'step-brew')],
+            steps: [routineStep('brew', {}, 'step-brew')],
           },
         ],
         recipes: [sampleRecipe()],
@@ -558,13 +558,13 @@ describe('RecipeBrewScreen', () => {
 
     it('advances to done when the gateway enters then leaves the target state', async () => {
       const env = renderScreen({
-        beverages: [
+        routines: [
           {
             id: 'bev-cap',
             name: 'Cappuccino',
             steps: [
-              beverageStep('brew', {}, 'step-brew'),
-              beverageStep('steam', {}, 'step-steam'),
+              routineStep('brew', {}, 'step-brew'),
+              routineStep('steam', {}, 'step-steam'),
             ],
           },
         ],
@@ -603,7 +603,7 @@ describe('RecipeBrewScreen', () => {
 
   describe('skipping', () => {
     it('clicking a future step jumps past intermediate ones and marks them skipped', async () => {
-      renderScreen({ beverages: [cappuccino()], recipes: [sampleRecipe()] });
+      renderScreen({ routines: [cappuccino()], recipes: [sampleRecipe()] });
       await waitFor(() => screen.getByTestId('step-bar'));
 
       // Click step 3 (index 2 / steam) directly from idle. Skips step 1 (brew)
@@ -630,11 +630,11 @@ describe('RecipeBrewScreen', () => {
   describe('post-brew', () => {
     it('shows the post-brew view after the last step ends', async () => {
       const env = renderScreen({
-        beverages: [
+        routines: [
           {
             id: 'bev-cap',
             name: 'Cappuccino',
-            steps: [beverageStep('brew', {}, 'step-brew')],
+            steps: [routineStep('brew', {}, 'step-brew')],
           },
         ],
         recipes: [sampleRecipe()],
@@ -649,11 +649,11 @@ describe('RecipeBrewScreen', () => {
 
     it('Brew again resets to step 1', async () => {
       const env = renderScreen({
-        beverages: [
+        routines: [
           {
             id: 'bev-cap',
             name: 'Cappuccino',
-            steps: [beverageStep('brew', {}, 'step-brew')],
+            steps: [routineStep('brew', {}, 'step-brew')],
           },
         ],
         recipes: [sampleRecipe()],
@@ -673,11 +673,11 @@ describe('RecipeBrewScreen', () => {
 
     it('Done calls onExit', async () => {
       const env = renderScreen({
-        beverages: [
+        routines: [
           {
             id: 'bev-cap',
             name: 'Cappuccino',
-            steps: [beverageStep('brew', {}, 'step-brew')],
+            steps: [routineStep('brew', {}, 'step-brew')],
           },
         ],
         recipes: [sampleRecipe()],
@@ -693,11 +693,11 @@ describe('RecipeBrewScreen', () => {
 
     it('shows empty copy when no shot data is available', async () => {
       const env = renderScreen({
-        beverages: [
+        routines: [
           {
             id: 'bev-cap',
             name: 'Cappuccino',
-            steps: [beverageStep('brew', {}, 'step-brew')],
+            steps: [routineStep('brew', {}, 'step-brew')],
           },
         ],
         recipes: [sampleRecipe()],
@@ -749,11 +749,11 @@ describe('RecipeBrewScreen', () => {
         ],
       };
       const env = renderScreen({
-        beverages: [
+        routines: [
           {
             id: 'bev-cap',
             name: 'Cappuccino',
-            steps: [beverageStep('brew', {}, 'step-brew')],
+            steps: [routineStep('brew', {}, 'step-brew')],
           },
         ],
         recipes: [sampleRecipe()],
@@ -831,11 +831,11 @@ describe('RecipeBrewScreen', () => {
         ],
       };
       const env = renderScreen({
-        beverages: [
+        routines: [
           {
             id: 'bev-cap',
             name: 'Cappuccino',
-            steps: [beverageStep('brew', {}, 'step-brew')],
+            steps: [routineStep('brew', {}, 'step-brew')],
           },
         ],
         recipes: [sampleRecipe()],
@@ -858,7 +858,7 @@ describe('RecipeBrewScreen', () => {
       {
         id: 'bev-cap',
         name: 'Cappuccino',
-        steps: [beverageStep('brew', {}, 'step-brew')],
+        steps: [routineStep('brew', {}, 'step-brew')],
       },
     ];
 
@@ -888,7 +888,7 @@ describe('RecipeBrewScreen', () => {
 
     it('auto-saves the enjoyment rating against the real gateway shot id', async () => {
       const env = renderScreen({
-        beverages: brewOnly(),
+        routines: brewOnly(),
         recipes: [sampleRecipe()],
         fetchLatestShot: () => Promise.resolve(gatewaySummary()),
       });
@@ -912,7 +912,7 @@ describe('RecipeBrewScreen', () => {
 
     it('auto-saves tasting notes', async () => {
       const env = renderScreen({
-        beverages: brewOnly(),
+        routines: brewOnly(),
         recipes: [sampleRecipe()],
         fetchLatestShot: () => Promise.resolve(gatewaySummary()),
       });
@@ -931,7 +931,7 @@ describe('RecipeBrewScreen', () => {
 
     it('saves a corrected actual dose only after it is edited', async () => {
       const env = renderScreen({
-        beverages: brewOnly(),
+        routines: brewOnly(),
         recipes: [sampleRecipe()],
         fetchLatestShot: () => Promise.resolve(gatewaySummary()),
       });
@@ -955,7 +955,7 @@ describe('RecipeBrewScreen', () => {
 
     it('marks the capture Saved after a successful write', async () => {
       const env = renderScreen({
-        beverages: brewOnly(),
+        routines: brewOnly(),
         recipes: [sampleRecipe()],
         fetchLatestShot: () => Promise.resolve(gatewaySummary()),
       });
@@ -980,7 +980,7 @@ describe('RecipeBrewScreen', () => {
         measurements: [],
       };
       const env = renderScreen({
-        beverages: brewOnly(),
+        routines: brewOnly(),
         recipes: [sampleRecipe()],
         optimisticShot: optimistic,
         // fetchLatestShot rejects (default) → gateway never catches up, so
@@ -1006,7 +1006,7 @@ describe('RecipeBrewScreen', () => {
   describe('back arrow', () => {
     it('clicking back calls onExit', async () => {
       const env = renderScreen({
-        beverages: [cappuccino()],
+        routines: [cappuccino()],
         recipes: [sampleRecipe()],
       });
       fireEvent.click(await waitFor(() => screen.getByTestId('brew-back-button')));

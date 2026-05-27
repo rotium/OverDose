@@ -3,16 +3,16 @@ import { render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
 import { RecipeEditor } from './RecipeEditor';
 import { WithRepositories } from '../../../../test/repositories';
 import {
-  LocalBeverageRepository,
+  LocalRoutineRepository,
   LocalRecipeRepository,
 } from '../../../../repositories';
 import { MemoryStorage } from '../../../../test/memoryStorage';
-import { beverageStep } from '../../../../domain';
-import type { Beverage, Recipe } from '../../../../domain';
+import { routineStep } from '../../../../domain';
+import type { Routine, Recipe } from '../../../../domain';
 import type { ProfileRecord } from '../../../../api';
 
 interface SeedOpts {
-  beverages?: Beverage[];
+  routines?: Routine[];
   recipes?: Recipe[];
   /** Profile-list fetcher seam (default: no profiles). */
   loadProfiles?: () => Promise<ProfileRecord[]>;
@@ -35,35 +35,35 @@ const mkProfileRecord = (
   ...over,
 });
 
-const seedRepos = ({ beverages = [], recipes = [] }: SeedOpts) => {
+const seedRepos = ({ routines = [], recipes = [] }: SeedOpts) => {
   const bStore = new MemoryStorage();
-  bStore.setItem('starter-skin.beverages.v1', JSON.stringify(beverages));
-  bStore.setItem('starter-skin.beverages.seeded.v1', '1');
+  bStore.setItem('starter-skin.routines.v1', JSON.stringify(routines));
+  bStore.setItem('starter-skin.routines.seeded.v1', '1');
   const rStore = new MemoryStorage();
   rStore.setItem('starter-skin.recipes.v1', JSON.stringify(recipes));
   rStore.setItem('starter-skin.recipes.seeded.v1', '1');
   return {
-    beverages: new LocalBeverageRepository(bStore),
+    routines: new LocalRoutineRepository(bStore),
     recipes: new LocalRecipeRepository(rStore),
   };
 };
 
-const cappuccinoBev = (id = 'bev-cap'): Beverage => ({
+const cappuccinoBev = (id = 'bev-cap'): Routine => ({
   id,
   name: 'Cappuccino',
-  steps: [beverageStep('brew', {}), beverageStep('steam', {})],
+  steps: [routineStep('brew', {}), routineStep('steam', {})],
 });
 
-const espressoBev = (id = 'bev-esp'): Beverage => ({
+const espressoBev = (id = 'bev-esp'): Routine => ({
   id,
   name: 'Espresso',
-  steps: [beverageStep('brew', {})],
+  steps: [routineStep('brew', {})],
 });
 
 const sampleRecipe = (over: Partial<Recipe> = {}): Recipe => ({
   id: 'rec-1',
   name: "Wife's",
-  beverageId: 'bev-cap',
+  routineId: 'bev-cap',
   overrides: {},
   doseGrams: 18,
   grinderSetting: 4.5,
@@ -81,7 +81,7 @@ const renderEditor = (opts: SeedOpts, recipeId = 'rec-1') => {
   const loadProfileById =
     opts.loadProfileById ?? (() => Promise.resolve<ProfileRecord | null>(null));
   render(() => (
-    <WithRepositories beverages={repos.beverages} recipes={repos.recipes}>
+    <WithRepositories routines={repos.routines} recipes={repos.recipes}>
       <RecipeEditor
         recipeId={recipeId}
         onClose={onClose}
@@ -107,7 +107,7 @@ describe('RecipeEditor', () => {
   describe('name editing', () => {
     it('persists a renamed recipe on change', async () => {
       const { repos } = renderEditor({
-        beverages: [cappuccinoBev()],
+        routines: [cappuccinoBev()],
         recipes: [sampleRecipe()],
       });
       const input = (await waitFor(() =>
@@ -123,7 +123,7 @@ describe('RecipeEditor', () => {
 
     it('ignores whitespace-only names', async () => {
       const { repos } = renderEditor({
-        beverages: [cappuccinoBev()],
+        routines: [cappuccinoBev()],
         recipes: [sampleRecipe()],
       });
       const input = (await waitFor(() =>
@@ -135,74 +135,74 @@ describe('RecipeEditor', () => {
     });
   });
 
-  describe('beverage re-target', () => {
-    it('lists all visible beverages and seeds the current selection', async () => {
+  describe('routine re-target', () => {
+    it('lists all visible routines and seeds the current selection', async () => {
       renderEditor({
-        beverages: [cappuccinoBev(), espressoBev()],
+        routines: [cappuccinoBev(), espressoBev()],
         recipes: [sampleRecipe()],
       });
       const select = (await waitFor(() =>
-        screen.getByTestId('recipe-beverage-select'),
+        screen.getByTestId('recipe-routine-select'),
       )) as HTMLSelectElement;
       expect(select.value).toBe('bev-cap');
       expect(select.options).toHaveLength(2);
     });
 
-    it('changing the beverage persists the new beverageId', async () => {
+    it('changing the routine persists the new routineId', async () => {
       const { repos } = renderEditor({
-        beverages: [cappuccinoBev(), espressoBev()],
+        routines: [cappuccinoBev(), espressoBev()],
         recipes: [sampleRecipe()],
       });
       const select = (await waitFor(() =>
-        screen.getByTestId('recipe-beverage-select'),
+        screen.getByTestId('recipe-routine-select'),
       )) as HTMLSelectElement;
       select.value = 'bev-esp';
       fireEvent.change(select);
       await waitFor(async () => {
         const r = await repos.recipes.get('rec-1');
-        expect(r?.beverageId).toBe('bev-esp');
+        expect(r?.routineId).toBe('bev-esp');
       });
     });
 
-    it('keeps a missing parent beverage selectable so the editor opens cleanly', async () => {
+    it('keeps a missing parent routine selectable so the editor opens cleanly', async () => {
       renderEditor({
-        beverages: [],
-        recipes: [sampleRecipe({ beverageId: 'gone' })],
+        routines: [],
+        recipes: [sampleRecipe({ routineId: 'gone' })],
       });
       const select = (await waitFor(() =>
-        screen.getByTestId('recipe-beverage-select'),
+        screen.getByTestId('recipe-routine-select'),
       )) as HTMLSelectElement;
       expect(select.value).toBe('gone');
-      expect(select).toHaveTextContent(/missing beverage/i);
+      expect(select).toHaveTextContent(/missing routine/i);
     });
 
-    it('renders the parent Beverage step-sequence hint below the select', async () => {
+    it('renders the parent Routine step-sequence hint below the select', async () => {
       renderEditor({
-        beverages: [cappuccinoBev()],
+        routines: [cappuccinoBev()],
         recipes: [sampleRecipe()],
       });
       const seq = await waitFor(() =>
-        screen.getByTestId('recipe-beverage-sequence'),
+        screen.getByTestId('recipe-routine-sequence'),
       );
       // cappuccinoBev() seeds [brew, steam].
       expect(seq).toHaveTextContent('Brew → Steam');
     });
 
-    it('sequence hint updates when the user re-targets the Beverage', async () => {
+    it('sequence hint updates when the user re-targets the Routine', async () => {
       renderEditor({
-        beverages: [
+        routines: [
           cappuccinoBev(),
-          { id: 'bev-flush-only', name: 'Flush-only', steps: [beverageStep('flush', {})] },
+          { id: 'bev-flush-only', name: 'Flush-only', steps: [routineStep('flush', {})] },
         ],
         recipes: [sampleRecipe()],
       });
       const select = (await waitFor(() =>
-        screen.getByTestId('recipe-beverage-select'),
+        screen.getByTestId('recipe-routine-select'),
       )) as HTMLSelectElement;
       select.value = 'bev-flush-only';
       fireEvent.change(select);
       await waitFor(() =>
-        expect(screen.getByTestId('recipe-beverage-sequence')).toHaveTextContent(
+        expect(screen.getByTestId('recipe-routine-sequence')).toHaveTextContent(
           /^Flush$/,
         ),
       );
@@ -210,11 +210,11 @@ describe('RecipeEditor', () => {
 
     it('falls back to "(no steps yet)" when the parent has no steps', async () => {
       renderEditor({
-        beverages: [{ id: 'bev-empty', name: 'Blank', steps: [] }],
-        recipes: [sampleRecipe({ beverageId: 'bev-empty' })],
+        routines: [{ id: 'bev-empty', name: 'Blank', steps: [] }],
+        recipes: [sampleRecipe({ routineId: 'bev-empty' })],
       });
       await waitFor(() =>
-        expect(screen.getByTestId('recipe-beverage-sequence')).toHaveTextContent(
+        expect(screen.getByTestId('recipe-routine-sequence')).toHaveTextContent(
           /no steps yet/i,
         ),
       );
@@ -224,7 +224,7 @@ describe('RecipeEditor', () => {
   describe('brewing fields', () => {
     it('seeds dose + grinder setting from storage', async () => {
       renderEditor({
-        beverages: [cappuccinoBev()],
+        routines: [cappuccinoBev()],
         recipes: [sampleRecipe()],
       });
       const dose = (await waitFor(() =>
@@ -239,7 +239,7 @@ describe('RecipeEditor', () => {
 
     it('edits dose and persists', async () => {
       const { repos } = renderEditor({
-        beverages: [cappuccinoBev()],
+        routines: [cappuccinoBev()],
         recipes: [sampleRecipe()],
       });
       const dose = (await waitFor(() =>
@@ -255,7 +255,7 @@ describe('RecipeEditor', () => {
 
     it('clearing dose stores undefined', async () => {
       const { repos } = renderEditor({
-        beverages: [cappuccinoBev()],
+        routines: [cappuccinoBev()],
         recipes: [sampleRecipe()],
       });
       const dose = (await waitFor(() =>
@@ -271,7 +271,7 @@ describe('RecipeEditor', () => {
 
     it('edits grinder setting and persists', async () => {
       const { repos } = renderEditor({
-        beverages: [cappuccinoBev()],
+        routines: [cappuccinoBev()],
         recipes: [sampleRecipe()],
       });
       const g = (await waitFor(() =>
@@ -287,7 +287,7 @@ describe('RecipeEditor', () => {
 
     it('edits target yield and persists', async () => {
       const { repos } = renderEditor({
-        beverages: [cappuccinoBev()],
+        routines: [cappuccinoBev()],
         recipes: [sampleRecipe()],
       });
       const y = (await waitFor(() =>
@@ -303,7 +303,7 @@ describe('RecipeEditor', () => {
 
     it('edits target volume and persists', async () => {
       const { repos } = renderEditor({
-        beverages: [cappuccinoBev()],
+        routines: [cappuccinoBev()],
         recipes: [sampleRecipe()],
       });
       const v = (await waitFor(() =>
@@ -319,7 +319,7 @@ describe('RecipeEditor', () => {
 
     it('clearing target yield stores undefined', async () => {
       const { repos } = renderEditor({
-        beverages: [cappuccinoBev()],
+        routines: [cappuccinoBev()],
         recipes: [sampleRecipe({ targetYieldGrams: 36 })],
       });
       const y = (await waitFor(() =>
@@ -337,7 +337,7 @@ describe('RecipeEditor', () => {
   describe('profile picker', () => {
     it('shows "No profile selected" copy when the Recipe has no profileId', async () => {
       renderEditor({
-        beverages: [cappuccinoBev()],
+        routines: [cappuccinoBev()],
         recipes: [sampleRecipe({ profileId: undefined })],
       });
       const field = await waitFor(() =>
@@ -356,7 +356,7 @@ describe('RecipeEditor', () => {
         profile: { title: 'Cool Profile' },
       });
       renderEditor({
-        beverages: [cappuccinoBev()],
+        routines: [cappuccinoBev()],
         recipes: [sampleRecipe({ profileId: profile.id })],
         loadProfileById: () => Promise.resolve(profile),
       });
@@ -372,7 +372,7 @@ describe('RecipeEditor', () => {
       // resolves (deleted, hidden, or offline): the loader resolves to
       // null and we render a graceful fallback instead of the title.
       renderEditor({
-        beverages: [cappuccinoBev()],
+        routines: [cappuccinoBev()],
         recipes: [sampleRecipe({ profileId: 'profile:ghost' })],
         loadProfileById: () => Promise.resolve(null),
       });
@@ -385,7 +385,7 @@ describe('RecipeEditor', () => {
 
     it('opens the picker dialog when the field button is clicked', async () => {
       renderEditor({
-        beverages: [cappuccinoBev()],
+        routines: [cappuccinoBev()],
         recipes: [sampleRecipe({ profileId: undefined })],
       });
       await waitFor(() => screen.getByTestId('recipe-profile-open'));
@@ -411,7 +411,7 @@ describe('RecipeEditor', () => {
         profile: { title: 'Newly Picked' },
       });
       const { repos } = renderEditor({
-        beverages: [cappuccinoBev()],
+        routines: [cappuccinoBev()],
         recipes: [sampleRecipe({ profileId: undefined })],
         loadProfiles: () => Promise.resolve([profile]),
       });
@@ -442,7 +442,7 @@ describe('RecipeEditor', () => {
         profile: { title: 'Other' },
       });
       const { repos } = renderEditor({
-        beverages: [cappuccinoBev()],
+        routines: [cappuccinoBev()],
         recipes: [sampleRecipe({ profileId: undefined })],
         loadProfiles: () => Promise.resolve([profile]),
       });
@@ -469,7 +469,7 @@ describe('RecipeEditor', () => {
         profile: { title: 'To Clear' },
       });
       const { repos } = renderEditor({
-        beverages: [cappuccinoBev()],
+        routines: [cappuccinoBev()],
         recipes: [sampleRecipe({ profileId: profile.id })],
         loadProfileById: () => Promise.resolve(profile),
       });
@@ -490,7 +490,7 @@ describe('RecipeEditor', () => {
       // picker is wired in its own section above Brewing. Bean and Grinder
       // are still stubs.
       renderEditor({
-        beverages: [cappuccinoBev()],
+        routines: [cappuccinoBev()],
         recipes: [sampleRecipe()],
       });
       const heading = await waitFor(() => screen.getByText('Coming soon'));
@@ -505,7 +505,7 @@ describe('RecipeEditor', () => {
   describe('delete', () => {
     it('confirms then deletes and closes the editor', async () => {
       const { repos, onClose } = renderEditor({
-        beverages: [cappuccinoBev()],
+        routines: [cappuccinoBev()],
         recipes: [sampleRecipe()],
       });
       await waitFor(() => screen.getByTestId('delete-recipe-button'));
@@ -518,7 +518,7 @@ describe('RecipeEditor', () => {
 
     it('cancel keeps the recipe', async () => {
       const { repos, onClose } = renderEditor({
-        beverages: [cappuccinoBev()],
+        routines: [cappuccinoBev()],
         recipes: [sampleRecipe()],
       });
       await waitFor(() => screen.getByTestId('delete-recipe-button'));

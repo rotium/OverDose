@@ -5,7 +5,7 @@ import {
   type JSX,
 } from 'solid-js';
 import type {
-  BeverageRepository,
+  RoutineRepository,
   RecipeRepository,
 } from './repositories';
 
@@ -16,17 +16,17 @@ import type {
  *
  * Home stays on prop-injected `recipeRepository` for now — its tests rely
  * on that surface and there's no benefit to migrating it. Use this context
- * for new code that touches Beverage + Recipe together.
+ * for new code that touches Routine + Recipe together.
  */
 export interface RepositoriesContextValue {
-  beverages: BeverageRepository;
+  routines: RoutineRepository;
   recipes: RecipeRepository;
 }
 
 const Ctx = createContext<RepositoriesContextValue>();
 
 export interface RepositoriesProviderProps {
-  beverages: BeverageRepository;
+  routines: RoutineRepository;
   recipes: RecipeRepository;
   children?: JSX.Element;
 }
@@ -34,7 +34,7 @@ export interface RepositoriesProviderProps {
 export const RepositoriesProvider: Component<RepositoriesProviderProps> = (p) => {
   // Pin once at mount — repository identity should not change.
   const value: RepositoriesContextValue = {
-    beverages: p.beverages,
+    routines: p.routines,
     recipes: p.recipes,
   };
   return <Ctx.Provider value={value}>{p.children}</Ctx.Provider>;

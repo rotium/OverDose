@@ -3,40 +3,40 @@ import { render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
 import { RecipesSection } from './RecipesSection';
 import { WithRepositories } from '../../../../test/repositories';
 import {
-  LocalBeverageRepository,
+  LocalRoutineRepository,
   LocalRecipeRepository,
 } from '../../../../repositories';
 import { MemoryStorage } from '../../../../test/memoryStorage';
-import { beverageStep } from '../../../../domain';
-import type { Beverage, Recipe } from '../../../../domain';
+import { routineStep } from '../../../../domain';
+import type { Routine, Recipe } from '../../../../domain';
 
-const seed = (recipes: Recipe[], beverages: Beverage[]) => {
+const seed = (recipes: Recipe[], routines: Routine[]) => {
   const recStore = new MemoryStorage();
   recStore.setItem('starter-skin.recipes.v1', JSON.stringify(recipes));
   recStore.setItem('starter-skin.recipes.seeded.v1', '1');
   const bevStore = new MemoryStorage();
-  bevStore.setItem('starter-skin.beverages.v1', JSON.stringify(beverages));
-  bevStore.setItem('starter-skin.beverages.seeded.v1', '1');
+  bevStore.setItem('starter-skin.routines.v1', JSON.stringify(routines));
+  bevStore.setItem('starter-skin.routines.seeded.v1', '1');
   return {
     recipes: new LocalRecipeRepository(recStore),
-    beverages: new LocalBeverageRepository(bevStore),
+    routines: new LocalRoutineRepository(bevStore),
   };
 };
 
 describe('RecipesSection', () => {
-  it('renders one row per recipe with name + parent beverage name + step sequence', async () => {
+  it('renders one row per recipe with name + parent routine name + step sequence', async () => {
     const repos = seed(
       [
         {
           id: 'r1',
           name: "Wife's",
-          beverageId: 'cappuccino',
+          routineId: 'cappuccino',
           overrides: {},
         },
         {
           id: 'r2',
           name: 'Indonesia X',
-          beverageId: 'cappuccino',
+          routineId: 'cappuccino',
           overrides: {},
         },
       ],
@@ -45,15 +45,15 @@ describe('RecipesSection', () => {
           id: 'cappuccino',
           name: 'Cappuccino',
           steps: [
-            beverageStep('brew', {}),
-            beverageStep('flush', {}),
-            beverageStep('steam', {}),
+            routineStep('brew', {}),
+            routineStep('flush', {}),
+            routineStep('steam', {}),
           ],
         },
       ],
     );
     render(() => (
-      <WithRepositories beverages={repos.beverages} recipes={repos.recipes}>
+      <WithRepositories routines={repos.routines} recipes={repos.recipes}>
         <RecipesSection />
       </WithRepositories>
     ));
@@ -69,13 +69,13 @@ describe('RecipesSection', () => {
     );
   });
 
-  it('shows "(no steps yet)" when the parent Beverage has no steps', async () => {
+  it('shows "(no steps yet)" when the parent Routine has no steps', async () => {
     const repos = seed(
-      [{ id: 'r1', name: 'A', beverageId: 'empty-bev', overrides: {} }],
+      [{ id: 'r1', name: 'A', routineId: 'empty-bev', overrides: {} }],
       [{ id: 'empty-bev', name: 'Blank', steps: [] }],
     );
     render(() => (
-      <WithRepositories beverages={repos.beverages} recipes={repos.recipes}>
+      <WithRepositories routines={repos.routines} recipes={repos.recipes}>
         <RecipesSection />
       </WithRepositories>
     ));
@@ -86,26 +86,26 @@ describe('RecipesSection', () => {
     );
   });
 
-  it('falls back to "(missing beverage)" when the referenced Beverage is gone', async () => {
+  it('falls back to "(missing routine)" when the referenced Routine is gone', async () => {
     const repos = seed(
       [
         {
           id: 'orphan',
           name: 'Orphan',
-          beverageId: 'deleted-bev',
+          routineId: 'deleted-bev',
           overrides: {},
         },
       ],
       [],
     );
     render(() => (
-      <WithRepositories beverages={repos.beverages} recipes={repos.recipes}>
+      <WithRepositories routines={repos.routines} recipes={repos.recipes}>
         <RecipesSection />
       </WithRepositories>
     ));
     await waitFor(() =>
       expect(screen.getByTestId('recipe-row-orphan')).toHaveTextContent(
-        /missing beverage/i,
+        /missing routine/i,
       ),
     );
   });
@@ -113,7 +113,7 @@ describe('RecipesSection', () => {
   it('shows an empty-state message when there are no recipes', async () => {
     const repos = seed([], []);
     render(() => (
-      <WithRepositories beverages={repos.beverages} recipes={repos.recipes}>
+      <WithRepositories routines={repos.routines} recipes={repos.recipes}>
         <RecipesSection />
       </WithRepositories>
     ));
@@ -123,17 +123,17 @@ describe('RecipesSection', () => {
   describe('list ↔ side-sheet editor', () => {
     it('clicking a row opens the editor for that recipe', async () => {
       const repos = seed(
-        [{ id: 'r1', name: "Wife's", beverageId: 'b1', overrides: {} }],
+        [{ id: 'r1', name: "Wife's", routineId: 'b1', overrides: {} }],
         [
           {
             id: 'b1',
             name: 'Cappuccino',
-            steps: [beverageStep('brew', {})],
+            steps: [routineStep('brew', {})],
           },
         ],
       );
       render(() => (
-        <WithRepositories beverages={repos.beverages} recipes={repos.recipes}>
+        <WithRepositories routines={repos.routines} recipes={repos.recipes}>
           <RecipesSection />
         </WithRepositories>
       ));
@@ -147,17 +147,17 @@ describe('RecipesSection', () => {
 
     it('Escape closes the sheet', async () => {
       const repos = seed(
-        [{ id: 'r1', name: 'A', beverageId: 'b1', overrides: {} }],
+        [{ id: 'r1', name: 'A', routineId: 'b1', overrides: {} }],
         [
           {
             id: 'b1',
             name: 'Cappuccino',
-            steps: [beverageStep('brew', {})],
+            steps: [routineStep('brew', {})],
           },
         ],
       );
       render(() => (
-        <WithRepositories beverages={repos.beverages} recipes={repos.recipes}>
+        <WithRepositories routines={repos.routines} recipes={repos.recipes}>
           <RecipesSection />
         </WithRepositories>
       ));
@@ -174,10 +174,10 @@ describe('RecipesSection', () => {
   });
 
   describe('create new recipe', () => {
-    it('disables the + button when no beverages exist', async () => {
+    it('disables the + button when no routines exist', async () => {
       const repos = seed([], []);
       render(() => (
-        <WithRepositories beverages={repos.beverages} recipes={repos.recipes}>
+        <WithRepositories routines={repos.routines} recipes={repos.recipes}>
           <RecipesSection />
         </WithRepositories>
       ));
@@ -187,32 +187,32 @@ describe('RecipesSection', () => {
       expect(btn.disabled).toBe(true);
     });
 
-    it('reveals the form with name + beverage picker pre-selected', async () => {
+    it('reveals the form with name + routine picker pre-selected', async () => {
       const repos = seed(
         [],
         [
           {
             id: 'b1',
             name: 'Cappuccino',
-            steps: [beverageStep('brew', {})],
+            steps: [routineStep('brew', {})],
           },
           {
             id: 'b2',
             name: 'Espresso',
-            steps: [beverageStep('brew', {})],
+            steps: [routineStep('brew', {})],
           },
         ],
       );
       render(() => (
-        <WithRepositories beverages={repos.beverages} recipes={repos.recipes}>
+        <WithRepositories routines={repos.routines} recipes={repos.recipes}>
           <RecipesSection />
         </WithRepositories>
       ));
       fireEvent.click(await waitFor(() => screen.getByTestId('open-new-recipe')));
       const select = (await waitFor(() =>
-        screen.getByTestId('new-recipe-beverage'),
+        screen.getByTestId('new-recipe-routine'),
       )) as HTMLSelectElement;
-      // First visible beverage seeds the picker.
+      // First visible routine seeds the picker.
       expect(select.value).toBe('b1');
       expect(select.options).toHaveLength(2);
     });
@@ -224,25 +224,25 @@ describe('RecipesSection', () => {
           {
             id: 'b1',
             name: 'Cappuccino',
-            steps: [beverageStep('brew', {})],
+            steps: [routineStep('brew', {})],
           },
           {
             id: 'b2',
             name: 'Espresso',
-            steps: [beverageStep('brew', {})],
+            steps: [routineStep('brew', {})],
           },
         ],
       );
       render(() => (
-        <WithRepositories beverages={repos.beverages} recipes={repos.recipes}>
+        <WithRepositories routines={repos.routines} recipes={repos.recipes}>
           <RecipesSection />
         </WithRepositories>
       ));
       fireEvent.click(await waitFor(() => screen.getByTestId('open-new-recipe')));
 
-      // Pick the non-default beverage so the assertion below verifies the
+      // Pick the non-default routine so the assertion below verifies the
       // editor actually honoured the choice (not just rendered the first option).
-      const picker = screen.getByTestId('new-recipe-beverage') as HTMLSelectElement;
+      const picker = screen.getByTestId('new-recipe-routine') as HTMLSelectElement;
       picker.value = 'b2';
       fireEvent.change(picker);
 
@@ -256,18 +256,18 @@ describe('RecipesSection', () => {
         (screen.getByTestId('recipe-name-input') as HTMLInputElement).value,
       ).toBe('Indonesia X');
 
-      // Editor select reflects the beverage we picked (not the first one).
+      // Editor select reflects the routine we picked (not the first one).
       await waitFor(() =>
         expect(
-          (screen.getByTestId('recipe-beverage-select') as HTMLSelectElement)
+          (screen.getByTestId('recipe-routine-select') as HTMLSelectElement)
             .value,
         ).toBe('b2'),
       );
 
-      // Underlying recipe exists with the picked beverage.
+      // Underlying recipe exists with the picked routine.
       const all = await repos.recipes.list();
       expect(all).toHaveLength(1);
-      expect(all[0]?.beverageId).toBe('b2');
+      expect(all[0]?.routineId).toBe('b2');
     });
 
     it('Cancel collapses the form without creating', async () => {
@@ -277,12 +277,12 @@ describe('RecipesSection', () => {
           {
             id: 'b1',
             name: 'Cappuccino',
-            steps: [beverageStep('brew', {})],
+            steps: [routineStep('brew', {})],
           },
         ],
       );
       render(() => (
-        <WithRepositories beverages={repos.beverages} recipes={repos.recipes}>
+        <WithRepositories routines={repos.routines} recipes={repos.recipes}>
           <RecipesSection />
         </WithRepositories>
       ));
@@ -293,33 +293,33 @@ describe('RecipesSection', () => {
     });
   });
 
-  it('lists Recipes whose parent Beverage is hidden (resolves via list, not listVisible)', async () => {
+  it('lists Recipes whose parent Routine is hidden (resolves via list, not listVisible)', async () => {
     const repos = seed(
       [
         {
           id: 'detached',
           name: 'My Detached Recipe',
-          beverageId: 'bev-hidden',
+          routineId: 'bev-hidden',
           overrides: {},
         },
       ],
       [
         {
           id: 'bev-hidden',
-          name: 'Hidden Beverage',
+          name: 'Hidden Routine',
           hidden: true,
-          steps: [beverageStep('brew', {})],
+          steps: [routineStep('brew', {})],
         },
       ],
     );
     render(() => (
-      <WithRepositories beverages={repos.beverages} recipes={repos.recipes}>
+      <WithRepositories routines={repos.routines} recipes={repos.recipes}>
         <RecipesSection />
       </WithRepositories>
     ));
     await waitFor(() =>
       expect(screen.getByTestId('recipe-row-detached')).toHaveTextContent(
-        'Hidden Beverage',
+        'Hidden Routine',
       ),
     );
   });

@@ -15,8 +15,8 @@ import {
 } from 'solid-js';
 import {
   formatStepType,
-  type Beverage,
-  type BeverageStep,
+  type Routine,
+  type RoutineStep,
   type Recipe,
   type StepType,
 } from '../domain';
@@ -148,7 +148,7 @@ interface ShotDraft {
 
 interface BrewBundle {
   recipe: Recipe | null;
-  beverage: Beverage | null;
+  routine: Routine | null;
 }
 
 export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
@@ -156,24 +156,24 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
   const machine = p.machineStream();
 
   // Combined fetch so the header + body don't render a half-loaded state
-  // (recipe arrived but beverage still pending — the previous two-resource
+  // (recipe arrived but routine still pending — the previous two-resource
   // setup was racy in jsdom even though it usually settled fast in browsers).
   const [bundle] = createResource<BrewBundle, string>(
     () => p.recipeId,
     async (id): Promise<BrewBundle> => {
       const recipe = await repos.recipes.get(id);
-      if (!recipe) return { recipe: null, beverage: null };
-      const beverage = await repos.beverages.get(recipe.beverageId);
-      return { recipe, beverage };
+      if (!recipe) return { recipe: null, routine: null };
+      const routine = await repos.routines.get(recipe.routineId);
+      return { recipe, routine };
     },
   );
 
   const recipe = (): Recipe | null | undefined =>
     bundle.loading ? undefined : (bundle()?.recipe ?? null);
-  const beverage = (): Beverage | null | undefined =>
-    bundle.loading ? undefined : (bundle()?.beverage ?? null);
+  const routine = (): Routine | null | undefined =>
+    bundle.loading ? undefined : (bundle()?.routine ?? null);
 
-  const steps = (): BeverageStep[] => beverage()?.steps ?? [];
+  const steps = (): RoutineStep[] => routine()?.steps ?? [];
 
   // Per-shot draft — seeded once from the Recipe when it first resolves,
   // then edited in the prep card without touching the stored Recipe.
@@ -253,7 +253,7 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
     });
   });
 
-  // Per-step status — defaults all to 'pending' until the recipe + beverage
+  // Per-step status — defaults all to 'pending' until the recipe + routine
   // load. Re-seeds whenever the step list arrives (so a different recipe
   // mid-screen doesn't carry over old statuses).
   const [statuses, setStatuses] = createSignal<StepStatus[]>([]);
@@ -330,7 +330,7 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
 
   return (
     <main class="brew-screen" data-testid="recipe-brew-screen">
-      <BrewHeader recipe={recipe} beverage={beverage} onExit={p.onExit} />
+      <BrewHeader recipe={recipe} routine={routine} onExit={p.onExit} />
 
       <Switch>
         <Match when={bundle.loading}>
@@ -341,17 +341,17 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
             recipe not found
           </p>
         </Match>
-        <Match when={beverage() === null}>
+        <Match when={routine() === null}>
           <p class="muted brew-screen__loading" role="alert">
-            parent beverage not found
+            parent routine not found
           </p>
         </Match>
         <Match when={steps().length === 0}>
           <p class="muted brew-screen__loading">
-            this beverage has no steps yet
+            this routine has no steps yet
           </p>
         </Match>
-        <Match when={recipe() && beverage() && steps().length > 0}>
+        <Match when={recipe() && routine() && steps().length > 0}>
           {/* Step bar is a progress indicator for an in-progress recipe —
               hidden on the result screen to give the chart the full height. */}
           <Show when={!isFinished()}>
@@ -400,7 +400,7 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
 
 const BrewHeader: Component<{
   recipe: Accessor<Recipe | null | undefined>;
-  beverage: Accessor<Beverage | null | undefined>;
+  routine: Accessor<Routine | null | undefined>;
   onExit: () => void;
 }> = (p) => (
   <header class="brew-screen__header">
@@ -421,17 +421,17 @@ const BrewHeader: Component<{
         {p.recipe()?.name ?? '…'}
       </span>
       <span
-        class="brew-screen__beverage-name"
-        data-testid="brew-beverage-name"
+        class="brew-screen__routine-name"
+        data-testid="brew-routine-name"
       >
-        {p.beverage()?.name ?? '…'}
+        {p.routine()?.name ?? '…'}
       </span>
     </h1>
   </header>
 );
 
 const StepBar: Component<{
-  steps: Accessor<BeverageStep[]>;
+  steps: Accessor<RoutineStep[]>;
   statuses: Accessor<StepStatus[]>;
   currentIdx: Accessor<number>;
   onJump: (idx: number) => void;
@@ -480,7 +480,7 @@ const StepBar: Component<{
 );
 
 const PrepCard: Component<{
-  step: Accessor<BeverageStep>;
+  step: Accessor<RoutineStep>;
   draft: Accessor<ShotDraft | null>;
   patchDraft: (patch: Partial<ShotDraft>) => void;
   status: Accessor<StepStatus>;

@@ -11,7 +11,7 @@ import {
   type Component,
 } from 'solid-js';
 import { formatStepType } from '../../../../domain';
-import type { Beverage, Recipe } from '../../../../domain';
+import type { Routine, Recipe } from '../../../../domain';
 import { useRepositories } from '../../../../RepositoriesContext';
 import { RecipeEditor } from './RecipeEditor';
 
@@ -20,14 +20,14 @@ const SHEET_ANIM_MS = 280;
 /**
  * Recipes list + side-sheet editor (Phase 4a).
  *
- * Mirrors BeveragesSection's structure: clickable rows open a side-sheet
+ * Mirrors RoutinesSection's structure: clickable rows open a side-sheet
  * with the editor; close affordances via X, backdrop, or Escape. The list
  * also exposes a `+ New Recipe` button that reveals an inline name +
- * Beverage-picker form (a Recipe can't exist without a parent Beverage,
- * so the picker is required at create time). If there are no Beverages,
+ * Routine-picker form (a Recipe can't exist without a parent Routine,
+ * so the picker is required at create time). If there are no Routines,
  * the Create button is disabled and the form explains why.
  *
- * Beverages are loaded with `list()` (not `listVisible()`) so a Recipe
+ * Routines are loaded with `list()` (not `listVisible()`) so a Recipe
  * whose parent was detached into a hidden clone still resolves its parent
  * name in the row meta. The picker for new Recipes uses `listVisible()`
  * since users shouldn't be able to manually pick a hidden clone.
@@ -37,35 +37,35 @@ export const RecipesSection: Component = () => {
   const [recipes, { refetch: refetchRecipes }] = createResource<Recipe[]>(() =>
     repos.recipes.list(),
   );
-  const [beverages] = createResource<Beverage[]>(() => repos.beverages.list());
-  const [visibleBeverages] = createResource<Beverage[]>(() =>
-    repos.beverages.listVisible(),
+  const [routines] = createResource<Routine[]>(() => repos.routines.list());
+  const [visibleRoutines] = createResource<Routine[]>(() =>
+    repos.routines.listVisible(),
   );
 
   const [selectedId, setSelectedId] = createSignal<string | null>(null);
   const [animatingOut, setAnimatingOut] = createSignal(false);
   const [creating, setCreating] = createSignal(false);
   const [draftName, setDraftName] = createSignal('');
-  const [draftBeverageId, setDraftBeverageId] = createSignal('');
+  const [draftRoutineId, setDraftRoutineId] = createSignal('');
   let nameInputRef: HTMLInputElement | undefined;
   let exitTimer: number | undefined;
 
-  const beverageById = createMemo<Record<string, Beverage>>(() => {
-    const map: Record<string, Beverage> = {};
-    for (const b of beverages() ?? []) map[b.id] = b;
+  const routineById = createMemo<Record<string, Routine>>(() => {
+    const map: Record<string, Routine> = {};
+    for (const b of routines() ?? []) map[b.id] = b;
     return map;
   });
 
-  const stepSequence = (beverageId: string): string => {
-    const steps = beverageById()[beverageId]?.steps ?? [];
+  const stepSequence = (routineId: string): string => {
+    const steps = routineById()[routineId]?.steps ?? [];
     if (steps.length === 0) return '(no steps yet)';
     return steps.map((s) => formatStepType(s.type)).join(' → ');
   };
 
   const loading = () =>
-    recipes.loading || beverages.loading || visibleBeverages.loading;
+    recipes.loading || routines.loading || visibleRoutines.loading;
   const errored = () =>
-    recipes.error || beverages.error || visibleBeverages.error;
+    recipes.error || routines.error || visibleRoutines.error;
 
   const openEditor = (id: string) => {
     if (exitTimer !== undefined) {
@@ -90,7 +90,7 @@ export const RecipesSection: Component = () => {
 
   const openCreate = () => {
     setDraftName('');
-    setDraftBeverageId((visibleBeverages() ?? [])[0]?.id ?? '');
+    setDraftRoutineId((visibleRoutines() ?? [])[0]?.id ?? '');
     setCreating(true);
     queueMicrotask(() => nameInputRef?.focus());
   };
@@ -98,19 +98,19 @@ export const RecipesSection: Component = () => {
   const cancelCreate = () => {
     setCreating(false);
     setDraftName('');
-    setDraftBeverageId('');
+    setDraftRoutineId('');
   };
 
   const submitCreate = async (e?: Event) => {
     e?.preventDefault();
     const name = draftName().trim();
-    const beverageId = draftBeverageId();
-    if (!name || !beverageId) return;
+    const routineId = draftRoutineId();
+    if (!name || !routineId) return;
     const id = crypto.randomUUID();
-    await repos.recipes.create({ id, name, beverageId, overrides: {} });
+    await repos.recipes.create({ id, name, routineId, overrides: {} });
     setCreating(false);
     setDraftName('');
-    setDraftBeverageId('');
+    setDraftRoutineId('');
     await refetchRecipes();
     openEditor(id);
   };
@@ -128,7 +128,7 @@ export const RecipesSection: Component = () => {
   });
 
   return (
-    <div class="beverages-section">
+    <div class="routines-section">
       <div class="settings-section-stack">
         <section
           class="settings-section"
@@ -136,9 +136,9 @@ export const RecipesSection: Component = () => {
         >
           <h2 id="library-recipes-heading">Recipes</h2>
           <p class="settings-help">
-            A specific way to make a Beverage — bean, dose, grind, milk
+            A specific way to make a Routine — bean, dose, grind, milk
             preferences. Inherits everything you don't override from the
-            parent Beverage.
+            parent Routine.
           </p>
 
           <Show
@@ -146,12 +146,12 @@ export const RecipesSection: Component = () => {
             fallback={
               <button
                 type="button"
-                class="btn beverages-section__add-btn"
+                class="btn routines-section__add-btn"
                 data-testid="open-new-recipe"
-                disabled={(visibleBeverages() ?? []).length === 0}
+                disabled={(visibleRoutines() ?? []).length === 0}
                 title={
-                  (visibleBeverages() ?? []).length === 0
-                    ? 'Create a Beverage first'
+                  (visibleRoutines() ?? []).length === 0
+                    ? 'Create a Routine first'
                     : undefined
                 }
                 onClick={openCreate}
@@ -161,14 +161,14 @@ export const RecipesSection: Component = () => {
             }
           >
             <form
-              class="beverages-section__add-form"
+              class="routines-section__add-form"
               data-testid="new-recipe-form"
               onSubmit={submitCreate}
             >
               <input
                 ref={(el) => (nameInputRef = el)}
                 type="text"
-                class="beverages-section__add-input"
+                class="routines-section__add-input"
                 placeholder="Recipe name"
                 aria-label="New recipe name"
                 data-testid="new-recipe-name"
@@ -182,13 +182,13 @@ export const RecipesSection: Component = () => {
                 }}
               />
               <select
-                aria-label="Beverage for new recipe"
-                data-testid="new-recipe-beverage"
-                class="recipe-editor__beverage-select"
-                value={draftBeverageId()}
-                onChange={(e) => setDraftBeverageId(e.currentTarget.value)}
+                aria-label="Routine for new recipe"
+                data-testid="new-recipe-routine"
+                class="recipe-editor__routine-select"
+                value={draftRoutineId()}
+                onChange={(e) => setDraftRoutineId(e.currentTarget.value)}
               >
-                <For each={visibleBeverages() ?? []}>
+                <For each={visibleRoutines() ?? []}>
                   {(b) => <option value={b.id}>{b.name}</option>}
                 </For>
               </select>
@@ -197,7 +197,7 @@ export const RecipesSection: Component = () => {
                 class="btn"
                 data-testid="confirm-new-recipe"
                 disabled={
-                  draftName().trim().length === 0 || draftBeverageId() === ''
+                  draftName().trim().length === 0 || draftRoutineId() === ''
                 }
               >
                 Create
@@ -222,7 +222,7 @@ export const RecipesSection: Component = () => {
                 failed to load recipes
               </p>
             </Match>
-            <Match when={recipes() && beverages()}>
+            <Match when={recipes() && routines()}>
               <Show
                 when={(recipes() ?? []).length > 0}
                 fallback={<p class="muted">no recipes yet</p>}
@@ -239,15 +239,15 @@ export const RecipesSection: Component = () => {
                         >
                           <span class="library-list__name">{r.name}</span>
                           <span class="library-list__meta recipes-section__meta">
-                            <span class="recipes-section__beverage">
-                              {beverageById()[r.beverageId]?.name ??
-                                '(missing beverage)'}
+                            <span class="recipes-section__routine">
+                              {routineById()[r.routineId]?.name ??
+                                '(missing routine)'}
                             </span>
                             <span
                               class="recipes-section__sequence"
                               data-testid={`recipe-row-${r.id}-sequence`}
                             >
-                              {stepSequence(r.beverageId)}
+                              {stepSequence(r.routineId)}
                             </span>
                           </span>
                         </button>

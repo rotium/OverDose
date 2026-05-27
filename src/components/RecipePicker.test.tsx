@@ -27,7 +27,7 @@ const profRec = (
 const rec = (id: string, name = id): Recipe => ({
   id,
   name,
-  beverageId: `bev-${id}`,
+  routineId: `bev-${id}`,
   overrides: {},
 });
 

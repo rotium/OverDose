@@ -11,12 +11,12 @@ import {
 } from 'solid-js';
 import { formatStepType } from '../../../../domain';
 import { useRepositories } from '../../../../RepositoriesContext';
-import { BeverageEditor } from './BeverageEditor';
+import { RoutineEditor } from './RoutineEditor';
 
 const SHEET_ANIM_MS = 280;
 
 /**
- * Beverages list + side-sheet editor.
+ * Routines list + side-sheet editor.
  *
  * Clicking a row slides a side-sheet in from the right (~70% width) over
  * a dimmed backdrop, with the editor inside. The list stays visible
@@ -30,12 +30,12 @@ const SHEET_ANIM_MS = 280;
  * the slide-out animation, then after the CSS transition completes we
  * unmount + refetch the list (so renames/deletes are visible on return).
  */
-export const BeveragesSection: Component = () => {
+export const RoutinesSection: Component = () => {
   const repos = useRepositories();
   const [selectedId, setSelectedId] = createSignal<string | null>(null);
   const [animatingOut, setAnimatingOut] = createSignal(false);
-  const [beverages, { refetch }] = createResource(() =>
-    repos.beverages.listVisible(),
+  const [routines, { refetch }] = createResource(() =>
+    repos.routines.listVisible(),
   );
   const [creating, setCreating] = createSignal(false);
   const [draftName, setDraftName] = createSignal('');
@@ -68,7 +68,7 @@ export const BeveragesSection: Component = () => {
     const name = draftName().trim();
     if (!name) return;
     const id = crypto.randomUUID();
-    await repos.beverages.create({ id, name, steps: [] });
+    await repos.routines.create({ id, name, steps: [] });
     setCreating(false);
     setDraftName('');
     await refetch();
@@ -102,16 +102,16 @@ export const BeveragesSection: Component = () => {
   });
 
   return (
-    <div class="beverages-section">
+    <div class="routines-section">
       <div class="settings-section-stack">
         <section
           class="settings-section"
-          aria-labelledby="library-beverages-heading"
+          aria-labelledby="library-routines-heading"
         >
-          <h2 id="library-beverages-heading">Beverages</h2>
+          <h2 id="library-routines-heading">Routines</h2>
           <p class="settings-help">
             How you brew each drink — a sequence of steps with default
-            values that all Recipes for this Beverage inherit.
+            values that all Recipes for this Routine inherit.
           </p>
 
           <Show
@@ -119,26 +119,26 @@ export const BeveragesSection: Component = () => {
             fallback={
               <button
                 type="button"
-                class="btn beverages-section__add-btn"
-                data-testid="open-new-beverage"
+                class="btn routines-section__add-btn"
+                data-testid="open-new-routine"
                 onClick={openCreate}
               >
-                + New Beverage
+                + New Routine
               </button>
             }
           >
             <form
-              class="beverages-section__add-form"
-              data-testid="new-beverage-form"
+              class="routines-section__add-form"
+              data-testid="new-routine-form"
               onSubmit={submitCreate}
             >
               <input
                 ref={(el) => (nameInputRef = el)}
                 type="text"
-                class="beverages-section__add-input"
-                placeholder="Beverage name"
-                aria-label="New beverage name"
-                data-testid="new-beverage-name"
+                class="routines-section__add-input"
+                placeholder="Routine name"
+                aria-label="New routine name"
+                data-testid="new-routine-name"
                 value={draftName()}
                 onInput={(e) => setDraftName(e.currentTarget.value)}
                 onKeyDown={(e) => {
@@ -151,7 +151,7 @@ export const BeveragesSection: Component = () => {
               <button
                 type="submit"
                 class="btn"
-                data-testid="confirm-new-beverage"
+                data-testid="confirm-new-routine"
                 disabled={draftName().trim().length === 0}
               >
                 Create
@@ -159,7 +159,7 @@ export const BeveragesSection: Component = () => {
               <button
                 type="button"
                 class="btn"
-                data-testid="cancel-new-beverage"
+                data-testid="cancel-new-routine"
                 onClick={cancelCreate}
               >
                 Cancel
@@ -168,33 +168,33 @@ export const BeveragesSection: Component = () => {
           </Show>
 
           <Switch>
-            <Match when={beverages.loading}>
-              <p class="muted">loading beverages…</p>
+            <Match when={routines.loading}>
+              <p class="muted">loading routines…</p>
             </Match>
-            <Match when={beverages.error}>
+            <Match when={routines.error}>
               <p class="muted" role="alert">
-                failed to load beverages
+                failed to load routines
               </p>
             </Match>
-            <Match when={beverages()}>
+            <Match when={routines()}>
               <Show
-                when={(beverages() ?? []).length > 0}
-                fallback={<p class="muted">no beverages yet</p>}
+                when={(routines() ?? []).length > 0}
+                fallback={<p class="muted">no routines yet</p>}
               >
-                <ul class="library-list" data-testid="beverages-list">
-                  <For each={beverages()}>
+                <ul class="library-list" data-testid="routines-list">
+                  <For each={routines()}>
                     {(b) => (
                       <li class="library-list__row library-list__row--clickable">
                         <button
                           type="button"
                           class="library-list__button"
-                          data-testid={`beverage-row-${b.id}`}
+                          data-testid={`routine-row-${b.id}`}
                           onClick={() => openEditor(b.id)}
                         >
                           <span class="library-list__name">{b.name}</span>
                           <span
-                            class="library-list__meta beverages-section__sequence"
-                            data-testid={`beverage-row-${b.id}-sequence`}
+                            class="library-list__meta routines-section__sequence"
+                            data-testid={`routine-row-${b.id}-sequence`}
                           >
                             {b.steps.length === 0
                               ? '(no steps yet)'
@@ -225,7 +225,7 @@ export const BeveragesSection: Component = () => {
           data-testid="side-sheet"
           role="dialog"
           aria-modal="true"
-          aria-label="Beverage editor"
+          aria-label="Routine editor"
         >
           <button
             type="button"
@@ -237,7 +237,7 @@ export const BeveragesSection: Component = () => {
             ×
           </button>
           <div class="side-sheet__body">
-            <BeverageEditor beverageId={selectedId()!} onClose={closeEditor} />
+            <RoutineEditor routineId={selectedId()!} onClose={closeEditor} />
           </div>
         </aside>
       </Show>

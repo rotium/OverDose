@@ -27,7 +27,7 @@ import type { GatewayShotRecord, GatewayShotSummary } from './api';
 const sampleRecipe: Recipe = {
   id: 'seed-espresso',
   name: 'Espresso',
-  beverageId: 'seed-bev-espresso',
+  routineId: 'seed-bev-espresso',
   overrides: {},
 };
 

@@ -8,7 +8,7 @@ import {
   type Component,
 } from 'solid-js';
 import { formatStepType } from '../../../../domain';
-import type { Beverage, Recipe } from '../../../../domain';
+import type { Routine, Recipe } from '../../../../domain';
 import { useRepositories } from '../../../../RepositoriesContext';
 import { DebouncedNumberField } from './DebouncedNumberField';
 import { PickerDialog } from '../../../PickerDialog';
@@ -36,8 +36,8 @@ export interface RecipeEditorProps {
  * Recipe editor (Phase 4a — basics).
  *
  * Fields covered:
- *   - Name (auto-save on change, mirrors BeverageEditor)
- *   - Beverage reference (a select of visible Beverages; user can re-target)
+ *   - Name (auto-save on change, mirrors RoutineEditor)
+ *   - Routine reference (a select of visible Routines; user can re-target)
  *   - Dose-in weight (grams)
  *   - Grinder setting (number — the grinder library isn't built yet, so
  *     this is a bare number for now; once a Grinder library exists the
@@ -60,16 +60,16 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
   // Pulls the full list (incl. hidden) so a recipe that points at a hidden
   // detach-clone can still resolve its parent's name + step sequence in
   // the header. The picker below filters visible ones for user selection.
-  const [beverages] = createResource<Beverage[]>(() => repos.beverages.list());
-  const visibleBeverages = (): Beverage[] =>
-    (beverages() ?? []).filter((b) => !b.hidden);
-  const parentBeverage = (): Beverage | undefined => {
+  const [routines] = createResource<Routine[]>(() => repos.routines.list());
+  const visibleRoutines = (): Routine[] =>
+    (routines() ?? []).filter((b) => !b.hidden);
+  const parentRoutine = (): Routine | undefined => {
     const r = recipe();
     if (!r) return undefined;
-    return (beverages() ?? []).find((b) => b.id === r.beverageId);
+    return (routines() ?? []).find((b) => b.id === r.routineId);
   };
   const parentStepSequence = (): string => {
-    const steps = parentBeverage()?.steps ?? [];
+    const steps = parentRoutine()?.steps ?? [];
     if (steps.length === 0) return '(no steps yet)';
     return steps.map((s) => formatStepType(s.type)).join(' → ');
   };
@@ -114,10 +114,10 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
     void saveRecipe({ ...r, name: next });
   };
 
-  const handleBeverageChange = (beverageId: string) => {
+  const handleRoutineChange = (routineId: string) => {
     const r = recipe();
-    if (!r || r.beverageId === beverageId) return;
-    void saveRecipe({ ...r, beverageId });
+    if (!r || r.routineId === routineId) return;
+    void saveRecipe({ ...r, routineId });
   };
 
   const handleDoseCommit = (g: number | undefined) => {
@@ -151,7 +151,7 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
 
   return (
     <div class="settings-section-stack" data-testid="recipe-editor">
-      <h2 class="beverage-editor__title">Edit Recipe</h2>
+      <h2 class="routine-editor__title">Edit Recipe</h2>
 
       <Switch>
         <Match when={recipe.loading}>
@@ -169,7 +169,7 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
                 <h3>Name</h3>
                 <input
                   type="text"
-                  class="beverage-editor__name"
+                  class="routine-editor__name"
                   value={r().name}
                   aria-label="Recipe name"
                   data-testid="recipe-name-input"
@@ -178,55 +178,55 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
               </section>
 
               <section class="settings-section">
-                <h3>Beverage</h3>
+                <h3>Routine</h3>
                 <p class="settings-help">
-                  Which Beverage this Recipe brews — re-target to inherit a
+                  Which Routine this Recipe brews — re-target to inherit a
                   different step sequence.
                 </p>
                 {/*
-                  Defer the select until `beverages` has resolved.
+                  Defer the select until `routines` has resolved.
                   Mounting the select against an empty/partial option list
                   and then swapping in real options later leaves the
                   browser holding on to the previously-selected fallback
                   option's index, even when the new option has
                   `selected` set — the editor would render with the first
-                  beverage selected instead of the Recipe's true parent.
+                  routine selected instead of the Recipe's true parent.
                 */}
                 <Show
-                  when={!beverages.loading}
-                  fallback={<p class="muted">loading beverages…</p>}
+                  when={!routines.loading}
+                  fallback={<p class="muted">loading routines…</p>}
                 >
                   <select
-                    class="recipe-editor__beverage-select"
-                    aria-label="Beverage"
-                    data-testid="recipe-beverage-select"
-                    value={r().beverageId}
+                    class="recipe-editor__routine-select"
+                    aria-label="Routine"
+                    data-testid="recipe-routine-select"
+                    value={r().routineId}
                     onChange={(e) =>
-                      handleBeverageChange(e.currentTarget.value)
+                      handleRoutineChange(e.currentTarget.value)
                     }
                   >
-                    <For each={visibleBeverages()}>
+                    <For each={visibleRoutines()}>
                       {(b) => <option value={b.id}>{b.name}</option>}
                     </For>
                     <Show
                       when={
-                        !visibleBeverages().some(
-                          (b) => b.id === r().beverageId,
+                        !visibleRoutines().some(
+                          (b) => b.id === r().routineId,
                         )
                       }
                     >
-                      {/* Keep the current value selectable even if it's a hidden / missing Beverage. */}
-                      <option value={r().beverageId}>
-                        {parentBeverage()
-                          ? `${parentBeverage()!.name} (hidden)`
-                          : `(missing beverage — ${r().beverageId})`}
+                      {/* Keep the current value selectable even if it's a hidden / missing Routine. */}
+                      <option value={r().routineId}>
+                        {parentRoutine()
+                          ? `${parentRoutine()!.name} (hidden)`
+                          : `(missing routine — ${r().routineId})`}
                       </option>
                     </Show>
                   </select>
                 </Show>
                 <p
-                  class="recipe-editor__beverage-sequence"
-                  data-testid="recipe-beverage-sequence"
+                  class="recipe-editor__routine-sequence"
+                  data-testid="recipe-routine-sequence"
                 >
                   {parentStepSequence()}
                 </p>
@@ -356,11 +356,11 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
                   }
                 >
                   <div
-                    class="beverage-editor__delete-confirm"
+                    class="routine-editor__delete-confirm"
                     data-testid="delete-confirm"
                   >
                     <p>Delete "{r().name}"? This can't be undone.</p>
-                    <div class="beverage-editor__button-row">
+                    <div class="routine-editor__button-row">
                       <button
                         type="button"
                         class="btn btn--danger"

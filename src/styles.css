@@ -1436,7 +1436,7 @@ html {
   gap: 0.5rem;
 }
 
-/* Library list rows — Beverages / Recipes / Beans / … list views.
+/* Library list rows — Routines / Recipes / Beans / … list views.
    Compact, name-led; meta column right-aligned in muted text. Add row
    states (hover/active) when the editor wires in. */
 .library-list {
@@ -1496,21 +1496,21 @@ html {
   background: rgba(255, 255, 255, 0.04);
 }
 
-/* ─── Side sheet (Beverage editor host) ───────────────────────────── */
+/* ─── Side sheet (Routine editor host) ───────────────────────────── */
 
 /* Anchor for the absolutely-positioned sheet + backdrop. The section
    itself uses normal flow above; sheet overlays its bounds. */
-.beverages-section {
+.routines-section {
   position: relative;
   min-height: 100%;
 }
 
-.beverages-section__add-btn {
+.routines-section__add-btn {
   align-self: flex-start;
   margin: 0.4rem 0 0.6rem;
 }
 
-.beverages-section__add-form {
+.routines-section__add-form {
   display: flex;
   gap: 0.5rem;
   align-items: center;
@@ -1518,7 +1518,7 @@ html {
   flex-wrap: wrap;
 }
 
-.beverages-section__add-input {
+.routines-section__add-input {
   flex: 1 1 14rem;
   min-width: 10rem;
   padding: 0.4rem 0.6rem;
@@ -2083,15 +2083,15 @@ html {
   font-variant-numeric: tabular-nums;
 }
 
-/* ─── Beverage editor ─────────────────────────────────────────────── */
+/* ─── Routine editor ─────────────────────────────────────────────── */
 
-.beverage-editor__title {
+.routine-editor__title {
   margin: 0 0 0.5rem;
   font-size: 1.15rem;
   font-weight: 600;
 }
 
-.beverage-editor__name {
+.routine-editor__name {
   width: 100%;
   padding: 0.5rem 0.75rem;
   background: var(--bg);
@@ -2101,25 +2101,25 @@ html {
   font: inherit;
 }
 
-.beverage-editor__delete-confirm,
-.beverage-editor__delete-blocked {
+.routine-editor__delete-confirm,
+.routine-editor__delete-blocked {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
 }
 
-.beverage-editor__delete-blocked ul {
+.routine-editor__delete-blocked ul {
   margin: 0;
   padding-left: 1.25rem;
   color: var(--fg);
 }
 
-.beverage-editor__button-row {
+.routine-editor__button-row {
   display: flex;
   gap: 0.5rem;
 }
 
-.beverage-editor__cascade-ack {
+.routine-editor__cascade-ack {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
@@ -2171,14 +2171,14 @@ html {
   cursor: not-allowed;
 }
 
-.beverage-editor__step-row {
+.routine-editor__step-row {
   display: grid;
   grid-template-columns: auto minmax(5rem, 1fr) auto;
   align-items: center;
   gap: 0.6rem;
 }
 
-.beverage-editor__step-name {
+.routine-editor__step-name {
   font-weight: 500;
   white-space: nowrap;
 }
@@ -2236,17 +2236,17 @@ html {
   border: 0;
 }
 
-.beverage-editor__step-reorder {
+.routine-editor__step-reorder {
   display: inline-flex;
   flex-direction: column;
   gap: 0.15rem;
 }
 
-.beverage-editor__add-step-btn {
+.routine-editor__add-step-btn {
   margin-top: 0.5rem;
 }
 
-.beverage-editor__step-picker {
+.routine-editor__step-picker {
   margin-top: 0.5rem;
   display: flex;
   flex-wrap: wrap;
@@ -2257,13 +2257,13 @@ html {
   border-radius: 6px;
 }
 
-.beverage-editor__step-picker-cancel {
+.routine-editor__step-picker-cancel {
   margin-left: auto;
 }
 
 /* ─── Recipe editor ───────────────────────────────────────────────── */
 
-.recipe-editor__beverage-select {
+.recipe-editor__routine-select {
   padding: 0.4rem 0.6rem;
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -2387,7 +2387,7 @@ html {
   font-style: italic;
 }
 
-.beverages-section__sequence {
+.routines-section__sequence {
   text-align: right;
   font-variant-numeric: normal;
   letter-spacing: 0.01em;
@@ -2405,7 +2405,7 @@ html {
   max-width: 60%;
 }
 
-.recipes-section__beverage {
+.recipes-section__routine {
   color: var(--fg);
   font-size: 0.85rem;
 }
@@ -2416,7 +2416,7 @@ html {
   letter-spacing: 0.01em;
 }
 
-.recipe-editor__beverage-sequence {
+.recipe-editor__routine-sequence {
   margin: 0.4rem 0 0;
   font-size: 0.85rem;
   color: var(--muted);
@@ -2459,7 +2459,7 @@ html {
   color: var(--fg);
 }
 
-.brew-screen__beverage-name {
+.brew-screen__routine-name {
   color: var(--muted);
   font-weight: 400;
   font-size: 0.95rem;

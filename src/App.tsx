@@ -7,7 +7,7 @@ import { SleepOverlay } from './components/SleepOverlay';
 import { Settings } from './components/settings/Settings';
 import { LiveShotProvider, useLiveShot } from './LiveShotContext';
 import { frozenToGatewayShotRecord } from './liveShotAdapter';
-import { LocalBeverageRepository, LocalRecipeRepository } from './repositories';
+import { LocalRoutineRepository, LocalRecipeRepository } from './repositories';
 import { RepositoriesProvider } from './RepositoriesContext';
 import { UserPrefsProvider } from './UserPrefsContext';
 import type { Recipe } from './domain';
@@ -19,7 +19,7 @@ import type {
 } from './snapshot';
 import type { WsStream } from './streams';
 
-const beverageRepository = new LocalBeverageRepository();
+const routineRepository = new LocalRoutineRepository();
 const recipeRepository = new LocalRecipeRepository();
 
 const onSleep = () =>
@@ -170,7 +170,7 @@ export const App: Component = () => {
   return (
     <UserPrefsProvider>
       <RepositoriesProvider
-        beverages={beverageRepository}
+        routines={routineRepository}
         recipes={recipeRepository}
       >
         <LiveShotProvider

@@ -1,21 +1,21 @@
 import { Match, Switch, createSignal, type Component } from 'solid-js';
-import { BeveragesSection } from './sections/library/BeveragesSection';
+import { RoutinesSection } from './sections/library/RoutinesSection';
 import { RecipesSection } from './sections/library/RecipesSection';
 import { BeansSection } from './sections/library/BeansSection';
 import { ProfilesSection } from './sections/library/ProfilesSection';
 import { EquipmentSection } from './sections/library/EquipmentSection';
 
 /**
- * Library tab — user-data CRUD (Beverages, Recipes, Beans, Profiles,
+ * Library tab — user-data CRUD (Routines, Recipes, Beans, Profiles,
  * Equipment). Same left-side sub-nav pattern as the App tab; each section
  * owns its own list/editor surface. Subsections read from
  * RepositoriesContext rather than receiving repos as props, so the sub-nav
  * doesn't have to thread them through.
  */
-type SectionId = 'beverages' | 'recipes' | 'beans' | 'profiles' | 'equipment';
+type SectionId = 'routines' | 'recipes' | 'beans' | 'profiles' | 'equipment';
 
 const SECTIONS: { id: SectionId; label: string }[] = [
-  { id: 'beverages', label: 'Beverages' },
+  { id: 'routines', label: 'Routines' },
   { id: 'recipes', label: 'Recipes' },
   { id: 'beans', label: 'Beans' },
   { id: 'profiles', label: 'Profiles' },
@@ -23,7 +23,7 @@ const SECTIONS: { id: SectionId; label: string }[] = [
 ];
 
 export const LibraryTab: Component = () => {
-  const [section, setSection] = createSignal<SectionId>('beverages');
+  const [section, setSection] = createSignal<SectionId>('routines');
 
   return (
     <div class="settings-subnav">
@@ -48,8 +48,8 @@ export const LibraryTab: Component = () => {
 
       <div class="settings-subnav__content" role="tabpanel">
         <Switch>
-          <Match when={section() === 'beverages'}>
-            <BeveragesSection />
+          <Match when={section() === 'routines'}>
+            <RoutinesSection />
           </Match>
           <Match when={section() === 'recipes'}>
             <RecipesSection />

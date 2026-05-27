@@ -10,27 +10,27 @@ import {
 } from 'solid-js';
 import {
   STEP_TYPES,
-  beverageStep,
+  routineStep,
   formatStepType,
-  type Beverage,
+  type Routine,
   type Recipe,
   type StepType,
 } from '../../../../domain';
 import { useRepositories } from '../../../../RepositoriesContext';
 
-export interface BeverageEditorProps {
-  beverageId: string;
+export interface RoutineEditorProps {
+  routineId: string;
   /** Called after a successful delete; the sheet wrapper closes itself. */
   onClose: () => void;
 }
 
 /**
- * Beverage editor.
+ * Routine editor.
  *
  * Auto-save semantics: every edit (name, add/remove/reorder step) writes
  * through to the repository immediately. The local resource refetches
  * after each write so the UI reflects persisted state, and consumers of
- * the parent list see fresh data on return (see BeveragesSection.refetch).
+ * the parent list see fresh data on return (see RoutinesSection.refetch).
  *
  * Reorder uses up/down arrows rather than drag-and-drop — accessible,
  * keyboard-reachable, and no extra dependencies. The first row's `↑` and
@@ -43,16 +43,16 @@ export interface BeverageEditorProps {
  *
  * Delete flow:
  *   - Always confirms first (inline panel, no native dialog)
- *   - If any Recipe references this Beverage, the confirm panel lists the
+ *   - If any Recipe references this Routine, the confirm panel lists the
  *     blockers and shows an opt-in "Also delete these N Recipes" checkbox.
  *     The Delete button is disabled until the checkbox is ticked; clicking
- *     it cascades — every referencing Recipe is deleted before the Beverage.
+ *     it cascades — every referencing Recipe is deleted before the Routine.
  */
-export const BeverageEditor: Component<BeverageEditorProps> = (p) => {
+export const RoutineEditor: Component<RoutineEditorProps> = (p) => {
   const repos = useRepositories();
-  const [beverage, { refetch: refetchBeverage }] = createResource(
-    () => p.beverageId,
-    (id) => repos.beverages.get(id),
+  const [routine, { refetch: refetchRoutine }] = createResource(
+    () => p.routineId,
+    (id) => repos.routines.get(id),
   );
   const [recipes] = createResource<Recipe[]>(() => repos.recipes.list());
   const [confirmingDelete, setConfirmingDelete] = createSignal(false);
@@ -60,23 +60,23 @@ export const BeverageEditor: Component<BeverageEditorProps> = (p) => {
   const [showStepPicker, setShowStepPicker] = createSignal(false);
 
   const referencingRecipes = createMemo<Recipe[]>(() =>
-    (recipes() ?? []).filter((r) => r.beverageId === p.beverageId),
+    (recipes() ?? []).filter((r) => r.routineId === p.routineId),
   );
 
-  const saveBeverage = async (next: Beverage) => {
-    await repos.beverages.update(next);
-    refetchBeverage();
+  const saveRoutine = async (next: Routine) => {
+    await repos.routines.update(next);
+    refetchRoutine();
   };
 
   const handleRename = (raw: string) => {
     const next = raw.trim();
-    const b = beverage();
+    const b = routine();
     if (!b || !next || b.name === next) return;
-    void saveBeverage({ ...b, name: next });
+    void saveRoutine({ ...b, name: next });
   };
 
   const moveStep = (id: string, direction: -1 | 1) => {
-    const b = beverage();
+    const b = routine();
     if (!b) return;
     const idx = b.steps.findIndex((s) => s.id === id);
     if (idx < 0) return;
@@ -84,20 +84,20 @@ export const BeverageEditor: Component<BeverageEditorProps> = (p) => {
     if (target < 0 || target >= b.steps.length) return;
     const steps = [...b.steps];
     [steps[idx], steps[target]] = [steps[target]!, steps[idx]!];
-    void saveBeverage({ ...b, steps });
+    void saveRoutine({ ...b, steps });
   };
 
   const removeStep = (id: string) => {
-    const b = beverage();
+    const b = routine();
     if (!b) return;
-    void saveBeverage({ ...b, steps: b.steps.filter((s) => s.id !== id) });
+    void saveRoutine({ ...b, steps: b.steps.filter((s) => s.id !== id) });
   };
 
   const addStep = (type: StepType) => {
-    const b = beverage();
+    const b = routine();
     if (!b) return;
     setShowStepPicker(false);
-    void saveBeverage({ ...b, steps: [...b.steps, beverageStep(type, {})] });
+    void saveRoutine({ ...b, steps: [...b.steps, routineStep(type, {})] });
   };
 
   const handleDelete = async () => {
@@ -108,7 +108,7 @@ export const BeverageEditor: Component<BeverageEditorProps> = (p) => {
       if (!cascadeAcknowledged()) return;
       await Promise.all(blockers.map((r) => repos.recipes.delete(r.id)));
     }
-    await repos.beverages.delete(p.beverageId);
+    await repos.routines.delete(p.routineId);
     p.onClose();
   };
 
@@ -119,56 +119,56 @@ export const BeverageEditor: Component<BeverageEditorProps> = (p) => {
 
   const usageHint = (): string => {
     const n = referencingRecipes().length;
-    if (n === 0) return 'No Recipes use this Beverage yet.';
-    if (n === 1) return '1 Recipe uses this Beverage — edits propagate.';
-    return `${n} Recipes use this Beverage — edits propagate.`;
+    if (n === 0) return 'No Recipes use this Routine yet.';
+    if (n === 1) return '1 Recipe uses this Routine — edits propagate.';
+    return `${n} Recipes use this Routine — edits propagate.`;
   };
 
   return (
-    <div class="settings-section-stack" data-testid="beverage-editor">
-      <h2 class="beverage-editor__title">Edit Beverage</h2>
+    <div class="settings-section-stack" data-testid="routine-editor">
+      <h2 class="routine-editor__title">Edit Routine</h2>
 
       <Switch>
-        <Match when={beverage.loading}>
+        <Match when={routine.loading}>
           <p class="muted">loading…</p>
         </Match>
-        <Match when={beverage() === null}>
+        <Match when={routine() === null}>
           <p class="muted" role="alert">
-            beverage not found
+            routine not found
           </p>
         </Match>
-        <Match when={beverage()}>
+        <Match when={routine()}>
           {(b) => (
             <>
               <section class="settings-section">
                 <h3>Name</h3>
                 <input
                   type="text"
-                  class="beverage-editor__name"
+                  class="routine-editor__name"
                   value={b().name}
-                  aria-label="Beverage name"
-                  data-testid="beverage-name-input"
+                  aria-label="Routine name"
+                  data-testid="routine-name-input"
                   onChange={(e) => handleRename(e.currentTarget.value)}
                 />
               </section>
 
               <section class="settings-section">
                 <h3>Steps</h3>
-                <p class="settings-help" data-testid="beverage-usage-hint">
+                <p class="settings-help" data-testid="routine-usage-hint">
                   {usageHint()}
                 </p>
                 <Show
                   when={b().steps.length > 0}
                   fallback={<p class="muted">no steps yet — add one below</p>}
                 >
-                  <ol class="library-list" data-testid="beverage-steps-list">
+                  <ol class="library-list" data-testid="routine-steps-list">
                     <For each={b().steps}>
                       {(s, i) => (
                         <li
-                          class="library-list__row beverage-editor__step-row"
-                          data-testid={`beverage-step-${s.id}`}
+                          class="library-list__row routine-editor__step-row"
+                          data-testid={`routine-step-${s.id}`}
                         >
-                          <div class="beverage-editor__step-reorder">
+                          <div class="routine-editor__step-reorder">
                             <button
                               type="button"
                               class="icon-btn icon-btn--compact"
@@ -190,7 +190,7 @@ export const BeverageEditor: Component<BeverageEditorProps> = (p) => {
                               ↓
                             </button>
                           </div>
-                          <span class="beverage-editor__step-name">
+                          <span class="routine-editor__step-name">
                             {i() + 1}. {formatStepType(s.type)}
                           </span>
                           <button
@@ -213,7 +213,7 @@ export const BeverageEditor: Component<BeverageEditorProps> = (p) => {
                   fallback={
                     <button
                       type="button"
-                      class="btn beverage-editor__add-step-btn"
+                      class="btn routine-editor__add-step-btn"
                       data-testid="open-add-step"
                       onClick={() => setShowStepPicker(true)}
                     >
@@ -222,7 +222,7 @@ export const BeverageEditor: Component<BeverageEditorProps> = (p) => {
                   }
                 >
                   <div
-                    class="beverage-editor__step-picker"
+                    class="routine-editor__step-picker"
                     data-testid="step-picker"
                     role="group"
                     aria-label="Choose a step type to add"
@@ -241,7 +241,7 @@ export const BeverageEditor: Component<BeverageEditorProps> = (p) => {
                     </For>
                     <button
                       type="button"
-                      class="btn beverage-editor__step-picker-cancel"
+                      class="btn routine-editor__step-picker-cancel"
                       onClick={() => setShowStepPicker(false)}
                     >
                       Cancel
@@ -258,10 +258,10 @@ export const BeverageEditor: Component<BeverageEditorProps> = (p) => {
                     <button
                       type="button"
                       class="btn btn--danger"
-                      data-testid="delete-beverage-button"
+                      data-testid="delete-routine-button"
                       onClick={() => setConfirmingDelete(true)}
                     >
-                      Delete beverage
+                      Delete routine
                     </button>
                   }
                 >
@@ -269,7 +269,7 @@ export const BeverageEditor: Component<BeverageEditorProps> = (p) => {
                     when={referencingRecipes().length === 0}
                     fallback={
                       <div
-                        class="beverage-editor__delete-blocked"
+                        class="routine-editor__delete-blocked"
                         data-testid="delete-blocked"
                       >
                         <p>
@@ -277,14 +277,14 @@ export const BeverageEditor: Component<BeverageEditorProps> = (p) => {
                           {referencingRecipes().length === 1
                             ? '1 Recipe uses'
                             : `${referencingRecipes().length} Recipes use`}{' '}
-                          this Beverage:
+                          this Routine:
                         </p>
                         <ul>
                           <For each={referencingRecipes()}>
                             {(r) => <li>{r.name}</li>}
                           </For>
                         </ul>
-                        <label class="beverage-editor__cascade-ack">
+                        <label class="routine-editor__cascade-ack">
                           <input
                             type="checkbox"
                             data-testid="cascade-ack-checkbox"
@@ -300,7 +300,7 @@ export const BeverageEditor: Component<BeverageEditorProps> = (p) => {
                               : `these ${referencingRecipes().length} Recipes`}
                           </span>
                         </label>
-                        <div class="beverage-editor__button-row">
+                        <div class="routine-editor__button-row">
                           <button
                             type="button"
                             class="btn btn--danger"
@@ -322,11 +322,11 @@ export const BeverageEditor: Component<BeverageEditorProps> = (p) => {
                     }
                   >
                     <div
-                      class="beverage-editor__delete-confirm"
+                      class="routine-editor__delete-confirm"
                       data-testid="delete-confirm"
                     >
                       <p>Delete "{b().name}"? This can't be undone.</p>
-                      <div class="beverage-editor__button-row">
+                      <div class="routine-editor__button-row">
                         <button
                           type="button"
                           class="btn btn--danger"

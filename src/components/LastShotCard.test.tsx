@@ -46,7 +46,7 @@ describe('LastShotCard', () => {
     expect(screen.getByText(/loading/i)).toBeInTheDocument();
   });
 
-  it('renders the beverage name and dose → yield once the summary arrives', async () => {
+  it('renders the routine name and dose → yield once the summary arrives', async () => {
     render(() => (
       <LastShotCard
         fetchSummary={() => Promise.resolve(summary())}

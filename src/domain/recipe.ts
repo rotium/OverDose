@@ -1,21 +1,21 @@
 import type { AnyStepConfig } from './steps';
 
 /**
- * A Recipe: a configured way to make a specific Beverage. References its
- * Beverage by id (reference model — see [[starter-skin-vocabulary]]) and
- * carries per-step config overrides keyed by `BeverageStep.id`.
+ * A Recipe: a configured way to make a specific Routine. References its
+ * Routine by id (reference model — see [[starter-skin-vocabulary]]) and
+ * carries per-step config overrides keyed by `RoutineStep.id`.
  *
- * Plus the per-Recipe prep metadata that's *not* part of the Beverage's
+ * Plus the per-Recipe prep metadata that's *not* part of the Routine's
  * step sequence: which bean, which grinder + setting, what dose to weigh,
- * which espresso profile. These aren't Beverage steps because they don't
+ * which espresso profile. These aren't Routine steps because they don't
  * map to machine actions — the runtime walks them as prep prompts before
- * the Beverage's first step runs.
+ * the Routine's first step runs.
  *
  * `overrides` may be missing keys or partial values; all per-step config
  * fields are optional. The effective config for a step at run time is:
  *
  *   run-time override (ephemeral) → Recipe.overrides[stepId] →
- *   Beverage.steps[i].config → operation-code fallback
+ *   Routine.steps[i].config → operation-code fallback
  *
  * Missing keys at every layer means the field stays undefined and the
  * operation either uses its own default or treats the step as unconfigured.
@@ -23,7 +23,7 @@ import type { AnyStepConfig } from './steps';
 export interface Recipe {
   id: string;
   name: string;
-  beverageId: string;
+  routineId: string;
   overrides: Record<string, Partial<AnyStepConfig>>;
   /**
    * Bean used for this Recipe. References Bean.id from the Bean library
@@ -41,7 +41,7 @@ export interface Recipe {
   /** Dose-in weight (grams) — the user weighs this much before brewing. */
   doseGrams?: number;
   /**
-   * Stop-at-weight target (grams of beverage in the cup). When set and a
+   * Stop-at-weight target (grams of routine in the cup). When set and a
    * scale is connected, the machine auto-stops the shot at this weight.
    * Maps to the gateway's `workflow.context.targetYield` at brew time —
    * a clean context-layer override that doesn't alter the profile's
@@ -59,7 +59,7 @@ export interface Recipe {
   targetVolumeMl?: number;
   /**
    * Espresso profile used by the brew step. References Profile.id from
-   * the Profile library. Per-Recipe rather than per-Beverage so the user
+   * the Profile library. Per-Recipe rather than per-Routine so the user
    * can tune profile per-bean (matches grind / dose / bean).
    */
   profileId?: string;
