@@ -94,3 +94,77 @@ describe('MachineTab — steam flow', () => {
     );
   });
 });
+
+describe('MachineTab — flush defaults', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', mkFetchMock());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('renders the timeout + flow sliders with the fetched values once loaded', async () => {
+    render(() => <MachineTab />);
+    await waitFor(() =>
+      expect(screen.queryByTestId('machine-settings-loading')).not.toBeInTheDocument(),
+    );
+    const timeout = screen.getByTestId('machine-flush-timeout') as HTMLInputElement;
+    expect(timeout.value).toBe('5');
+    expect(timeout.min).toBe('3');
+    expect(timeout.max).toBe('120');
+    expect(screen.getByTestId('machine-flush-timeout-value')).toHaveTextContent('5 s');
+
+    const flow = screen.getByTestId('machine-flush-flow') as HTMLInputElement;
+    expect(flow.value).toBe('4');
+    expect(flow.min).toBe('1');
+    expect(flow.max).toBe('10');
+    expect(screen.getByTestId('machine-flush-flow-value')).toHaveTextContent('4.0 mL/s');
+  });
+
+  it('POSTs a sparse partial when the timeout slider changes', async () => {
+    const fetchMock = mkFetchMock();
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(() => <MachineTab />);
+    await waitFor(() => screen.getByTestId('machine-flush-timeout'));
+
+    const slider = screen.getByTestId('machine-flush-timeout') as HTMLInputElement;
+    slider.value = '30';
+    fireEvent.input(slider);
+    fireEvent.pointerUp(slider);
+
+    await waitFor(() => {
+      const postCall = fetchMock.mock.calls.find(
+        (call) => (call[1] as RequestInit | undefined)?.method === 'POST',
+      );
+      expect(postCall).toBeDefined();
+      expect((postCall![1] as RequestInit).body).toBe(
+        JSON.stringify({ flushTimeout: 30 }),
+      );
+    });
+  });
+
+  it('POSTs a sparse partial when the flow slider changes', async () => {
+    const fetchMock = mkFetchMock();
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(() => <MachineTab />);
+    await waitFor(() => screen.getByTestId('machine-flush-flow'));
+
+    const slider = screen.getByTestId('machine-flush-flow') as HTMLInputElement;
+    slider.value = '7.5';
+    fireEvent.input(slider);
+    fireEvent.pointerUp(slider);
+
+    await waitFor(() => {
+      const postCall = fetchMock.mock.calls.find(
+        (call) => (call[1] as RequestInit | undefined)?.method === 'POST',
+      );
+      expect(postCall).toBeDefined();
+      expect((postCall![1] as RequestInit).body).toBe(
+        JSON.stringify({ flushFlow: 7.5 }),
+      );
+    });
+  });
+});
