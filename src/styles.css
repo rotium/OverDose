@@ -3138,3 +3138,84 @@ html {
   border-color: #4f8ff5;
 }
 
+/* ─── Sleep / standby overlay ─────────────────────────────────────────
+   Full-screen black veil shown while the machine is asleep, above
+   everything (drawer is z-50; dialogs ≤20). One button — tap anywhere (or
+   Enter/Space) wakes, even after the hint has faded out. */
+.sleep-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  border: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  color: var(--fg);
+  cursor: pointer;
+  font: inherit;
+  /* It's a native <button>, so a tap/click would otherwise flash the
+     platform press state (and the touch tap-highlight on the tablet) for
+     a frame before the leave-fade starts — the "flick" you don't get on a
+     gateway-driven wake. Strip all native interaction chrome. */
+  -webkit-appearance: none;
+  appearance: none;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.sleep-overlay:focus,
+.sleep-overlay:focus-visible {
+  outline: none;
+}
+
+/* Entering: the black veil fades in (~800ms) — "the screen fades out". */
+.sleep-overlay[data-state='entering'] {
+  animation: sleep-overlay-fade-in 800ms ease forwards;
+}
+
+/* Leaving (wake): the veil fades back out so the UI underneath fades in,
+   then unmounts. Stop capturing taps so they land on the now-awake screen. */
+.sleep-overlay[data-state='leaving'] {
+  animation: sleep-overlay-fade-out 600ms ease forwards;
+  pointer-events: none;
+}
+
+@keyframes sleep-overlay-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes sleep-overlay-fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+/* Moon + hint: fade in clearly, hold a beat, then fade to nothing so the
+   screen ends up completely dark (Decenza-style). The 18% keyframe
+   (~810ms of the 4.5s run) lands as the veil finishes darkening. */
+.sleep-overlay__content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  animation: sleep-overlay-content 4500ms ease forwards;
+}
+
+@keyframes sleep-overlay-content {
+  0%   { opacity: 0; }
+  18%  { opacity: 0.92; }
+  45%  { opacity: 0.92; }
+  100% { opacity: 0; }
+}
+
+.sleep-overlay__hint {
+  font-size: 0.9rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+

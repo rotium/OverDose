@@ -3,6 +3,7 @@ import { api, type GatewayShotRecord } from './api';
 import { Home, defaultStreams } from './Home';
 import { LiveBrewDrawer } from './components/LiveBrewDrawer';
 import { RecipeBrewScreen } from './components/RecipeBrewScreen';
+import { SleepOverlay } from './components/SleepOverlay';
 import { Settings } from './components/settings/Settings';
 import { LiveShotProvider, useLiveShot } from './LiveShotContext';
 import { frozenToGatewayShotRecord } from './liveShotAdapter';
@@ -103,6 +104,12 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
   // briefly become tappable in the gap between freeze and reset.
   const homeInert = (): boolean => live.accumulator.status() !== 'idle';
 
+  // Standby veil. Driven straight off the machine state, so it appears
+  // whenever the DE1 sleeps (header button, its own timeout, physical GHC)
+  // and clears the moment it reports any non-sleeping state.
+  const isSleeping = (): boolean =>
+    p.streams.machine.latest()?.state.state === 'sleeping';
+
   return (
     <>
       <Show
@@ -146,6 +153,8 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
         </Show>
       </Show>
       <LiveBrewDrawer />
+      {/* Always mounted; it owns its own enter/leave fade off `active`. */}
+      <SleepOverlay active={isSleeping} onWake={onWake} />
     </>
   );
 };
