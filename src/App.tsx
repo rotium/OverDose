@@ -24,7 +24,8 @@ import {
   linkSeedRecipeProfiles,
 } from './repositories';
 import { RepositoriesProvider } from './RepositoriesContext';
-import { UserPrefsProvider } from './UserPrefsContext';
+import { UserPrefsProvider, useUserPrefs } from './UserPrefsContext';
+import { isWaterBlocked } from './water';
 import type { Recipe } from './domain';
 import type {
   MachineSnapshot,
@@ -73,6 +74,15 @@ interface AppStreams {
 
 const AppBody: Component<{ streams: AppStreams }> = (p) => {
   const live = useLiveShot();
+  const prefs = useUserPrefs();
+  // Water-critical state — shared by the prep-screen Start gate (here)
+  // and the ExploreTray's direct-op tile lock (computed independently
+  // inside Home, since Home consumes the same stream + pref directly).
+  const isWaterCritical = (): boolean => {
+    const w = p.streams.waterLevels.latest();
+    if (!w) return false;
+    return isWaterBlocked(w.currentLevel, prefs.waterBlockMm());
+  };
   // Settings overlay is a single-screen swap today (no router). The header's
   // menu button opens it; back / × close it. A future menu drawer would
   // wrap this in a richer navigator.
@@ -184,6 +194,7 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
               recipeId={activeBrewRecipeId()!}
               onExit={onExitBrew}
               machineStream={() => p.streams.machine}
+              isWaterCritical={isWaterCritical}
               requestState={api.requestState}
               fetchLatestShot={api.shotsLatest}
               fetchShot={api.shotById}
@@ -202,6 +213,7 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
                 bundleOverride={exploreBundle()!}
                 onExit={() => setExploreBrewing(false)}
                 machineStream={() => p.streams.machine}
+                isWaterCritical={isWaterCritical}
                 requestState={api.requestState}
                 fetchLatestShot={api.shotsLatest}
                 fetchShot={api.shotById}

@@ -80,6 +80,7 @@ const renderScreen = (
     updateShot?: (id: string, patch: ShotAnnotationsPatch) => Promise<void>;
     saveDebounceMs?: number;
     bundleOverride?: BrewBundle;
+    isWaterCritical?: () => boolean;
   },
 ): ReturnType<typeof mkSetup> & {
   onApplyWorkflow: ReturnType<typeof vi.fn>;
@@ -112,6 +113,7 @@ const renderScreen = (
         bundleOverride={opts.bundleOverride}
         onExit={env.onExit}
         machineStream={() => env.machineStream}
+        isWaterCritical={opts.isWaterCritical}
         requestState={env.requestState}
         loadProfileById={loadProfileById}
         loadProfiles={loadProfiles}
@@ -366,6 +368,61 @@ describe('RecipeBrewScreen', () => {
       expect(screen.getByTestId('prep-card-start')).not.toHaveAttribute(
         'data-heater-off',
       );
+    });
+  });
+
+  describe('water critical', () => {
+    // Driven by an isWaterCritical accessor — App.tsx computes the value
+    // from the water-levels stream + user prefs. The brew screen just
+    // gates the action on whatever the parent passes.
+    it('disables Start with the droplet icon + "Refill water" label', async () => {
+      const env = renderScreen({
+        routines: [cappuccino()],
+        recipes: [sampleRecipe()],
+        isWaterCritical: () => true,
+      });
+      env.setMachineSnap(snapshotWithState('idle'));
+      const start = await waitFor(() => screen.getByTestId('prep-card-start'));
+      expect(start).toBeDisabled();
+      expect(start).toHaveAttribute('data-water-critical', 'true');
+      expect(start).toHaveTextContent(/refill water/i);
+    });
+
+    it('marks only the current step bar item with data-water-critical', async () => {
+      const env = renderScreen({
+        routines: [cappuccino()],
+        recipes: [sampleRecipe()],
+        isWaterCritical: () => true,
+      });
+      env.setMachineSnap(snapshotWithState('idle'));
+      await waitFor(() => screen.getByTestId('step-bar'));
+      expect(screen.getByTestId('step-bar-item-0')).toHaveAttribute(
+        'data-water-critical',
+        'true',
+      );
+      expect(screen.getByTestId('step-bar-item-1')).not.toHaveAttribute(
+        'data-water-critical',
+      );
+    });
+
+    it('heater-off wins priority over water-critical on the Start button', async () => {
+      // Substates are mutually exclusive on the firmware side, but we
+      // make the visual priority explicit anyway: power glyph + "Heater
+      // off" label when both signals fire simultaneously.
+      const heaterOffSnap: MachineSnapshot = {
+        ...snapshotWithState('idle'),
+        state: { state: 'idle', substate: 'errorNoAC' },
+      };
+      const env = renderScreen({
+        routines: [cappuccino()],
+        recipes: [sampleRecipe()],
+        isWaterCritical: () => true,
+      });
+      env.setMachineSnap(heaterOffSnap);
+      const start = await waitFor(() => screen.getByTestId('prep-card-start'));
+      expect(start).toHaveAttribute('data-heater-off', 'true');
+      expect(start).not.toHaveAttribute('data-water-critical');
+      expect(start).toHaveTextContent(/heater off/i);
     });
   });
 

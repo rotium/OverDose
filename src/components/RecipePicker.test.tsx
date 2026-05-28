@@ -1,9 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
 import type { Recipe } from '../domain';
 import type { RecipeRepository } from '../repositories';
-import type { DisabledReason } from './RecipeTile';
 import { RecipePicker } from './RecipePicker';
 import type { ProfileRecord } from '../api';
 
@@ -129,44 +127,21 @@ describe('RecipePicker', () => {
     });
   });
 
-  it('disables every tile and shows the reason icon when disabledReason() is non-null', async () => {
+  it('tiles are always navigable — gating happens at the prep-screen Start, not at the picker', async () => {
+    // Replaces the previous disabledReason / reason-icon tests; the picker
+    // no longer carries any "not ready" state.
     const onSelect = vi.fn();
     render(() => (
       <RecipePicker
         repository={repo([rec('a', 'Espresso'), rec('b', 'Cappuccino')])}
         onSelect={onSelect}
-        disabledReason={() => 'low-water'}
       />
     ));
     await waitFor(() => screen.getByTestId('recipe-tile-a'));
-
     const tileA = screen.getByTestId('recipe-tile-a') as HTMLButtonElement;
-    const tileB = screen.getByTestId('recipe-tile-b') as HTMLButtonElement;
-    expect(tileA).toBeDisabled();
-    expect(tileB).toBeDisabled();
-    expect(screen.getByTestId('recipe-tile-a-reason')).toBeInTheDocument();
-    expect(screen.getByTestId('recipe-tile-b-reason')).toBeInTheDocument();
-
+    expect(tileA).not.toBeDisabled();
     fireEvent.click(tileA);
-    expect(onSelect).not.toHaveBeenCalled();
-  });
-
-  it('reactively re-enables tiles when disabledReason() flips back to null', async () => {
-    const [reason, setReason] = createSignal<DisabledReason | null>('low-water');
-    render(() => (
-      <RecipePicker
-        repository={repo([rec('a', 'Espresso')])}
-        onSelect={() => {}}
-        disabledReason={reason}
-      />
-    ));
-    await waitFor(() => screen.getByTestId('recipe-tile-a'));
-    expect(screen.getByTestId('recipe-tile-a')).toBeDisabled();
-    setReason(null);
-    await waitFor(() => {
-      expect(screen.getByTestId('recipe-tile-a')).not.toBeDisabled();
-    });
-    expect(screen.queryByTestId('recipe-tile-a-reason')).not.toBeInTheDocument();
+    expect(onSelect).toHaveBeenCalledTimes(1);
   });
 
   it('refreshes the list via the imperative handle', async () => {

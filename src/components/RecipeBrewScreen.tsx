@@ -27,7 +27,7 @@ import {
   type MachineSnapshot,
   type MachineState,
 } from '../snapshot';
-import { PowerIcon, ThermometerIcon } from './icons';
+import { PowerIcon, ThermometerIcon, WaterDropIcon } from './icons';
 import type { WsStream } from '../streams';
 import {
   api,
@@ -110,6 +110,10 @@ export interface RecipeBrewScreenProps {
   onExit: () => void;
   /** Streams the machine snapshot — used to detect step-end transitions. */
   machineStream: () => WsStream<MachineSnapshot>;
+  /** True when the water tank is below the brewing-block threshold.
+   *  Optional — when omitted (e.g. unit tests that don't care), water
+   *  gating is off. App.tsx supplies the real signal. */
+  isWaterCritical?: Accessor<boolean>;
   /** Fires a gateway state request (typically `api.requestState`). */
   requestState: (state: MachineState) => Promise<void>;
   /** Single-profile fetcher used to render the brew step's prep card.
@@ -174,6 +178,10 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
   // over warming when both could apply — the user has to physically
   // flip a switch before any warming can happen.
   const heaterOff = (): boolean => isHeaterOff(machine.latest() ?? null);
+  // Water-critical (tank below block threshold). Wins over warming on
+  // the Start button — refilling is a precondition for further heating
+  // to even matter — but heater-off still trumps water-critical.
+  const waterCritical = (): boolean => p.isWaterCritical?.() ?? false;
 
   // Combined fetch so the header + body don't render a half-loaded state
   // (recipe arrived but routine still pending — the previous two-resource
@@ -383,6 +391,7 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
               currentIdx={currentIdx}
               isWarming={isWarming}
               isHeaterOff={heaterOff}
+              isWaterCritical={waterCritical}
               onJump={jumpToStep}
             />
           </Show>
@@ -409,6 +418,7 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
                 status={() => statuses()[currentIdx()]!}
                 isWarming={isWarming}
                 isHeaterOff={heaterOff}
+                isWaterCritical={waterCritical}
                 onStart={startCurrentStep}
                 profile={() => profile() ?? null}
                 profileLoading={() => profile.loading}
@@ -462,6 +472,7 @@ const StepBar: Component<{
   currentIdx: Accessor<number>;
   isWarming: Accessor<boolean>;
   isHeaterOff: Accessor<boolean>;
+  isWaterCritical: Accessor<boolean>;
   onJump: (idx: number) => void;
 }> = (p) => (
   <ol class="step-bar" data-testid="step-bar">
@@ -478,18 +489,20 @@ const StepBar: Component<{
         };
         const clickable = () => i() > p.currentIdx();
         // Tint only the current step while the machine isn't ready —
-        // future steps stay neutral; the user can still see what's coming.
-        // Heater-off takes priority over warming (the two are mutually
-        // exclusive on the firmware side, but we make the priority
-        // explicit anyway).
+        // future steps stay neutral; the user can still see what's
+        // coming. Priority: heater-off > water-critical > warming.
         const heaterOff = () => isCurrent() && p.isHeaterOff();
-        const warming = () => isCurrent() && p.isWarming() && !heaterOff();
+        const waterCritical = () =>
+          isCurrent() && p.isWaterCritical() && !heaterOff();
+        const warming = () =>
+          isCurrent() && p.isWarming() && !heaterOff() && !waterCritical();
         return (
           <li
             class="step-bar__item"
             data-variant={variant()}
             data-warming={warming() ? 'true' : undefined}
             data-heater-off={heaterOff() ? 'true' : undefined}
+            data-water-critical={waterCritical() ? 'true' : undefined}
             data-testid={`step-bar-item-${i()}`}
           >
             <button
@@ -513,6 +526,9 @@ const StepBar: Component<{
                   <Match when={heaterOff()}>
                     <PowerIcon size={14} />
                   </Match>
+                  <Match when={waterCritical()}>
+                    <WaterDropIcon size={14} />
+                  </Match>
                   <Match when={warming()}>
                     <ThermometerIcon size={14} />
                   </Match>
@@ -534,6 +550,7 @@ const PrepCard: Component<{
   status: Accessor<StepStatus>;
   isWarming: Accessor<boolean>;
   isHeaterOff: Accessor<boolean>;
+  isWaterCritical: Accessor<boolean>;
   onStart: () => void;
   profile: Accessor<ProfileRecord | null>;
   profileLoading: Accessor<boolean>;
@@ -579,12 +596,19 @@ const PrepCard: Component<{
           type="button"
           class="btn btn--primary prep__start"
           data-testid="prep-card-start"
-          data-warming={
-            p.isWarming() && !p.isHeaterOff() ? 'true' : undefined
-          }
           data-heater-off={p.isHeaterOff() ? 'true' : undefined}
-          disabled={p.isWarming() || p.isHeaterOff()}
-          aria-disabled={p.isWarming() || p.isHeaterOff()}
+          data-water-critical={
+            p.isWaterCritical() && !p.isHeaterOff() ? 'true' : undefined
+          }
+          data-warming={
+            p.isWarming() && !p.isHeaterOff() && !p.isWaterCritical()
+              ? 'true'
+              : undefined
+          }
+          disabled={p.isWarming() || p.isHeaterOff() || p.isWaterCritical()}
+          aria-disabled={
+            p.isWarming() || p.isHeaterOff() || p.isWaterCritical()
+          }
           onClick={p.onStart}
         >
           <Switch
@@ -593,6 +617,10 @@ const PrepCard: Component<{
             <Match when={p.isHeaterOff()}>
               <PowerIcon size={18} />
               Heater off
+            </Match>
+            <Match when={p.isWaterCritical()}>
+              <WaterDropIcon size={18} />
+              Refill water
             </Match>
             <Match when={p.isWarming()}>
               <ThermometerIcon size={18} />

@@ -12,7 +12,7 @@ import {
 import type { Recipe } from '../domain';
 import type { RecipeRepository } from '../repositories';
 import { api, type ProfileRecord } from '../api';
-import { RecipeTile, type DisabledReason } from './RecipeTile';
+import { RecipeTile } from './RecipeTile';
 
 /**
  * Recipe picker grid (was WorkflowPicker). Loads recipes from the injected
@@ -26,15 +26,12 @@ import { RecipeTile, type DisabledReason } from './RecipeTile';
  * `refresh` is exposed for callers that mutate the library (e.g. after the
  * user creates a Recipe in the editor) and want the picker to re-pull.
  *
- * `disabledReason` (accessor, optional) gates the whole grid — when it
- * returns a non-null value all tiles render disabled with the matching
- * reason icon (e.g. low-water blocking). Driven by the parent so the rule
- * (which signal, which threshold) lives there, not here.
+ * Tiles are always navigable; gating on "not ready" signals (low water,
+ * heater off, warming up) happens at the prep-screen Start button.
  */
 export interface RecipePickerProps {
   repository: RecipeRepository;
   onSelect: (recipe: Recipe) => void;
-  disabledReason?: Accessor<DisabledReason | null>;
   /** Fetcher seam for the gateway's profile list. The picker resolves
    *  each tile's profile name from this for the subtitle. Defaults to
    *  `api.profiles({})`; tests can inject a fake or omit (the default
@@ -99,18 +96,13 @@ export const RecipePicker: Component<
           >
             <div class="picker__grid" data-testid="picker-grid">
               <For each={recipes()}>
-                {(r) => {
-                  const reason = () => p.disabledReason?.() ?? null;
-                  return (
-                    <RecipeTile
-                      recipe={r}
-                      onSelect={p.onSelect}
-                      disabled={reason() !== null}
-                      disabledReason={reason() ?? undefined}
-                      profileTitle={profileTitleFor(r.profileId)}
-                    />
-                  );
-                }}
+                {(r) => (
+                  <RecipeTile
+                    recipe={r}
+                    onSelect={p.onSelect}
+                    profileTitle={profileTitleFor(r.profileId)}
+                  />
+                )}
               </For>
             </div>
           </Show>

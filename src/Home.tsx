@@ -3,10 +3,12 @@ import { api, type GatewayShotRecord } from './api';
 import { Header } from './components/Header';
 import { LastShotCard } from './components/LastShotCard';
 import { StatusPanel } from './components/StatusPanel';
-import { WaterAlertBanner } from './components/WaterAlertBanner';
 import { RecipePicker } from './components/RecipePicker';
-import { ExploreTray, type ExploreOp } from './components/ExploreTray';
-import type { DisabledReason } from './components/RecipeTile';
+import {
+  ExploreTray,
+  type ExploreBlockReason,
+  type ExploreOp,
+} from './components/ExploreTray';
 import type { Recipe } from './domain';
 import type { RecipeRepository } from './repositories';
 import {
@@ -145,13 +147,18 @@ export const Home: Component<HomeProps> = (p) => {
     prevSubstate = curSubstate;
   });
 
-  // Block tiles (with droplet icon) only at the critical threshold.
-  const disabledReason = (): DisabledReason | null => {
+  // Resolve why the Explore direct-op tiles (steam/water/flush) should be
+  // disabled. Recipe tiles and the Explore "Brew" tile are always navigable
+  // — gating happens at the prep-screen Start. These direct ops have no
+  // prep intermediate, so we block them at the tile. Heater-off wins over
+  // water-critical when both apply (heater is the more fundamental block).
+  const exploreBlockReason = (): ExploreBlockReason | null => {
+    if (heaterOff()) return 'heater-off';
     const w = waterLevels.latest();
-    if (!w) return null;
-    return isWaterBlocked(w.currentLevel, prefs.waterBlockMm())
-      ? 'low-water'
-      : null;
+    if (w && isWaterBlocked(w.currentLevel, prefs.waterBlockMm())) {
+      return 'water-critical';
+    }
+    return null;
   };
 
   return (
@@ -172,12 +179,11 @@ export const Home: Component<HomeProps> = (p) => {
             <RecipePicker
               repository={p.recipeRepository}
               onSelect={p.onSelectRecipe}
-              disabledReason={disabledReason}
             />
           </div>
           <ExploreTray
             onSelect={p.onExplore}
-            disabled={() => disabledReason() !== null}
+            blockReason={exploreBlockReason}
           />
         </div>
         <aside class="home__sidebar">
@@ -197,7 +203,6 @@ export const Home: Component<HomeProps> = (p) => {
           />
         </aside>
       </main>
-      <WaterAlertBanner severity={severity} />
     </div>
   );
 };

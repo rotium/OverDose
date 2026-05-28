@@ -99,6 +99,7 @@ html {
 }
 
 .explore-tile {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -141,6 +142,26 @@ html {
 .explore-tile__label {
   font-size: 0.8rem;
   letter-spacing: 0.02em;
+}
+
+/* Small corner badge that explains why a direct-op tile is disabled. */
+.explore-tile__reason {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  color: #fff;
+}
+.explore-tile[data-block-reason='water-critical'] .explore-tile__reason {
+  background: var(--bad);
+}
+.explore-tile[data-block-reason='heater-off'] .explore-tile__reason {
+  background: var(--bad);
 }
 
 /* ─── Header ──────────────────────────────────────────────────────── */
@@ -1186,27 +1207,6 @@ html {
 .live-view__readouts--flush {
   display: flex;
   justify-content: flex-end;
-}
-
-/* ─── Water alert banner (bottom of Home) ─────────────────────────── */
-
-.water-banner {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  font-weight: 600;
-  border-top: 1px solid var(--border);
-}
-
-.water-banner[data-severity='warn'] {
-  background: rgba(168, 106, 0, 0.22);
-  color: var(--warn-fg);
-}
-
-.water-banner[data-severity='critical'] {
-  background: rgba(111, 31, 31, 0.32);
-  color: var(--bad-fg);
 }
 
 /* ─── Settings screen ─────────────────────────────────────────────── */
@@ -2706,6 +2706,20 @@ html {
   color: #fff;
 }
 
+/* Water-critical modifier — same red as heater-off (user must act),
+   different icon. Used on the prep step bar when the tank is below
+   the brewing-block threshold. */
+.step-bar__item[data-water-critical='true'] .step-bar__button {
+  background: rgba(111, 31, 31, 0.18);
+  border-color: var(--bad);
+  color: var(--fg);
+}
+.step-bar__item[data-water-critical='true'] .step-bar__icon {
+  background: var(--bad);
+  border-color: var(--bad);
+  color: #fff;
+}
+
 /* Prep / post-brew — full-bleed page content, no card chrome.
    The screen IS the surface, so this just lays out the heading, the
    featured profile/purge block, the stat readouts, and a big primary
@@ -2946,6 +2960,21 @@ html {
    signal "user action required" (flip the front switch). */
 .prep__start[data-heater-off='true'],
 .prep__start[data-heater-off='true']:hover {
+  background: var(--bad);
+  border-color: var(--bad);
+  color: #fff;
+  cursor: not-allowed;
+  opacity: 0.95;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+/* Water-critical — same red treatment as heater-off; the droplet icon
+   plus the "Refill water" label distinguishes them. */
+.prep__start[data-water-critical='true'],
+.prep__start[data-water-critical='true']:hover {
   background: var(--bad);
   border-color: var(--bad);
   color: #fff;

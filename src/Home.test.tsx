@@ -224,7 +224,9 @@ describe('Home', () => {
     expect(onSelect).toHaveBeenCalledWith(sampleRecipe);
   });
 
-  it('disables Recipe tiles with a droplet icon when water level is at/under the block threshold', async () => {
+  it('keeps Recipe tiles navigable even when water level is at the block threshold', async () => {
+    // Gating moved to the prep-screen Start. Recipe tiles browse freely
+    // so the user can queue up a recipe and refill the tank, then start.
     const onSelect = vi.fn();
     render(() =>
       buildHome({
@@ -233,25 +235,33 @@ describe('Home', () => {
       }),
     );
     await waitFor(() => screen.getByTestId('recipe-tile-seed-espresso'));
-    const tile = screen.getByTestId('recipe-tile-seed-espresso') as HTMLButtonElement;
-    expect(tile).toBeDisabled();
-    expect(screen.getByTestId('recipe-tile-seed-espresso-reason')).toBeInTheDocument();
+    const tile = screen.getByTestId(
+      'recipe-tile-seed-espresso',
+    ) as HTMLButtonElement;
+    expect(tile).not.toBeDisabled();
     fireEvent.click(tile);
-    expect(onSelect).not.toHaveBeenCalled();
+    expect(onSelect).toHaveBeenCalledTimes(1);
   });
 
-  it('leaves Recipe tiles enabled when water is just above the block threshold (warn-only)', async () => {
+  it('disables Explore direct-op tiles with a droplet icon at critical water', async () => {
     render(() =>
-      buildHome({ stubs: { water: { currentLevel: 4, refillLevel: 5 } } }),
+      buildHome({ stubs: { water: { currentLevel: 2, refillLevel: 5 } } }),
     );
-    await waitFor(() => screen.getByTestId('recipe-tile-seed-espresso'));
-    expect(screen.getByTestId('recipe-tile-seed-espresso')).not.toBeDisabled();
-    expect(
-      screen.queryByTestId('recipe-tile-seed-espresso-reason'),
-    ).not.toBeInTheDocument();
+    await waitFor(() => screen.getByTestId('explore-brew'));
+    // Brew tile stays navigable — gating happens at the prep Start.
+    expect(screen.getByTestId('explore-brew')).not.toBeDisabled();
+    // Steam/water/flush block since their tap IS the action.
+    for (const op of ['steam', 'water', 'flush']) {
+      const tile = screen.getByTestId(`explore-${op}`);
+      expect(tile).toBeDisabled();
+      expect(tile).toHaveAttribute('data-block-reason', 'water-critical');
+      expect(
+        screen.getByTestId(`explore-${op}-reason`),
+      ).toBeInTheDocument();
+    }
   });
 
-  it('at warn level: header pill + tinted Water row + bottom banner; no inline critical banner', async () => {
+  it('at warn level: header pill + tinted Water row; no Explore tile lock', async () => {
     render(() =>
       buildHome({ stubs: { water: { currentLevel: 4, refillLevel: 5 } } }),
     );
@@ -264,14 +274,11 @@ describe('Home', () => {
       'data-severity',
       'warn',
     );
-    expect(screen.getByTestId('water-alert-banner')).toHaveAttribute(
-      'data-severity',
-      'warn',
-    );
+    expect(screen.getByTestId('explore-steam')).not.toBeDisabled();
     expect(screen.queryByTestId('status-water-alert')).not.toBeInTheDocument();
   });
 
-  it('at critical: pill + tinted row + inline banner inside Water cell + bottom banner', async () => {
+  it('at critical: pill + tinted row + inline cell banner + Explore direct ops locked', async () => {
     render(() =>
       buildHome({ stubs: { water: { currentLevel: 2, refillLevel: 5 } } }),
     );
@@ -282,12 +289,10 @@ describe('Home', () => {
     );
     const waterCell = screen.getByTestId('status-water');
     expect(waterCell).toHaveAttribute('data-severity', 'critical');
-    const inline = screen.getByTestId('status-water-alert');
-    expect(waterCell.contains(inline)).toBe(true);
-    expect(screen.getByTestId('water-alert-banner')).toHaveAttribute(
-      'data-severity',
-      'critical',
+    expect(waterCell.contains(screen.getByTestId('status-water-alert'))).toBe(
+      true,
     );
+    expect(screen.getByTestId('explore-steam')).toBeDisabled();
   });
 
   it('refetches the last shot when machine state transitions out of `espresso`', async () => {
@@ -380,11 +385,11 @@ describe('Home', () => {
     );
     await waitFor(() => screen.getByTestId('recipe-tile-seed-espresso'));
     expect(screen.queryByTestId('header-water-pill')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('water-alert-banner')).not.toBeInTheDocument();
     expect(screen.queryByTestId('status-water-alert')).not.toBeInTheDocument();
     expect(screen.getByTestId('status-water')).toHaveAttribute(
       'data-severity',
       'normal',
     );
+    expect(screen.getByTestId('explore-steam')).not.toBeDisabled();
   });
 });
