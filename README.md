@@ -1,95 +1,115 @@
 # OverDose
 
-A SolidJS skin for [Decent.app](https://github.com/tadelv/reaprime) espresso
-gateways. Subscribes to the gateway's machine and scale snapshot WebSockets and
-renders live state with fine-grained reactivity.
+A community skin for [Decent.app](https://github.com/tadelv/reaprime) —
+the gateway that drives Decent Espresso machines. OverDose adds a
+recipe-driven brewing UI, designed for the tablet on your espresso bar.
 
-## Why SolidJS
+## Recipes
 
-Snapshots stream at up to ~10 Hz per device (more during a shot). Solid's
-signal model means only the specific text nodes bound to changed fields
-update — no component re-render, no virtual DOM diff, no GC churn. Same
-mental fit for the chart layer when you add real-time graphs.
+OverDose is built around one idea: **a great espresso is a recipe,
+not just a profile.**
 
-## Run
+<img src="docs/screenshots/home.png" alt="OverDose home screen" width="500">
 
-```bash
-npm install
+A profile tells the machine how to push water. A Recipe holds the
+whole drink — profile, dose, grind setting, steam, hot water,
+rinse — saved together and edited in one place.
 
-# Start a Decent.app gateway with simulated devices in another terminal:
-#   cd ../reaprime && flutter run --dart-define=simulate=machine,scale
+<img src="docs/screenshots/recipe-editor.png" alt="Recipe editor" width="500">
 
-# Then in this folder:
-npm run dev
-# → http://localhost:5173
-```
+Pick a recipe and OverDose shows a prep view — dose target, grind
+reminder, the starting state of the machine — before you start.
 
-The Vite dev server proxies `/api/*` and `/ws/*` to `localhost:8080` (the
-gateway). Override the gateway host with:
+<img src="docs/screenshots/recipe-selected.png" alt="Brew prep view after selecting a recipe" width="500">
 
-```bash
-GATEWAY_HOST=192.168.1.42:8080 npm run dev
-```
+Then the shot itself — pressure, flow, and weight in real time.
 
-## Build
+<img src="docs/screenshots/brew-live.png" alt="Live brew" width="500">
 
-```bash
-npm run build      # type-check + bundle → dist/
-npm run preview    # serve the built bundle locally
-```
+For drinks with milk or hot water, the shot is just the first step.
+Steam follows when you're ready — manual progression keeps you in
+control between phases rather than racing an auto-progressing timer.
 
-## Deploy to Decent.app
+For ad-hoc operations that don't deserve a saved recipe — warming a
+cup, a quick steam wand purge, hot water for tea — the **Explore**
+tray on the home screen runs the four machine operations directly.
 
-Zip the contents of `dist/` (so `index.html` is at the zip root) and upload
-via the gateway's WebUI endpoints. See `doc/Skins.md` in the reaprime repo for
-the upload flow.
+## Installing OverDose
 
-## What it talks to
+OverDose installs onto a running Decent.app gateway as a "skin." The
+gateway has its own settings UI for managing skins — it lives outside
+the skin itself, on the gateway's dashboard.
 
-- `GET /api/v1/machine/info` — basic machine info (logged to console on mount)
-- `PUT /api/v1/scale/tare` — tare on button click
-- `ws://.../ws/v1/machine/snapshot` — machine state stream
-- `ws://.../ws/v1/scale/snapshot` — scale weight stream (status frames + data frames)
+### Getting to skin settings
 
-Full API reference: `doc/Api.md` and `doc/Skins.md` in the reaprime repo.
+Skin management isn't reachable from inside OverDose. From wherever
+you are:
 
-## Layout
+1. Tap your browser's **back** button until you're at the Decent.app
+   dashboard.
+2. Open **Settings** from the dashboard.
+3. Go to the **Web Interface** section.
+4. Open the **Skin** dropdown — the install actions live there.
 
-```
-src/
-  main.tsx                  # bootstrap: render <App />
-  App.tsx                   # top-level shell, wires WS streams to components
-  streams.ts                # createWsStream() — reconnecting WS as Solid signals
-  api.ts                    # typed REST client
-  snapshot.ts               # MachineSnapshot, ScaleMessage types + state enums
-  styles.css
-  components/
-    Machine.tsx             # live machine state card
-    Scale.tsx               # live weight + tare button
-    ConnectionBadge.tsx     # WS status pill in header
-    ShotChart.tsx           # real-time pressure/flow/weight chart (uPlot)
-```
+<img src="docs/screenshots/gateway-settings.png" alt="Gateway dashboard → Settings → Web Interface → Skin dropdown" width="500">
 
-## Real-time chart
+### Three ways to install
 
-`ShotChart.tsx` uses [uPlot](https://github.com/leeoniya/uPlot) for the live
-trace. The data path deliberately bypasses Solid's reactivity:
+**From a zip release (recommended).** Download the latest
+`overdose-vX.Y.Z.zip` from the
+[Releases page](https://github.com/rotium/OverDose/releases). In the
+Skin dropdown, choose **Install from .zip** and pick the file.
 
-- A pre-allocated typed-array ring buffer (~60 s at 10 Hz, capacity 600)
-  holds pressure / flow / weight.
-- A single `createEffect` listens to the machine snapshot signal and calls
-  `chart.setData(...)` directly on each tick.
-- The chart instance is created once on mount and destroyed on cleanup; no
-  re-render of the surrounding component ever touches it.
+**From a URL.** If your gateway is reachable on the network:
 
-To extend (more traces, longer window, different scales), edit the `series`
-and `axes` arrays in `ShotChart.tsx` and bump `BUFFER_SIZE` as needed.
+    POST http://<gateway-ip>:8080/api/v1/webui/skins/install/url
+    Content-Type: application/json
+    {"url": "https://github.com/rotium/OverDose/releases/download/vX.Y.Z/overdose-vX.Y.Z.zip"}
 
-## Adding more streams
+**Live-edit (for development).** `npm run build`, then in the Skin
+dropdown choose **Live-edit from folder** and point at this repo's
+`dist/` path. Rebuilds appear in the gateway without re-installing.
 
-Subscribe to any gateway WebSocket the same way:
+### Upgrading
 
-```ts
-const sensor = createWsStream<SensorSnapshot>('/ws/v1/sensors/<id>/snapshot', 'sensor');
-// sensor.latest() and sensor.status() are signals
-```
+Install the new zip over the old one. The gateway replaces the
+previous install in place.
+
+### Accessing OverDose from another device
+
+If you want to open the skin from a phone or laptop on the same
+network instead of the Decent.app tablet, ports **8080** (API) and
+**3000** (skin host) need to be reachable. Allow them in any firewall
+running on the gateway machine.
+
+## For contributors
+
+OverDose is SolidJS + Vite + uPlot. The dev loop runs the Decent.app
+gateway in simulate mode alongside Vite's dev server.
+
+    # terminal 1 — the gateway, with a simulated machine and scale
+    cd ../reaprime
+    flutter run --dart-define=simulate=machine,scale
+
+    # terminal 2 — the skin
+    npm install
+    npm run dev    # http://localhost:5173
+
+`npm run dev` proxies `/api/*` and `/ws/*` to `localhost:8080`. Point
+the dev server at a real gateway on your LAN with
+`GATEWAY_HOST=192.168.1.42:8080 npm run dev`.
+
+Other commands:
+- `npm run build` — type-check + production bundle to `dist/`
+- `npm test` — vitest unit + component tests
+
+## License
+
+GPL-3.0. See [LICENSE](LICENSE).
+
+## Thanks
+
+- The Decent Espresso community for
+  [de1app](https://github.com/decentespresso/de1app), the original DE1 client.
+- [reaprime](https://github.com/tadelv/reaprime) — the gateway OverDose
+  runs on.
