@@ -11,12 +11,14 @@ import type { Recipe } from './domain';
 import type { RecipeRepository } from './repositories';
 import {
   isHeaterOff,
+  isScaleStatusFrame,
   isWarmingUp,
   type MachineSnapshot,
   type ScaleMessage,
   type ShotSettingsSnapshot,
   type WaterLevelsSnapshot,
 } from './snapshot';
+import type { WsStatus } from './streams';
 import { createWsStream, type WsStream } from './streams';
 import { useUserPrefs } from './UserPrefsContext';
 import { isWaterBlocked, waterSeverity, type WaterSeverity } from './water';
@@ -90,6 +92,23 @@ export const Home: Component<HomeProps> = (p) => {
   const isWarming = (): boolean => isWarmingUp(machine.latest() ?? null);
   const heaterOff = (): boolean => isHeaterOff(machine.latest() ?? null);
 
+  // The scale WS is held open by the gateway regardless of whether a scale
+  // is actually paired — the BLE-level state is signalled via status frames
+  // (`{status:'connected'|'disconnected'}`) interleaved with the weight
+  // data frames. So `scale.status` alone reports "online" any time the
+  // WebSocket is up, even on a machine with no scale. Combine both signals
+  // so the header pill reflects the real connectedness.
+  const scalePillStatus = (): WsStatus => {
+    const ws = scale.status();
+    if (ws !== 'open') return ws;
+    const frame = scale.latest();
+    if (!frame) return 'connecting'; // open WS but no status frame yet
+    if (isScaleStatusFrame(frame)) {
+      return frame.status === 'connected' ? 'open' : 'closed';
+    }
+    return 'open'; // a data frame implies the scale was connected at that tick
+  };
+
   const handleToggleSleep = () => {
     if (isSleeping()) p.onWake();
     else p.onSleep();
@@ -139,7 +158,7 @@ export const Home: Component<HomeProps> = (p) => {
     <div class="home">
       <Header
         machineStatus={machine.status}
-        scaleStatus={scale.status}
+        scaleStatus={scalePillStatus}
         waterSeverity={severity}
         isSleeping={isSleeping}
         isWarming={isWarming}

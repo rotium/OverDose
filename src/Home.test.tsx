@@ -172,6 +172,50 @@ describe('Home', () => {
     expect(onUpdate).not.toHaveBeenCalled();
   });
 
+  describe('scale connection pill (derived from status frames)', () => {
+    // Regression: the scale WS is held open by the gateway whether a scale
+    // is paired or not. Relying on the raw WS status would show "online"
+    // on machines with no scale. The pill has to read the latest
+    // status/data frame to reflect the BLE-level connectedness.
+
+    it('shows connecting (…) before any scale frame has arrived', () => {
+      render(() => buildHome({ stubs: { scaleMsg: null } }));
+      expect(screen.getByText(/scale · …/)).toBeInTheDocument();
+    });
+
+    it('shows offline when the latest frame is a disconnected status frame', () => {
+      render(() =>
+        buildHome({ stubs: { scaleMsg: { status: 'disconnected' } } }),
+      );
+      expect(screen.getByText(/scale · offline/)).toBeInTheDocument();
+    });
+
+    it('shows online when the latest frame is a connected status frame', () => {
+      render(() =>
+        buildHome({ stubs: { scaleMsg: { status: 'connected' } } }),
+      );
+      expect(screen.getByText(/scale · online/)).toBeInTheDocument();
+    });
+
+    it('shows online when the latest frame is a weight data frame', () => {
+      // A data frame implies the scale was connected at that tick — the
+      // gateway only emits weight frames while the scale is paired.
+      render(() =>
+        buildHome({
+          stubs: {
+            scaleMsg: {
+              timestamp: '2026-05-29T00:00:00Z',
+              weight: 12.4,
+              weightFlow: 0,
+              batteryLevel: 80,
+            },
+          },
+        }),
+      );
+      expect(screen.getByText(/scale · online/)).toBeInTheDocument();
+    });
+  });
+
   it('tapping a Recipe tile calls onSelectRecipe', async () => {
     const onSelect = vi.fn();
     render(() => buildHome({ onSelect }));
