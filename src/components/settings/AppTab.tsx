@@ -1,6 +1,7 @@
 import { Match, Switch, createSignal, type Component } from 'solid-js';
 import { DisplaySection } from './sections/DisplaySection';
 import { AlertsSection } from './sections/AlertsSection';
+import { AboutSection } from './sections/AboutSection';
 
 /**
  * App tab — skin-side UI preferences. Sectioned into a left side-nav so
@@ -8,11 +9,12 @@ import { AlertsSection } from './sections/AlertsSection';
  * their own panes rather than competing on one scrolling page. New
  * subsections can plug in by extending SECTIONS and adding a Match arm.
  */
-type SectionId = 'display' | 'alerts';
+type SectionId = 'display' | 'alerts' | 'about';
 
 const SECTIONS: { id: SectionId; label: string }[] = [
   { id: 'display', label: 'Display' },
   { id: 'alerts', label: 'Alerts' },
+  { id: 'about', label: 'About' },
 ];
 
 export const AppTab: Component = () => {
@@ -42,6 +44,9 @@ export const AppTab: Component = () => {
           </Match>
           <Match when={section() === 'alerts'}>
             <AlertsSection />
+          </Match>
+          <Match when={section() === 'about'}>
+            <AboutSection />
           </Match>
         </Switch>
       </div>

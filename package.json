@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo dev) vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest"
