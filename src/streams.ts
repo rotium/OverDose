@@ -1,4 +1,5 @@
 import { createSignal, onCleanup, type Accessor } from 'solid-js';
+import { gatewayWsOrigin } from './gateway';
 
 export type WsStatus = 'connecting' | 'open' | 'closed';
 
@@ -23,7 +24,7 @@ export function createWsStream<T>(path: string, label: string): WsStream<T> {
 
   const open = () => {
     if (closed) return;
-    const url = `${location.origin.replace(/^http/, 'ws')}${path}`;
+    const url = `${gatewayWsOrigin()}${path}`;
     socket = new WebSocket(url);
     socket.onopen = () => {
       setStatus('open');

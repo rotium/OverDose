@@ -1,5 +1,6 @@
 import type { MachineState } from './snapshot';
 import type { ShotSettingsSnapshot } from './snapshot';
+import { gatewayHttpOrigin } from './gateway';
 
 export interface Device {
   name: string;
@@ -115,13 +116,13 @@ export interface WorkflowSnapshot {
 }
 
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, init);
+  const res = await fetch(`${gatewayHttpOrigin()}${path}`, init);
   if (!res.ok) throw new Error(`${init?.method ?? 'GET'} ${path} → ${res.status}`);
   return res.json() as Promise<T>;
 }
 
 async function fetchEmpty(path: string, init?: RequestInit): Promise<void> {
-  const res = await fetch(path, init);
+  const res = await fetch(`${gatewayHttpOrigin()}${path}`, init);
   if (!res.ok) throw new Error(`${init?.method ?? 'GET'} ${path} → ${res.status}`);
 }
 
