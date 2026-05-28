@@ -191,7 +191,19 @@ export const LiveShotProvider: Component<LiveShotProviderProps> = (p) => {
     // --- Lifecycle transitions (low-frequency) ---
     // Drive transitions BEFORE the append so the very first frame after
     // 'preparingForShot' lands in a fresh buffer rather than the prior shot.
-    if (substate === 'preparingForShot' && prevSubstate !== 'preparingForShot') {
+    //
+    // Guarded on state==='espresso' because the DE1 firmware emits
+    // `preparingForShot` from several heating substates (heatWaterTank,
+    // heatWaterHeater, stabilizeMixTemp) during any warm-up — including
+    // wake-from-sleep — not just before a real shot. Without the guard,
+    // waking the machine would open the brew drawer with no path to close
+    // it, since the state never reaches `espresso` and the freeze branch
+    // below never fires.
+    if (
+      substate === 'preparingForShot' &&
+      prevSubstate !== 'preparingForShot' &&
+      state === 'espresso'
+    ) {
       shotStartMs = Date.parse(snap.timestamp);
       // Start with no workflow immediately; replace with the fetched
       // workflow (target + profile + step names) when the request lands.

@@ -122,6 +122,38 @@ describe('LiveShotProvider', () => {
     expect(liveCtx().accumulator.status()).toBe('idle');
   });
 
+  it('does not record on preparingForShot during wake-from-sleep (state still heating)', () => {
+    // Real-hardware regression. The DE1 firmware maps several heating
+    // substates (heatWaterTank, heatWaterHeater, stabilizeMixTemp) to
+    // MachineSubstate.preparingForShot in reaprime's de1.utils.dart. On wake
+    // those substates fire while the parent state is `heating` / `sleeping`,
+    // not `espresso`. The simulator never emits preparingForShot outside an
+    // espresso routine, which is why this only reproduces on real hardware.
+    //
+    // Bug: if we started the accumulator on substate alone, the brew drawer
+    // opened on wake and never closed — the state never reaches espresso, so
+    // the freeze branch (state leaves espresso) never fires.
+    const rig = buildRig();
+    mount(rig);
+    rig.setMachine(
+      mkSnap({ state: { state: 'sleeping', substate: 'idle' } }),
+    );
+    rig.setMachine(
+      mkSnap({
+        timestamp: '2026-05-22T08:00:00.500Z',
+        state: { state: 'heating', substate: 'preparingForShot' },
+      }),
+    );
+    expect(liveCtx().accumulator.status()).toBe('idle');
+    rig.setMachine(
+      mkSnap({
+        timestamp: '2026-05-22T08:00:02.000Z',
+        state: { state: 'idle', substate: 'idle' },
+      }),
+    );
+    expect(liveCtx().accumulator.status()).toBe('idle');
+  });
+
   it('transitions to recording on substate "preparingForShot" and appends subsequent frames', () => {
     const rig = buildRig();
     mount(rig);
