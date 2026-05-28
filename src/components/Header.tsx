@@ -1,7 +1,13 @@
 import { Show, type Accessor, type Component } from 'solid-js';
 import type { WsStatus } from '../streams';
 import type { WaterSeverity } from '../water';
-import { MoonIcon, SunIcon, WaterDropIcon } from './icons';
+import {
+  MoonIcon,
+  PowerIcon,
+  SunIcon,
+  ThermometerIcon,
+  WaterDropIcon,
+} from './icons';
 
 /**
  * Top-of-screen header. Contains:
@@ -20,6 +26,13 @@ export interface HeaderProps {
   scaleStatus: Accessor<WsStatus>;
   waterSeverity: Accessor<WaterSeverity>;
   isSleeping: Accessor<boolean>;
+  /** True while the DE1's boiler is climbing to target. Surfaces an amber
+   *  pill so the user doesn't try to brew on cold water. */
+  isWarming: Accessor<boolean>;
+  /** True when the brew heater isn't powered — typically the front
+   *  physical switch is off. Surfaces a red pill since the user has to
+   *  physically flip the switch. Takes visual priority over warming. */
+  isHeaterOff: Accessor<boolean>;
   onMenu: () => void;
   /** Toggle handler — parent decides whether to sleep or wake based on isSleeping. */
   onToggleSleep: () => void;
@@ -55,6 +68,28 @@ export const Header: Component<HeaderProps> = (p) => (
         >
           <WaterDropIcon size={14} />
           {WATER_PILL_LABEL[p.waterSeverity() as 'warn' | 'critical']}
+        </span>
+      </Show>
+      <Show when={p.isHeaterOff()}>
+        <span
+          class="alert-pill"
+          data-severity="heater-off"
+          role="status"
+          data-testid="header-heater-off-pill"
+        >
+          <PowerIcon size={14} />
+          heater off
+        </span>
+      </Show>
+      <Show when={p.isWarming() && !p.isHeaterOff()}>
+        <span
+          class="alert-pill"
+          data-severity="warming"
+          role="status"
+          data-testid="header-warming-pill"
+        >
+          <ThermometerIcon size={14} />
+          warming up
         </span>
       </Show>
     </div>

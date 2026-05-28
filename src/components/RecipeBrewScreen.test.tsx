@@ -251,6 +251,124 @@ describe('RecipeBrewScreen', () => {
     });
   });
 
+  describe('warming up', () => {
+    // The DE1 emits state=idle + substate=preparingForShot while the boiler
+    // climbs to target. Both the Start button and the current step bar item
+    // should flag that the machine isn't ready, so the user doesn't pull a
+    // cold shot.
+    const warmingSnap: MachineSnapshot = {
+      ...snapshotWithState('idle'),
+      state: { state: 'idle', substate: 'preparingForShot' },
+    };
+    const readySnap: MachineSnapshot = snapshotWithState('idle');
+
+    it('disables the Start button and shows the warming label', async () => {
+      const env = renderScreen({
+        routines: [cappuccino()],
+        recipes: [sampleRecipe()],
+      });
+      env.setMachineSnap(warmingSnap);
+      const start = await waitFor(() => screen.getByTestId('prep-card-start'));
+      expect(start).toBeDisabled();
+      expect(start).toHaveAttribute('data-warming', 'true');
+      expect(start).toHaveTextContent(/warming up/i);
+    });
+
+    it('marks only the current step bar item with data-warming', async () => {
+      const env = renderScreen({
+        routines: [cappuccino()],
+        recipes: [sampleRecipe()],
+      });
+      env.setMachineSnap(warmingSnap);
+      await waitFor(() => screen.getByTestId('step-bar'));
+      expect(screen.getByTestId('step-bar-item-0')).toHaveAttribute(
+        'data-warming',
+        'true',
+      );
+      expect(screen.getByTestId('step-bar-item-1')).not.toHaveAttribute(
+        'data-warming',
+      );
+    });
+
+    it('clears the warming state once the machine becomes ready', async () => {
+      const env = renderScreen({
+        routines: [cappuccino()],
+        recipes: [sampleRecipe()],
+      });
+      env.setMachineSnap(warmingSnap);
+      const start = await waitFor(() => screen.getByTestId('prep-card-start'));
+      expect(start).toBeDisabled();
+
+      env.setMachineSnap(readySnap);
+      await waitFor(() =>
+        expect(screen.getByTestId('prep-card-start')).not.toBeDisabled(),
+      );
+      expect(screen.getByTestId('prep-card-start')).not.toHaveAttribute(
+        'data-warming',
+      );
+      expect(screen.getByTestId('step-bar-item-0')).not.toHaveAttribute(
+        'data-warming',
+      );
+    });
+  });
+
+  describe('heater off (front switch off)', () => {
+    // Substate=errorNoAC while state stays idle is the DE1's only
+    // explicit signal that the front physical switch cut AC to the
+    // brew heater.
+    const heaterOffSnap: MachineSnapshot = {
+      ...snapshotWithState('idle'),
+      state: { state: 'idle', substate: 'errorNoAC' },
+    };
+    const readySnap: MachineSnapshot = snapshotWithState('idle');
+
+    it('disables Start and shows the heater-off label with PowerIcon', async () => {
+      const env = renderScreen({
+        routines: [cappuccino()],
+        recipes: [sampleRecipe()],
+      });
+      env.setMachineSnap(heaterOffSnap);
+      const start = await waitFor(() => screen.getByTestId('prep-card-start'));
+      expect(start).toBeDisabled();
+      expect(start).toHaveAttribute('data-heater-off', 'true');
+      expect(start).toHaveTextContent(/heater off/i);
+    });
+
+    it('marks only the current step bar item with data-heater-off', async () => {
+      const env = renderScreen({
+        routines: [cappuccino()],
+        recipes: [sampleRecipe()],
+      });
+      env.setMachineSnap(heaterOffSnap);
+      await waitFor(() => screen.getByTestId('step-bar'));
+      expect(screen.getByTestId('step-bar-item-0')).toHaveAttribute(
+        'data-heater-off',
+        'true',
+      );
+      expect(screen.getByTestId('step-bar-item-1')).not.toHaveAttribute(
+        'data-heater-off',
+      );
+    });
+
+    it('clears heater-off when the switch is flipped back on', async () => {
+      const env = renderScreen({
+        routines: [cappuccino()],
+        recipes: [sampleRecipe()],
+      });
+      env.setMachineSnap(heaterOffSnap);
+      await waitFor(() =>
+        expect(screen.getByTestId('prep-card-start')).toBeDisabled(),
+      );
+      env.setMachineSnap(readySnap);
+      await waitFor(() =>
+        expect(screen.getByTestId('prep-card-start')).not.toBeDisabled(),
+      );
+      expect(screen.getByTestId('prep-card-start')).not.toHaveAttribute(
+        'data-heater-off',
+      );
+    });
+  });
+
   describe('prep card per step type', () => {
     it('seeds the editable dose/grinder inputs from the Recipe; profile shows the Choose prompt when none is pinned', async () => {
       renderScreen({

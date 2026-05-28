@@ -21,7 +21,13 @@ import {
   type StepType,
 } from '../domain';
 import { useRepositories } from '../RepositoriesContext';
-import type { MachineSnapshot, MachineState } from '../snapshot';
+import {
+  isHeaterOff,
+  isWarmingUp,
+  type MachineSnapshot,
+  type MachineState,
+} from '../snapshot';
+import { PowerIcon, ThermometerIcon } from './icons';
 import type { WsStream } from '../streams';
 import {
   api,
@@ -159,6 +165,15 @@ export interface BrewBundle {
 export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
   const repos = useRepositories();
   const machine = p.machineStream();
+
+  // Gates the Start button + tints the current step bar item when the
+  // DE1's boiler isn't at target yet. Same `isWarmingUp` heuristic the
+  // Header pill uses, so the visual story is consistent across screens.
+  const isWarming = (): boolean => isWarmingUp(machine.latest() ?? null);
+  // Heater-off (front switch off): substate=errorNoAC. Takes priority
+  // over warming when both could apply — the user has to physically
+  // flip a switch before any warming can happen.
+  const heaterOff = (): boolean => isHeaterOff(machine.latest() ?? null);
 
   // Combined fetch so the header + body don't render a half-loaded state
   // (recipe arrived but routine still pending — the previous two-resource
@@ -366,6 +381,8 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
               steps={steps}
               statuses={statuses}
               currentIdx={currentIdx}
+              isWarming={isWarming}
+              isHeaterOff={heaterOff}
               onJump={jumpToStep}
             />
           </Show>
@@ -390,6 +407,8 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
                 draft={draft}
                 patchDraft={patchDraft}
                 status={() => statuses()[currentIdx()]!}
+                isWarming={isWarming}
+                isHeaterOff={heaterOff}
                 onStart={startCurrentStep}
                 profile={() => profile() ?? null}
                 profileLoading={() => profile.loading}
@@ -441,6 +460,8 @@ const StepBar: Component<{
   steps: Accessor<RoutineStep[]>;
   statuses: Accessor<StepStatus[]>;
   currentIdx: Accessor<number>;
+  isWarming: Accessor<boolean>;
+  isHeaterOff: Accessor<boolean>;
   onJump: (idx: number) => void;
 }> = (p) => (
   <ol class="step-bar" data-testid="step-bar">
@@ -456,10 +477,19 @@ const StepBar: Component<{
           return 'future';
         };
         const clickable = () => i() > p.currentIdx();
+        // Tint only the current step while the machine isn't ready —
+        // future steps stay neutral; the user can still see what's coming.
+        // Heater-off takes priority over warming (the two are mutually
+        // exclusive on the firmware side, but we make the priority
+        // explicit anyway).
+        const heaterOff = () => isCurrent() && p.isHeaterOff();
+        const warming = () => isCurrent() && p.isWarming() && !heaterOff();
         return (
           <li
             class="step-bar__item"
             data-variant={variant()}
+            data-warming={warming() ? 'true' : undefined}
+            data-heater-off={heaterOff() ? 'true' : undefined}
             data-testid={`step-bar-item-${i()}`}
           >
             <button
@@ -471,11 +501,22 @@ const StepBar: Component<{
               onClick={() => clickable() && p.onJump(i())}
             >
               <span class="step-bar__icon" aria-hidden="true">
-                {variant() === 'done'
-                  ? '✓'
-                  : variant() === 'skipped'
-                    ? '–'
-                    : i() + 1}
+                <Switch
+                  fallback={
+                    variant() === 'done'
+                      ? '✓'
+                      : variant() === 'skipped'
+                        ? '–'
+                        : i() + 1
+                  }
+                >
+                  <Match when={heaterOff()}>
+                    <PowerIcon size={14} />
+                  </Match>
+                  <Match when={warming()}>
+                    <ThermometerIcon size={14} />
+                  </Match>
+                </Switch>
               </span>
               <span class="step-bar__label">{formatStepType(s.type)}</span>
             </button>
@@ -491,6 +532,8 @@ const PrepCard: Component<{
   draft: Accessor<ShotDraft | null>;
   patchDraft: (patch: Partial<ShotDraft>) => void;
   status: Accessor<StepStatus>;
+  isWarming: Accessor<boolean>;
+  isHeaterOff: Accessor<boolean>;
   onStart: () => void;
   profile: Accessor<ProfileRecord | null>;
   profileLoading: Accessor<boolean>;
@@ -536,9 +579,26 @@ const PrepCard: Component<{
           type="button"
           class="btn btn--primary prep__start"
           data-testid="prep-card-start"
+          data-warming={
+            p.isWarming() && !p.isHeaterOff() ? 'true' : undefined
+          }
+          data-heater-off={p.isHeaterOff() ? 'true' : undefined}
+          disabled={p.isWarming() || p.isHeaterOff()}
+          aria-disabled={p.isWarming() || p.isHeaterOff()}
           onClick={p.onStart}
         >
-          Start {formatStepType(p.step().type).toLowerCase()}
+          <Switch
+            fallback={<>Start {formatStepType(p.step().type).toLowerCase()}</>}
+          >
+            <Match when={p.isHeaterOff()}>
+              <PowerIcon size={18} />
+              Heater off
+            </Match>
+            <Match when={p.isWarming()}>
+              <ThermometerIcon size={18} />
+              Warming up…
+            </Match>
+          </Switch>
         </button>
       </Show>
     </footer>

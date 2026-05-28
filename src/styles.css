@@ -211,6 +211,16 @@ html {
   color: #fff;
 }
 
+.alert-pill[data-severity='warming'] {
+  background: var(--warn);
+  color: #fff;
+}
+
+.alert-pill[data-severity='heater-off'] {
+  background: var(--bad);
+  color: #fff;
+}
+
 .icon-btn {
   background: var(--bg-elev);
   color: var(--fg);
@@ -2668,6 +2678,34 @@ html {
   color: var(--muted-2);
 }
 
+/* Warming-up modifier — overrides the current-variant tint with the same
+   amber the prep button uses, so the visual story (machine isn't ready)
+   reads the same on the step bar as on the action below. */
+.step-bar__item[data-warming='true'] .step-bar__button {
+  background: rgba(168, 106, 0, 0.18);
+  border-color: var(--warn);
+  color: var(--fg);
+}
+.step-bar__item[data-warming='true'] .step-bar__icon {
+  background: var(--warn);
+  border-color: var(--warn);
+  color: #fff;
+}
+
+/* Heater-off modifier — louder than warming because the user has to act
+   (flip the front switch). Wins over the warming variant when both
+   attributes happen to coexist. */
+.step-bar__item[data-heater-off='true'] .step-bar__button {
+  background: rgba(111, 31, 31, 0.18);
+  border-color: var(--bad);
+  color: var(--fg);
+}
+.step-bar__item[data-heater-off='true'] .step-bar__icon {
+  background: var(--bad);
+  border-color: var(--bad);
+  color: #fff;
+}
+
 /* Prep / post-brew — full-bleed page content, no card chrome.
    The screen IS the surface, so this just lays out the heading, the
    featured profile/purge block, the stat readouts, and a big primary
@@ -2886,6 +2924,37 @@ html {
   padding: 0.85rem 2.25rem;
   min-width: 260px;
   border-radius: 10px;
+}
+
+/* Warming-up state — disabled, amber, with a thermometer icon. Overrides
+   .btn--primary because the user shouldn't tap Start before the machine
+   is at temperature. */
+.prep__start[data-warming='true'],
+.prep__start[data-warming='true']:hover {
+  background: var(--warn);
+  border-color: var(--warn);
+  color: #fff;
+  cursor: not-allowed;
+  opacity: 0.95;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+/* Heater-off state — same layout as warming, red instead of amber to
+   signal "user action required" (flip the front switch). */
+.prep__start[data-heater-off='true'],
+.prep__start[data-heater-off='true']:hover {
+  background: var(--bad);
+  border-color: var(--bad);
+  color: #fff;
+  cursor: not-allowed;
+  opacity: 0.95;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: center;
 }
 
 .prep__secondary {

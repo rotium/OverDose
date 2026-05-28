@@ -11,6 +11,8 @@ const setup = (
     scale?: WsStatus;
     waterSeverity?: WaterSeverity;
     isSleeping?: boolean;
+    isWarming?: boolean;
+    isHeaterOff?: boolean;
   } = {},
   handlers: Partial<{ onMenu: () => void; onToggleSleep: () => void }> = {},
 ) => {
@@ -20,6 +22,10 @@ const setup = (
     initial.waterSeverity ?? 'normal',
   );
   const [sleeping, setSleeping] = createSignal<boolean>(initial.isSleeping ?? false);
+  const [warming, setWarming] = createSignal<boolean>(initial.isWarming ?? false);
+  const [heaterOff, setHeaterOff] = createSignal<boolean>(
+    initial.isHeaterOff ?? false,
+  );
   const onMenu = handlers.onMenu ?? vi.fn();
   const onToggleSleep = handlers.onToggleSleep ?? vi.fn();
   render(() => (
@@ -28,11 +34,22 @@ const setup = (
       scaleStatus={scale}
       waterSeverity={waterSev}
       isSleeping={sleeping}
+      isWarming={warming}
+      isHeaterOff={heaterOff}
       onMenu={onMenu}
       onToggleSleep={onToggleSleep}
     />
   ));
-  return { setMachine, setScale, setWaterSev, setSleeping, onMenu, onToggleSleep };
+  return {
+    setMachine,
+    setScale,
+    setWaterSev,
+    setSleeping,
+    setWarming,
+    setHeaterOff,
+    onMenu,
+    onToggleSleep,
+  };
 };
 
 describe('Header', () => {
@@ -133,6 +150,70 @@ describe('Header', () => {
       expect(screen.getByTestId('header-water-pill')).toBeInTheDocument();
       setWaterSev('normal');
       expect(screen.queryByTestId('header-water-pill')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('warming-up pill', () => {
+    it('is hidden when the machine is not warming', () => {
+      setup();
+      expect(screen.queryByTestId('header-warming-pill')).not.toBeInTheDocument();
+    });
+
+    it('renders the amber pill while warming', () => {
+      setup({ isWarming: true });
+      const pill = screen.getByTestId('header-warming-pill');
+      expect(pill).toHaveAttribute('data-severity', 'warming');
+      expect(pill).toHaveTextContent(/warming up/i);
+    });
+
+    it('appears and disappears reactively as warming state changes', () => {
+      const { setWarming } = setup();
+      expect(screen.queryByTestId('header-warming-pill')).not.toBeInTheDocument();
+      setWarming(true);
+      expect(screen.getByTestId('header-warming-pill')).toBeInTheDocument();
+      setWarming(false);
+      expect(screen.queryByTestId('header-warming-pill')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('heater-off pill', () => {
+    it('is hidden when the heater is on', () => {
+      setup();
+      expect(
+        screen.queryByTestId('header-heater-off-pill'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('renders the red pill when isHeaterOff is true', () => {
+      setup({ isHeaterOff: true });
+      const pill = screen.getByTestId('header-heater-off-pill');
+      expect(pill).toHaveAttribute('data-severity', 'heater-off');
+      expect(pill).toHaveTextContent(/heater off/i);
+    });
+
+    it('hides the warming pill when heater-off and warming both apply', () => {
+      // Belt-and-suspenders: at the firmware level the substates are
+      // mutually exclusive (errorNoAC vs preparingForShot), but the
+      // Header should still resolve the priority correctly if both
+      // accessors return true.
+      setup({ isHeaterOff: true, isWarming: true });
+      expect(screen.getByTestId('header-heater-off-pill')).toBeInTheDocument();
+      expect(
+        screen.queryByTestId('header-warming-pill'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('appears and disappears reactively as heater state changes', () => {
+      const { setHeaterOff } = setup();
+      expect(
+        screen.queryByTestId('header-heater-off-pill'),
+      ).not.toBeInTheDocument();
+      setHeaterOff(true);
+      expect(screen.getByTestId('header-heater-off-pill')).toBeInTheDocument();
+      setHeaterOff(false);
+      expect(
+        screen.queryByTestId('header-heater-off-pill'),
+      ).not.toBeInTheDocument();
     });
   });
 });

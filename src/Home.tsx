@@ -9,11 +9,13 @@ import { ExploreTray, type ExploreOp } from './components/ExploreTray';
 import type { DisabledReason } from './components/RecipeTile';
 import type { Recipe } from './domain';
 import type { RecipeRepository } from './repositories';
-import type {
-  MachineSnapshot,
-  ScaleMessage,
-  ShotSettingsSnapshot,
-  WaterLevelsSnapshot,
+import {
+  isHeaterOff,
+  isWarmingUp,
+  type MachineSnapshot,
+  type ScaleMessage,
+  type ShotSettingsSnapshot,
+  type WaterLevelsSnapshot,
 } from './snapshot';
 import { createWsStream, type WsStream } from './streams';
 import { useUserPrefs } from './UserPrefsContext';
@@ -85,6 +87,9 @@ export const Home: Component<HomeProps> = (p) => {
   const isSleeping = (): boolean =>
     machine.latest()?.state.state === 'sleeping';
 
+  const isWarming = (): boolean => isWarmingUp(machine.latest() ?? null);
+  const heaterOff = (): boolean => isHeaterOff(machine.latest() ?? null);
+
   const handleToggleSleep = () => {
     if (isSleeping()) p.onWake();
     else p.onSleep();
@@ -137,6 +142,8 @@ export const Home: Component<HomeProps> = (p) => {
         scaleStatus={scale.status}
         waterSeverity={severity}
         isSleeping={isSleeping}
+        isWarming={isWarming}
+        isHeaterOff={heaterOff}
         onMenu={p.onMenu}
         onToggleSleep={handleToggleSleep}
       />
