@@ -1,4 +1,7 @@
-# OverDose
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/logo-lockup-dark.svg">
+  <img src="docs/logo-lockup-light.svg" alt="OverDose" width="280">
+</picture>
 
 A community skin for [Decent.app](https://github.com/tadelv/reaprime) —
 the gateway that drives Decent Espresso machines. OverDose adds a

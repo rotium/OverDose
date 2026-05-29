@@ -6,7 +6,7 @@ import {
   type Accessor,
   type Component,
 } from 'solid-js';
-import { MoonIcon } from './icons';
+import { Logo } from './Logo';
 
 /**
  * Full-screen standby veil shown while the DE1 reports the `sleeping` state.
@@ -76,7 +76,7 @@ export const SleepOverlay: Component<SleepOverlayProps> = (p) => {
         onClick={() => p.onWake()}
       >
         <span class="sleep-overlay__content" data-testid="sleep-overlay-content">
-          <MoonIcon size={64} />
+          <Logo size={72} />
           <span class="sleep-overlay__hint">Tap to wake</span>
         </span>
       </button>

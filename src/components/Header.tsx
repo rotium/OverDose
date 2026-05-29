@@ -1,6 +1,7 @@
 import { Show, type Accessor, type Component } from 'solid-js';
 import type { WsStatus } from '../streams';
 import type { WaterSeverity } from '../water';
+import { Logo } from './Logo';
 import {
   MoonIcon,
   PowerIcon,
@@ -51,7 +52,10 @@ const WATER_PILL_LABEL: Record<Exclude<WaterSeverity, 'normal'>, string> = {
 
 export const Header: Component<HeaderProps> = (p) => (
   <header class="app-header">
-    <h1 class="app-title">OverDose</h1>
+    <div class="app-brand">
+      <Logo size={26} class="app-logo" />
+      <h1 class="app-title">OverDose</h1>
+    </div>
     <div class="app-header__pills">
       <span class="conn" data-state={p.machineStatus()}>
         machine · {PILL_LABEL[p.machineStatus()]}
