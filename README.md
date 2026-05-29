@@ -106,6 +106,22 @@ Other commands:
 - `npm run build` — type-check + production bundle to `dist/`
 - `npm test` — vitest unit + component tests
 
+### Releasing
+
+Releases are cut by pushing a version tag — no local tooling beyond `git`
+needed. A GitHub Actions workflow (`.github/workflows/release.yml`) builds the
+skin, stamps the tag into `dist/manifest.json`, zips the **contents** of
+`dist/` (so `index.html` is at the zip root) as `overdose-vX.Y.Z.zip`, and
+publishes a GitHub Release with that asset:
+
+    git tag v0.0.2
+    git push origin v0.0.2
+
+Users then install the published zip via the gateway's Skin dropdown (see
+[Installing OverDose](#installing-overdose)). To build the zip by hand instead:
+
+    npm run build && (cd dist && zip -r ../overdose-v0.0.2.zip .)
+
 ## License
 
 GPL-3.0. See [LICENSE](LICENSE).

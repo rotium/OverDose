@@ -1,0 +1,49 @@
+name: Release
+
+# Cut a release by pushing a version tag:
+#   git tag v0.0.2 && git push origin v0.0.2
+# This builds the skin, stamps the tag into dist/manifest.json, zips the
+# *contents* of dist/ (so index.html is at the zip root, as the gateway
+# expects), and publishes a GitHub Release with that zip attached.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write # needed for `gh release create`
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - name: Package dist as overdose-<tag>.zip
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          # Stamp the released version into the manifest (keeps the committed
+          # manifest's version as a dev default; the tag is the source of truth).
+          jq --arg v "$VERSION" '.version = $v' dist/manifest.json > dist/manifest.tmp
+          mv dist/manifest.tmp dist/manifest.json
+          ( cd dist && zip -r "../overdose-${GITHUB_REF_NAME}.zip" . )
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "overdose-${GITHUB_REF_NAME}.zip" \
+            --title "OverDose $GITHUB_REF_NAME" \
+            --generate-notes
