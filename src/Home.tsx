@@ -166,6 +166,7 @@ export const Home: Component<HomeProps> = (p) => {
       <Header
         machineStatus={machine.status}
         scaleStatus={scalePillStatus}
+        showScale={prefs.hasScale}
         waterSeverity={severity}
         isSleeping={isSleeping}
         isWarming={isWarming}

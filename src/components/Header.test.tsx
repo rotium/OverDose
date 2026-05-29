@@ -13,6 +13,7 @@ const setup = (
     isSleeping?: boolean;
     isWarming?: boolean;
     isHeaterOff?: boolean;
+    showScale?: boolean;
   } = {},
   handlers: Partial<{ onMenu: () => void; onToggleSleep: () => void }> = {},
 ) => {
@@ -26,12 +27,14 @@ const setup = (
   const [heaterOff, setHeaterOff] = createSignal<boolean>(
     initial.isHeaterOff ?? false,
   );
+  const [showScale] = createSignal<boolean>(initial.showScale ?? true);
   const onMenu = handlers.onMenu ?? vi.fn();
   const onToggleSleep = handlers.onToggleSleep ?? vi.fn();
   render(() => (
     <Header
       machineStatus={machine}
       scaleStatus={scale}
+      showScale={showScale}
       waterSeverity={waterSev}
       isSleeping={sleeping}
       isWarming={warming}
@@ -64,6 +67,12 @@ describe('Header', () => {
     const scalePill = screen.getByText(/scale ·/);
     expect(machinePill).toHaveAttribute('data-state', 'open');
     expect(scalePill).toHaveAttribute('data-state', 'closed');
+  });
+
+  it('hides the scale pill when showScale is false', () => {
+    setup({ scale: 'closed', showScale: false });
+    expect(screen.getByText(/machine ·/)).toBeInTheDocument();
+    expect(screen.queryByText(/scale ·/)).not.toBeInTheDocument();
   });
 
   it('reacts to status signal updates', () => {

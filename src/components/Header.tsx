@@ -25,6 +25,9 @@ import {
 export interface HeaderProps {
   machineStatus: Accessor<WsStatus>;
   scaleStatus: Accessor<WsStatus>;
+  /** Whether to show the scale status pill. Default true — set false when the
+   *  user has no scale (the pill would otherwise read permanently offline). */
+  showScale?: Accessor<boolean>;
   waterSeverity: Accessor<WaterSeverity>;
   isSleeping: Accessor<boolean>;
   /** True while the DE1's boiler is climbing to target. Surfaces an amber
@@ -60,9 +63,11 @@ export const Header: Component<HeaderProps> = (p) => (
       <span class="conn" data-state={p.machineStatus()}>
         machine · {PILL_LABEL[p.machineStatus()]}
       </span>
-      <span class="conn" data-state={p.scaleStatus()}>
-        scale · {PILL_LABEL[p.scaleStatus()]}
-      </span>
+      <Show when={p.showScale?.() ?? true}>
+        <span class="conn" data-state={p.scaleStatus()}>
+          scale · {PILL_LABEL[p.scaleStatus()]}
+        </span>
+      </Show>
       <Show when={p.waterSeverity() !== 'normal'}>
         <span
           class="alert-pill"

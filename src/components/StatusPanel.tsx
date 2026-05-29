@@ -153,16 +153,18 @@ export const StatusPanel: Component<StatusPanelProps> = (p) => {
           </Show>
         </dd>
 
-        <dt>
-          <ScaleIcon size={16} />
-          <span>Scale</span>
-        </dt>
-        <dd data-testid="status-scale">
-          {fmtWeight(scaleData()?.weight)}
-          <Show when={scaleData()?.batteryLevel != null}>
-            <span class="muted"> · {scaleData()!.batteryLevel}%</span>
-          </Show>
-        </dd>
+        <Show when={prefs.hasScale()}>
+          <dt>
+            <ScaleIcon size={16} />
+            <span>Scale</span>
+          </dt>
+          <dd data-testid="status-scale">
+            {fmtWeight(scaleData()?.weight)}
+            <Show when={scaleData()?.batteryLevel != null}>
+              <span class="muted"> · {scaleData()!.batteryLevel}%</span>
+            </Show>
+          </dd>
+        </Show>
       </dl>
     </section>
   );

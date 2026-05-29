@@ -62,3 +62,10 @@ export const DEFAULT_TRACE_VISIBILITY: TraceVisibility = {
  */
 export type WaterUnit = 'mL' | 'mm' | 'both';
 export const DEFAULT_WATER_UNIT: WaterUnit = 'mL';
+
+/**
+ * Whether a scale is part of the setup. Default true. When false, the skin
+ * hides scale UI (the header status pill, the dashboard scale readout) so a
+ * scaleless user isn't shown a permanently-offline badge.
+ */
+export const DEFAULT_HAS_SCALE = true;

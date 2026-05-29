@@ -138,6 +138,24 @@ export const DisplaySection: Component = () => {
           mid-operation (mirrors Decent.app's own screens).
         </p>
       </section>
+
+      <section class="settings-section" aria-labelledby="display-scale-heading">
+        <h2 id="display-scale-heading">Scale</h2>
+        <label class="settings-checkbox">
+          <input
+            type="checkbox"
+            data-testid="pref-has-scale"
+            checked={prefs.hasScale()}
+            onChange={(e) => prefs.setHasScale(e.currentTarget.checked)}
+          />
+          <span>I have a scale connected to the machine</span>
+        </label>
+        <p class="settings-help">
+          Turn this off if you don't use a scale — the scale status pill and
+          the dashboard weight readout are hidden instead of showing a
+          permanently-offline scale.
+        </p>
+      </section>
     </div>
   );
 };

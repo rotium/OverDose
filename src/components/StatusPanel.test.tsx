@@ -3,6 +3,8 @@ import { render, screen, fireEvent } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { StatusPanel } from './StatusPanel';
 import { WithPrefs } from '../test/prefs';
+import { UserPrefsProvider } from '../UserPrefsContext';
+import { MemoryStorage } from '../test/memoryStorage';
 import type {
   MachineSnapshot,
   ScaleMessage,
@@ -84,6 +86,27 @@ describe('StatusPanel', () => {
       expect(screen.getByTestId('status-group-temp')).toHaveTextContent('—');
       expect(screen.getByTestId('status-water')).toHaveTextContent('—');
       expect(screen.getByTestId('status-scale')).toHaveTextContent('—');
+    });
+
+    it('hides the scale row when hasScale is off', () => {
+      const store = new MemoryStorage();
+      store.setItem('starter-skin.prefs.v1', JSON.stringify({ hasScale: false }));
+      const [machine] = createSignal<MachineSnapshot | null>(null);
+      const [scale] = createSignal<ScaleMessage | null>(null);
+      const [shotSettings] = createSignal<ShotSettingsSnapshot | null>(null);
+      const [waterLevels] = createSignal<WaterLevelsSnapshot | null>(null);
+      render(() => (
+        <UserPrefsProvider storage={store}>
+          <StatusPanel
+            machine={machine}
+            scale={scale}
+            shotSettings={shotSettings}
+            waterLevels={waterLevels}
+            onSteamToggle={vi.fn()}
+          />
+        </UserPrefsProvider>
+      ));
+      expect(screen.queryByTestId('status-scale')).not.toBeInTheDocument();
     });
 
     it('renders machine state and group temp from snapshot', () => {
