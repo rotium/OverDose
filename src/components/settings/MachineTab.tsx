@@ -24,15 +24,15 @@ export interface MachineTabProps {
 }
 
 export const MachineTab: Component<MachineTabProps> = (p) => {
-  // `/api/v1/machine/settings` doesn't have a WS stream — it's request /
-  // response only — so a one-shot resource is the right shape. If the user
-  // changes the value via another client we won't see it until the tab is
-  // re-opened; acceptable since this is a "set and forget" surface.
+  // `/api/v1/machine/settings` has no WS stream — it's request/response only —
+  // so a one-shot resource is the right shape: it fetches the machine's
+  // current values each time the tab is opened (the tab unmounts/remounts via
+  // the Settings <Switch>, so a fresh read happens on every open). Steam
+  // temp/duration come live off the shotSettings WS below.
   //
   // The fetcher catches its own errors and resolves to `null` rather than
-  // rejecting. That way the resource never enters an unhandled-error state
-  // (Solid leaks those as unhandled promise rejections), and the UI just
-  // checks `settings() === null` to render the "couldn't load" copy.
+  // rejecting — so the resource never enters an unhandled-error state, and the
+  // UI checks `settings() === null` to render the "couldn't load" copy.
   const [settings, { refetch }] = createResource<MachineSettingsSnapshot | null>(
     async () => {
       try {

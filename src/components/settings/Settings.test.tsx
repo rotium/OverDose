@@ -112,16 +112,16 @@ describe('Settings', () => {
       );
     });
 
-    it('switches to Library when clicked and lands on Routines subsection', async () => {
+    it('switches to Library when clicked and lands on Recipes subsection', async () => {
       setup();
       fireEvent.click(screen.getByRole('tab', { name: 'Library' }));
       expect(screen.getByRole('tab', { name: 'Library' })).toHaveAttribute(
         'aria-selected',
         'true',
       );
-      // Library's default subsection is Routines — the list renders from
-      // the seeded LocalRoutineRepository in WithRepositories.
-      await waitFor(() => screen.getByTestId('routines-list'));
+      // Library's default subsection is Recipes — the list renders from
+      // the seeded LocalRecipeRepository in WithRepositories.
+      await waitFor(() => screen.getByTestId('recipes-list'));
     });
   });
 

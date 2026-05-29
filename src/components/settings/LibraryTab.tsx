@@ -24,12 +24,12 @@ type SectionId =
   | 'equipment';
 
 const SECTIONS: { id: SectionId; label: string }[] = [
-  { id: 'routines', label: 'Routines' },
   { id: 'recipes', label: 'Recipes' },
-  { id: 'steam', label: 'Steam' },
   { id: 'beans', label: 'Beans' },
   { id: 'profiles', label: 'Profiles' },
+  { id: 'steam', label: 'Steam' },
   { id: 'equipment', label: 'Equipment' },
+  { id: 'routines', label: 'Routines' },
 ];
 
 export interface LibraryTabProps {
@@ -39,7 +39,7 @@ export interface LibraryTabProps {
 }
 
 export const LibraryTab: Component<LibraryTabProps> = (p) => {
-  const [section, setSection] = createSignal<SectionId>('routines');
+  const [section, setSection] = createSignal<SectionId>('recipes');
 
   return (
     <div class="settings-subnav">

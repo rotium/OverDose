@@ -11,30 +11,37 @@ const renderLibrary = () =>
   ));
 
 describe('LibraryTab', () => {
-  it('renders all five subsection tabs', () => {
+  it('renders all subsection tabs', () => {
     renderLibrary();
-    for (const label of ['Routines', 'Recipes', 'Beans', 'Profiles', 'Equipment']) {
+    for (const label of [
+      'Recipes',
+      'Beans',
+      'Profiles',
+      'Steam',
+      'Equipment',
+      'Routines',
+    ]) {
       expect(screen.getByRole('tab', { name: label })).toBeInTheDocument();
     }
   });
 
-  it('defaults to Routines subsection', async () => {
+  it('defaults to the Recipes subsection', async () => {
     renderLibrary();
-    expect(screen.getByRole('tab', { name: 'Routines' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
-    await waitFor(() => screen.getByTestId('routines-list'));
-  });
-
-  it('switches subsections when a tab is clicked', async () => {
-    renderLibrary();
-    fireEvent.click(screen.getByRole('tab', { name: 'Recipes' }));
     expect(screen.getByRole('tab', { name: 'Recipes' })).toHaveAttribute(
       'aria-selected',
       'true',
     );
     await waitFor(() => screen.getByTestId('recipes-list'));
+  });
+
+  it('switches subsections when a tab is clicked', async () => {
+    renderLibrary();
+    fireEvent.click(screen.getByRole('tab', { name: 'Routines' }));
+    expect(screen.getByRole('tab', { name: 'Routines' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await waitFor(() => screen.getByTestId('routines-list'));
   });
 
   it('Beans / Profiles / Equipment render TODO shells', () => {

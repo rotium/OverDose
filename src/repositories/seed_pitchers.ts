@@ -12,7 +12,7 @@ export const SEED_PITCHERS: Pitcher[] = [
     name: 'Small',
     capacityMl: 350,
     steamDurationSec: 30,
-    steamTempC: 150,
+    steamTempC: 170,
     steamFlow: 0.8,
   },
   {
@@ -20,7 +20,7 @@ export const SEED_PITCHERS: Pitcher[] = [
     name: 'Large',
     capacityMl: 600,
     steamDurationSec: 50,
-    steamTempC: 150,
+    steamTempC: 170,
     steamFlow: 0.8,
   },
 ];
