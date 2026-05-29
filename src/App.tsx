@@ -31,6 +31,8 @@ import {
 } from './repositories';
 import { RepositoriesProvider } from './RepositoriesContext';
 import { UserPrefsProvider, useUserPrefs } from './UserPrefsContext';
+import { setDebugLogging as setDebugLoggingEnabled, dlog } from './debugLog';
+import { deriveActivity } from './machineActivity';
 import { isWaterBlocked } from './water';
 import type { Recipe } from './domain';
 import type {
@@ -163,6 +165,28 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
   // stays in place during the drawer's slide-out animation — Home doesn't
   // briefly become tappable in the gap between freeze and reset.
   const homeInert = (): boolean => live.accumulator.status() !== 'idle';
+
+  // ── Developer logging ──
+  // Mirror the pref into the leaf logger, then log the events that matter for
+  // diagnosing the brew/steam flow: machine state+activity transitions and
+  // steam-duration changes. `dlog` is a no-op while logging is off.
+  createEffect(() => setDebugLoggingEnabled(prefs.debugLogging()));
+  let lastStateKey = '';
+  createEffect(() => {
+    const snap = p.streams.machine.latest();
+    if (!snap) return;
+    const key = `${snap.state.state}/${snap.state.substate}`;
+    if (key === lastStateKey) return;
+    lastStateKey = key;
+    dlog('state', `${key}  →  ${deriveActivity(snap).kind}`);
+  });
+  let lastSteamDur: number | undefined;
+  createEffect(() => {
+    const ss = p.streams.shotSettings.latest();
+    if (!ss || ss.targetSteamDuration === lastSteamDur) return;
+    lastSteamDur = ss.targetSteamDuration;
+    dlog('steamDur', `${ss.targetSteamDuration}s`);
+  });
 
   // Standby veil. Driven straight off the machine state, so it appears
   // whenever the DE1 sleeps (header button, its own timeout, physical GHC)

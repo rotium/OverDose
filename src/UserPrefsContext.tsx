@@ -9,6 +9,7 @@ import {
 } from 'solid-js';
 import {
   DEFAULT_CHART_SMOOTHING,
+  DEFAULT_DEBUG_LOGGING,
   DEFAULT_HAS_SCALE,
   DEFAULT_TRACE_VISIBILITY,
   DEFAULT_WATER_UNIT,
@@ -35,6 +36,7 @@ interface PersistedPrefs {
   showWaterFlowSlider?: boolean;
   showFlushFlowSlider?: boolean;
   hasScale?: boolean;
+  debugLogging?: boolean;
 }
 
 export interface UserPrefsContextValue {
@@ -70,6 +72,9 @@ export interface UserPrefsContextValue {
    *  hides scale UI (header pill + dashboard readout). */
   hasScale: Accessor<boolean>;
   setHasScale: (v: boolean) => void;
+  /** Developer console/debug logging. Default off. */
+  debugLogging: Accessor<boolean>;
+  setDebugLogging: (v: boolean) => void;
 }
 
 const Ctx = createContext<UserPrefsContextValue>();
@@ -122,6 +127,9 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
   const [hasScale, setHasScale] = createSignal<boolean>(
     initial.hasScale ?? DEFAULT_HAS_SCALE,
   );
+  const [debugLogging, setDebugLogging] = createSignal<boolean>(
+    initial.debugLogging ?? DEFAULT_DEBUG_LOGGING,
+  );
 
   const setTraceVisible = (k: keyof TraceVisibility, v: boolean) =>
     setTraceVisibility({ ...traceVisibility(), [k]: v });
@@ -139,6 +147,7 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
       showWaterFlowSlider: showWaterFlowSlider(),
       showFlushFlowSlider: showFlushFlowSlider(),
       hasScale: hasScale(),
+      debugLogging: debugLogging(),
     };
     storage.setItem(STORAGE_KEY, JSON.stringify(shape));
   });
@@ -163,6 +172,8 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
     setShowFlushFlowSlider,
     hasScale,
     setHasScale,
+    debugLogging,
+    setDebugLogging,
   };
 
   return <Ctx.Provider value={value}>{p.children}</Ctx.Provider>;

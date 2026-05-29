@@ -1,6 +1,23 @@
+// `machineActivity` only type-imports this module, so this runtime import
+// introduces no cycle. `isWarmingUp`/`isHeaterOff` below delegate to it.
+import { deriveActivity } from './machineActivity';
+
+/**
+ * Machine state as reported by the gateway (`MachineState` in reaprime's
+ * `machine.dart`, serialized by enum name). Mirrors that enum 1:1 so every
+ * value the gateway can send is represented.
+ *
+ * `heating` / `preheating` are part of the gateway enum but the DE1 firmware
+ * mapping never actually produces them (warm-up is reported as `idle` +
+ * `preparingForShot`); kept here for faithfulness to the wire contract.
+ *
+ * See `docs/states.md` for the full firmware → gateway → skin map.
+ */
 export type MachineState =
-  | 'idle'
   | 'booting'
+  | 'busy'
+  | 'idle'
+  | 'schedIdle'
   | 'sleeping'
   | 'heating'
   | 'preheating'
@@ -9,12 +26,29 @@ export type MachineState =
   | 'flush'
   | 'steam'
   | 'steamRinse'
+  | 'skipStep'
   | 'cleaning'
   | 'descaling'
+  | 'calibration'
+  | 'selfTest'
   | 'airPurge'
   | 'needsWater'
-  | 'error';
+  | 'error'
+  | 'fwUpgrade';
 
+/**
+ * Machine substate (`MachineSubstate` in reaprime, serialized by enum name).
+ * Mirrors that enum 1:1, including every error substate.
+ *
+ * The gateway collapses several distinct firmware substates into these — e.g.
+ * the three warm-up substates → `preparingForShot`, and `pausedSteam` /
+ * `puffing` → `idle`. Those collapses are lossy; see `docs/states.md`.
+ *
+ * `errorNoAC` (front power switch off) is reported as `idle` + `errorNoAC` and
+ * is the only error substate the skin acts on today (see `isHeaterOff`); the
+ * rest are modelled so a fault arrives as a known value rather than an
+ * unmodelled string.
+ */
 export type MachineSubstate =
   | 'idle'
   | 'preparingForShot'
@@ -22,15 +56,26 @@ export type MachineSubstate =
   | 'pouring'
   | 'pouringDone'
   | 'cleaningStart'
-  | 'cleaingGroup'
+  | 'cleaningGroup'
   | 'cleanSoaking'
   | 'cleaningSteam'
-  /** Heater isn't getting AC — happens when the DE1's front power switch
-   *  is in the off position. Firmware state stays at `idle`; only the
-   *  substate flips. The only "real" error substate we model right now.
-   *  Reaprime exposes 17 other error substates (errorNaN, errorTSensor,
-   *  …) that we currently leave unmodelled — TypeScript will reject any
-   *  snapshot carrying one until they're added. */
+  | 'errorNaN'
+  | 'errorInf'
+  | 'errorGeneric'
+  | 'errorAcc'
+  | 'errorTSensor'
+  | 'errorPSensor'
+  | 'errorWLevel'
+  | 'errorDip'
+  | 'errorAssertion'
+  | 'errorUnsafe'
+  | 'errorInvalidParam'
+  | 'errorFlash'
+  | 'errorOOM'
+  | 'errorDeadline'
+  | 'errorHiCurrent'
+  | 'errorLoCurrent'
+  | 'errorBootFill'
   | 'errorNoAC';
 
 export interface MachineSnapshot {
@@ -72,37 +117,28 @@ export function isScaleStatusFrame(m: ScaleMessage): m is ScaleStatusFrame {
 }
 
 /**
- * True when the machine is still warming up and isn't ready to brew/steam.
- * Covers two cases:
- *   - `state === 'booting'` — right after a hard power-on, before firmware
- *     comes up.
- *   - `state === 'idle' && substate === 'preparingForShot'` — boiler is
- *     climbing to target. The DE1 firmware emits `heatWaterTank` /
- *     `heatWaterHeater` / `stabilizeMixTemp` substates during any heater
- *     cycle, and reaprime collapses all three into `preparingForShot` (see
- *     [[starter-skin-de1-substate-leak]]). When the boiler reaches target
- *     and substate transitions back to `idle`, the machine is ready.
+ * True when the machine is still warming up and isn't ready to brew/steam —
+ * `state === 'booting'`, or the boiler climbing to target (`idle` +
+ * `preparingForShot`, the collapsed warm-up substate; see
+ * [[starter-skin-de1-substate-leak]]).
+ *
+ * Thin wrapper over `deriveActivity` so the `(state, substate)` → meaning
+ * mapping lives in exactly one place (`machineActivity.ts`).
  */
 export function isWarmingUp(snap: MachineSnapshot | null): boolean {
-  if (!snap) return false;
-  const { state, substate } = snap.state;
-  if (state === 'booting') return true;
-  if (state === 'idle' && substate === 'preparingForShot') return true;
-  return false;
+  const a = deriveActivity(snap);
+  return a.kind === 'warmingUp' || a.kind === 'booting';
 }
 
 /**
- * True when the DE1's brew heater isn't powered — typically the front
- * physical switch is in the off position. The firmware reports
- * `state=idle, substate=errorNoAC` in this case; nothing else in the
- * protocol exposes the front-switch state directly. Distinct from
- * `isWarmingUp` (which is "wait, heater is on and climbing"); this is
- * "the user has to flip a switch."
+ * True when the DE1's brew heater isn't powered — typically the front physical
+ * switch is off (reported as `idle` + `errorNoAC`). Distinct from
+ * `isWarmingUp` ("heater on and climbing"); this is "flip a switch."
+ *
+ * Thin wrapper over `deriveActivity` (single source of truth).
  */
 export function isHeaterOff(snap: MachineSnapshot | null): boolean {
-  if (!snap) return false;
-  const { state, substate } = snap.state;
-  return state === 'idle' && substate === 'errorNoAC';
+  return deriveActivity(snap).kind === 'heaterOff';
 }
 
 /**

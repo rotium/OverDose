@@ -54,6 +54,7 @@ import { ProfilePicker } from './settings/sections/library/ProfilePicker';
 import { PickerDialog } from './PickerDialog';
 import { DebouncedNumberField } from './settings/sections/library/DebouncedNumberField';
 import { DebouncedSliderField } from './settings/DebouncedSliderField';
+import { dlog } from '../debugLog';
 
 /**
  * Recipe-driven brewing runtime — full-screen replacement for Home that
@@ -342,8 +343,10 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
     if (!step) return;
     const target = stepToGatewayState(step.type);
     if (ss[idx] === 'requested' && cur === target) {
+      dlog('step', `${idx} ${step.type}: running (state=${cur})`);
       updateStatus(idx, 'running');
     } else if (ss[idx] === 'running' && cur !== target) {
+      dlog('step', `${idx} ${step.type}: done (state=${cur})`);
       updateStatus(idx, 'done');
     }
   });
@@ -438,6 +441,10 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
     const flow = steamFlow();
     if (dur == null || temp == null || flow == null) return;
     const cur = p.shotSettingsStream?.().latest();
+    dlog(
+      'steam.apply',
+      `pitcher=${pitcherId() ?? 'custom'} dur=${dur}s temp=${temp}°C flow=${flow} (shotSettings ${cur ? 'present' : 'MISSING'})`,
+    );
     if (cur) {
       const update =
         p.updateShotSettings ??

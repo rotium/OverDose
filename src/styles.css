@@ -2988,6 +2988,32 @@ html {
   color: var(--muted);
 }
 
+/* Developer section action buttons. */
+.dev-actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+/* Developer build-info list: label / value rows. */
+.dev-build {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 1rem;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.dev-build dt {
+  color: var(--muted);
+}
+
+.dev-build dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  word-break: break-all;
+}
+
 /* Compact steam parameter sliders below the chips. Constrained width + a
    small label-then-slider row so they read as a minor fine-tune, not a
    full-width control. */

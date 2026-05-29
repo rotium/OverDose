@@ -13,7 +13,27 @@ export const AboutSection: Component = () => (
         OverDose v{__APP_VERSION__} · {__GIT_COMMIT__}
       </p>
       <p class="settings-help">
-        A SolidJS skin for Decent (DE1) espresso machines.
+        A focused, recipe-driven interface for your Decent espresso machine.
+      </p>
+      <p class="settings-help" data-testid="about-repo">
+        <a
+          href="https://github.com/rotium/OverDose"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          github.com/rotium/OverDose
+        </a>
+      </p>
+      <p class="settings-help" data-testid="about-license">
+        Licensed under{' '}
+        <a
+          href="https://www.gnu.org/licenses/gpl-3.0.html"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          GPL-3.0
+        </a>
+        .
       </p>
     </section>
   </div>

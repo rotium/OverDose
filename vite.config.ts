@@ -19,6 +19,7 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
     __GIT_COMMIT__: JSON.stringify(GIT_COMMIT),
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
   },
   plugins: [solid()],
   server: {

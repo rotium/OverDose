@@ -20,6 +20,7 @@ import {
   type ShotSettingsSnapshot,
 } from './snapshot';
 import type { WsStream } from './streams';
+import { dlog } from './debugLog';
 
 /**
  * Streams + side-effects the context needs in order to drive the
@@ -356,6 +357,36 @@ export const LiveShotProvider: Component<LiveShotProviderProps> = (p) => {
 
     prevState = state;
     prevSubstate = substate;
+  });
+
+  // ── Steam time-stop enforcement ──
+  // Nothing else reliably stops steam at the target duration: the DE1 firmware
+  // doesn't on its own, reaprime's SteamSequencer only does stop-at-temperature
+  // (inert today), and the simulator never stops steam. So once a steam session
+  // has run for `targetSteamDuration`, request idle — matching the countdown
+  // the user sees in LiveSteamView. Fires once per session; skipped during the
+  // trailing wand purge and when no duration is set (0 = steam until stopped).
+  let steamStopFired = false;
+  createEffect(() => {
+    const snap = p.machineStream.latest();
+    const steaming =
+      opStatus() === 'active' && opKind() === 'steam' && opPhase() !== 'purging';
+    if (!steaming) {
+      // Reset once the steam session is fully over (not merely purging).
+      if (opStatus() !== 'active' || opKind() !== 'steam') {
+        steamStopFired = false;
+      }
+      return;
+    }
+    if (!snap || steamStopFired) return;
+    const dur = p.shotSettingsStream?.latest()?.targetSteamDuration ?? 0;
+    const startMs = opStartedAtMs();
+    if (dur <= 0 || startMs === 0) return;
+    const elapsedSec = (Date.parse(snap.timestamp) - startMs) / 1000;
+    if (Number.isNaN(elapsedSec) || elapsedSec < dur) return;
+    steamStopFired = true;
+    dlog('steam.autostop', `elapsed=${elapsedSec.toFixed(1)}s ≥ dur=${dur}s → stop`);
+    void p.onStop().catch((e) => console.warn('steam auto-stop failed', e));
   });
 
   const extendSteam = async (deltaSec: number): Promise<void> => {

@@ -457,6 +457,72 @@ describe('LiveShotProvider', () => {
       expect(liveCtx().operationSession.status()).toBe('idle');
       expect(liveCtx().operationSession.phase()).toBe('idle');
     });
+
+    const steamSettings = (
+      over: Partial<ShotSettingsSnapshot> = {},
+    ): ShotSettingsSnapshot => ({
+      steamSetting: 0,
+      targetSteamTemp: 150,
+      targetSteamDuration: 30,
+      targetHotWaterTemp: 85,
+      targetHotWaterVolume: 0,
+      targetHotWaterDuration: 0,
+      targetShotVolume: 36,
+      groupTemp: 94,
+      ...over,
+    });
+
+    it('auto-stops steam once it has run for targetSteamDuration', async () => {
+      const rig = buildRig({ shotSettings: steamSettings({ targetSteamDuration: 30 }) });
+      mount(rig);
+      rig.setMachine(
+        mkSnap({
+          timestamp: '2026-05-22T08:00:00.000Z',
+          state: { state: 'steam', substate: 'pouring' },
+        }),
+      );
+      // 29 s in — not yet.
+      rig.setMachine(
+        mkSnap({
+          timestamp: '2026-05-22T08:00:29.000Z',
+          state: { state: 'steam', substate: 'pouring' },
+        }),
+      );
+      expect(rig.onStop).not.toHaveBeenCalled();
+      // Past 30 s → request stop, exactly once.
+      rig.setMachine(
+        mkSnap({
+          timestamp: '2026-05-22T08:00:31.000Z',
+          state: { state: 'steam', substate: 'pouring' },
+        }),
+      );
+      await waitFor(() => expect(rig.onStop).toHaveBeenCalledTimes(1));
+      rig.setMachine(
+        mkSnap({
+          timestamp: '2026-05-22T08:00:40.000Z',
+          state: { state: 'steam', substate: 'pouring' },
+        }),
+      );
+      expect(rig.onStop).toHaveBeenCalledTimes(1);
+    });
+
+    it('never auto-stops steam when the duration is 0 (steam until stopped)', () => {
+      const rig = buildRig({ shotSettings: steamSettings({ targetSteamDuration: 0 }) });
+      mount(rig);
+      rig.setMachine(
+        mkSnap({
+          timestamp: '2026-05-22T08:00:00.000Z',
+          state: { state: 'steam', substate: 'pouring' },
+        }),
+      );
+      rig.setMachine(
+        mkSnap({
+          timestamp: '2026-05-22T08:05:00.000Z',
+          state: { state: 'steam', substate: 'pouring' },
+        }),
+      );
+      expect(rig.onStop).not.toHaveBeenCalled();
+    });
   });
 
   describe('water + flush sessions', () => {

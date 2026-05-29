@@ -69,3 +69,11 @@ export const DEFAULT_WATER_UNIT: WaterUnit = 'mL';
  * scaleless user isn't shown a permanently-offline badge.
  */
 export const DEFAULT_HAS_SCALE = true;
+
+/**
+ * Developer console/debug logging. Default off. When on, key flow events
+ * (machine state/activity transitions, steam duration changes, brew-step and
+ * steam-stop events) are written to the console and an in-memory buffer
+ * (Settings → App → Developer).
+ */
+export const DEFAULT_DEBUG_LOGGING = false;

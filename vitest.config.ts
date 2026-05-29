@@ -9,6 +9,7 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
     __GIT_COMMIT__: JSON.stringify('test'),
+    __BUILD_TIME__: JSON.stringify('test'),
   },
   plugins: [solid()],
   test: {
