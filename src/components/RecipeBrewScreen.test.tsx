@@ -10,7 +10,12 @@ import {
 import { MemoryStorage } from '../test/memoryStorage';
 import { routineStep } from '../domain';
 import type { Routine, Recipe } from '../domain';
-import type { MachineSnapshot, MachineState } from '../snapshot';
+import type {
+  MachineSnapshot,
+  MachineState,
+  ShotSettingsSnapshot,
+} from '../snapshot';
+import type { Pitcher } from '../domain';
 import type {
   GatewayShotMeasurement,
   GatewayShotRecord,
@@ -81,10 +86,23 @@ const renderScreen = (
     saveDebounceMs?: number;
     bundleOverride?: BrewBundle;
     isWaterCritical?: () => boolean;
+    /** Seed snapshot for the shotSettings stream (the base the steam-step
+     *  start overlays its temp/duration onto). Omit to leave the stream empty. */
+    shotSettingsSnap?: ShotSettingsSnapshot | null;
+    updateShotSettings?: (s: ShotSettingsSnapshot) => Promise<void>;
+    updateMachineSettings?: (partial: { steamFlow: number }) => Promise<void>;
+    /** Steam-flow seed source; defaults to null (slider falls back to 0.8). */
+    loadMachineSettings?: () => Promise<{ steamFlow: number } | null>;
+    /** Pitcher list for the steam step's picker. Omit to use the seeded repo. */
+    loadPitchers?: () => Promise<Pitcher[]>;
+    /** Whether the steam-flow slider shows in steam prep. Default false. */
+    showFlowSlider?: () => boolean;
   },
 ): ReturnType<typeof mkSetup> & {
   onApplyWorkflow: ReturnType<typeof vi.fn>;
   updateShot: ReturnType<typeof vi.fn>;
+  updateShotSettings: ReturnType<typeof vi.fn>;
+  updateMachineSettings: ReturnType<typeof vi.fn>;
 } => {
   const env = mkSetup({ routines: opts.routines, recipes: opts.recipes });
   // Default profile fetchers return empty/null so the brew-step prep card
@@ -106,6 +124,19 @@ const renderScreen = (
   const updateShot = vi.fn(
     opts.updateShot ?? (async (_id: string, _patch: ShotAnnotationsPatch) => {}),
   );
+  const updateShotSettings = vi.fn(
+    opts.updateShotSettings ?? (async (_s: ShotSettingsSnapshot) => {}),
+  );
+  const updateMachineSettings = vi.fn(
+    opts.updateMachineSettings ?? (async (_p: { steamFlow: number }) => {}),
+  );
+  const [shotSettings] = createSignal<ShotSettingsSnapshot | null>(
+    opts.shotSettingsSnap ?? null,
+  );
+  const shotSettingsStream: WsStream<ShotSettingsSnapshot> = {
+    latest: shotSettings,
+    status: createSignal<'open'>('open')[0],
+  };
   render(() => (
     <WithRepositories routines={env.repos.routines} recipes={env.repos.recipes}>
       <RecipeBrewScreen
@@ -115,6 +146,14 @@ const renderScreen = (
         machineStream={() => env.machineStream}
         isWaterCritical={opts.isWaterCritical}
         requestState={env.requestState}
+        shotSettingsStream={() => shotSettingsStream}
+        updateShotSettings={updateShotSettings}
+        updateMachineSettings={updateMachineSettings}
+        loadMachineSettings={
+          opts.loadMachineSettings ?? (() => Promise.resolve(null))
+        }
+        loadPitchers={opts.loadPitchers}
+        showFlowSlider={opts.showFlowSlider}
         loadProfileById={loadProfileById}
         loadProfiles={loadProfiles}
         onApplyWorkflow={onApplyWorkflow}
@@ -126,7 +165,13 @@ const renderScreen = (
       />
     </WithRepositories>
   ));
-  return { ...env, onApplyWorkflow, updateShot };
+  return {
+    ...env,
+    onApplyWorkflow,
+    updateShot,
+    updateShotSettings,
+    updateMachineSettings,
+  };
 };
 
 const mkProfileRecord = (
@@ -693,22 +738,193 @@ describe('RecipeBrewScreen', () => {
   });
 
   describe('non-brew prep', () => {
-    it('steam prep has no Routine-level parameters today', async () => {
-      // No SteamConfig fields ship at the Routine layer (purge is firmware-
-      // driven, not Recipe-level). The prep card falls through to the
-      // generic "no prep needed" copy, like water and flush.
+    const baseShot: ShotSettingsSnapshot = {
+      steamSetting: 0,
+      targetSteamTemp: 150,
+      targetSteamDuration: 99,
+      targetHotWaterTemp: 85,
+      targetHotWaterVolume: 100,
+      targetHotWaterDuration: 35,
+      targetShotVolume: 36,
+      groupTemp: 94,
+    };
+
+    const PITCHERS: Pitcher[] = [
+      {
+        id: 'p-small',
+        name: 'Small',
+        capacityMl: 350,
+        steamDurationSec: 30,
+        steamTempC: 150,
+        steamFlow: 0.8,
+      },
+      {
+        id: 'p-large',
+        name: 'Large',
+        capacityMl: 600,
+        steamDurationSec: 50,
+        steamTempC: 160,
+        steamFlow: 1.2,
+      },
+    ];
+
+    const steamRoutine = () => ({
+      id: 'bev-cap',
+      name: 'Cappuccino',
+      steps: [routineStep('steam', {}, 'step-steam')],
+    });
+
+    const sliderValue = (testId: string): string =>
+      (screen.getByTestId(testId) as HTMLInputElement).value;
+
+    it('defaults to the recipe\'s pitcher and seeds the duration slider', async () => {
       renderScreen({
-        routines: [
-          {
-            id: 'bev-cap',
-            name: 'Cappuccino',
-            steps: [routineStep('steam', {}, 'step-steam')],
-          },
-        ],
-        recipes: [sampleRecipe()],
+        routines: [steamRoutine()],
+        recipes: [sampleRecipe({ pitcherId: 'p-large' })],
+        loadPitchers: () => Promise.resolve(PITCHERS),
       });
-      const card = await waitFor(() => screen.getByTestId('prep-card'));
-      expect(card).toHaveTextContent(/No prep needed/i);
+      await waitFor(() => screen.getByTestId('steam-param-duration'));
+      // The recipe's pitcher chip is selected; both chips are offered.
+      expect(screen.getByTestId('pitcher-p-small')).toBeInTheDocument();
+      expect(screen.getByTestId('pitcher-p-large')).toHaveAttribute(
+        'data-selected',
+        'true',
+      );
+      // Duration reflects the large pitcher; there is no temperature slider.
+      expect(sliderValue('steam-param-duration')).toBe('50');
+      expect(screen.queryByTestId('steam-param-temp')).not.toBeInTheDocument();
+    });
+
+    it('hides the flow slider unless the pref is on', async () => {
+      renderScreen({
+        routines: [steamRoutine()],
+        recipes: [sampleRecipe({ pitcherId: 'p-large' })],
+        loadPitchers: () => Promise.resolve(PITCHERS),
+      });
+      await waitFor(() => screen.getByTestId('steam-param-duration'));
+      expect(screen.queryByTestId('steam-param-flow')).not.toBeInTheDocument();
+    });
+
+    it('shows the flow slider when the pref is on', async () => {
+      renderScreen({
+        routines: [steamRoutine()],
+        recipes: [sampleRecipe({ pitcherId: 'p-large' })],
+        loadPitchers: () => Promise.resolve(PITCHERS),
+        showFlowSlider: () => true,
+      });
+      await waitFor(() => screen.getByTestId('steam-param-flow'));
+      expect(sliderValue('steam-param-flow')).toBe('1.2');
+    });
+
+    it('seeds the duration slider from the machine when no pitcher is named', async () => {
+      renderScreen({
+        routines: [steamRoutine()],
+        recipes: [sampleRecipe()],
+        shotSettingsSnap: baseShot, // duration 99 / temp 150
+        loadMachineSettings: () => Promise.resolve({ steamFlow: 0.6 }),
+        loadPitchers: () => Promise.resolve(PITCHERS),
+        showFlowSlider: () => true,
+      });
+      await waitFor(() => screen.getByTestId('steam-param-duration'));
+      // No chip selected; sliders show the machine's current settings.
+      expect(screen.getByTestId('pitcher-p-small')).not.toHaveAttribute(
+        'data-selected',
+      );
+      expect(sliderValue('steam-param-duration')).toBe('99');
+      expect(sliderValue('steam-param-flow')).toBe('0.6');
+    });
+
+    it('does not write any steam settings when no pitcher is chosen', async () => {
+      const env = renderScreen({
+        routines: [steamRoutine()],
+        recipes: [sampleRecipe()],
+        shotSettingsSnap: baseShot,
+        loadPitchers: () => Promise.resolve(PITCHERS),
+      });
+      await waitFor(() => screen.getByTestId('steam-param-duration'));
+      fireEvent.click(screen.getByTestId('prep-card-start'));
+      await waitFor(() =>
+        expect(env.requestState).toHaveBeenCalledWith('steam'),
+      );
+      // No pitcher + untouched → machine keeps its current steam settings.
+      expect(env.updateShotSettings).not.toHaveBeenCalled();
+      expect(env.updateMachineSettings).not.toHaveBeenCalled();
+    });
+
+    it('selecting a pitcher loads its values into the sliders', async () => {
+      renderScreen({
+        routines: [steamRoutine()],
+        recipes: [sampleRecipe({ pitcherId: 'p-small' })],
+        loadPitchers: () => Promise.resolve(PITCHERS),
+      });
+      await waitFor(() => screen.getByTestId('steam-param-duration'));
+      expect(sliderValue('steam-param-duration')).toBe('30');
+      fireEvent.click(screen.getByTestId('pitcher-p-large'));
+      expect(screen.getByTestId('pitcher-p-large')).toHaveAttribute(
+        'data-selected',
+        'true',
+      );
+      expect(sliderValue('steam-param-duration')).toBe('50');
+    });
+
+    it('editing a slider detaches from the pitcher and applies the custom value', async () => {
+      const env = renderScreen({
+        routines: [steamRoutine()],
+        recipes: [sampleRecipe({ pitcherId: 'p-small' })],
+        shotSettingsSnap: baseShot,
+        loadPitchers: () => Promise.resolve(PITCHERS),
+      });
+      const dur = (await waitFor(() =>
+        screen.getByTestId('steam-param-duration'),
+      )) as HTMLInputElement;
+      // Recipe seeded small (selected).
+      expect(screen.getByTestId('pitcher-p-small')).toHaveAttribute(
+        'data-selected',
+        'true',
+      );
+      // Drag the duration slider → pitcher deselects.
+      dur.value = '42';
+      fireEvent.input(dur);
+      fireEvent.pointerUp(dur);
+      expect(screen.getByTestId('pitcher-p-small')).not.toHaveAttribute(
+        'data-selected',
+      );
+
+      fireEvent.click(screen.getByTestId('prep-card-start'));
+      await waitFor(() => expect(env.updateShotSettings).toHaveBeenCalled());
+      const body = env.updateShotSettings.mock
+        .calls[0]![0] as ShotSettingsSnapshot;
+      // Custom duration applied; temp stays the small pitcher's seeded value.
+      expect(body.targetSteamDuration).toBe(42);
+      expect(body.targetSteamTemp).toBe(150);
+    });
+
+    it('applies the chosen pitcher\'s params before steaming', async () => {
+      const env = renderScreen({
+        routines: [steamRoutine()],
+        recipes: [sampleRecipe({ pitcherId: 'p-small' })],
+        shotSettingsSnap: baseShot,
+        loadPitchers: () => Promise.resolve(PITCHERS),
+      });
+      // Switch from the recipe default (small) to large, then start.
+      fireEvent.click(await waitFor(() => screen.getByTestId('pitcher-p-large')));
+      fireEvent.click(screen.getByTestId('prep-card-start'));
+
+      await waitFor(() => expect(env.updateShotSettings).toHaveBeenCalled());
+      const body = env.updateShotSettings.mock
+        .calls[0]![0] as ShotSettingsSnapshot;
+      // shotSettings carries temp + duration (overlaid on the live snapshot).
+      expect(body.targetSteamDuration).toBe(50);
+      expect(body.targetSteamTemp).toBe(160);
+      // Flow rides machineSettings, not shotSettings.
+      await waitFor(() =>
+        expect(env.updateMachineSettings).toHaveBeenCalledWith({
+          steamFlow: 1.2,
+        }),
+      );
+      await waitFor(() =>
+        expect(env.requestState).toHaveBeenCalledWith('steam'),
+      );
     });
 
     it('shows a "no prep needed" caption for water and flush', async () => {

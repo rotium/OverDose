@@ -1,5 +1,7 @@
 import { Show, createResource, type Component } from 'solid-js';
 import { api, type MachineSettingsSnapshot } from '../../api';
+import type { ShotSettingsSnapshot } from '../../snapshot';
+import type { WsStream } from '../../streams';
 import { DebouncedSliderField } from './DebouncedSliderField';
 
 /**
@@ -12,7 +14,16 @@ import { DebouncedSliderField } from './DebouncedSliderField';
  * Persistence: machine settings live on the firmware (MMR), not local
  * storage. We fetch on mount and POST sparse partials on change.
  */
-export const MachineTab: Component = () => {
+export interface MachineTabProps {
+  /** Live shotSettings stream — the only source of `targetSteamTemp` /
+   *  `targetSteamDuration` (the shotSettings endpoint has no REST GET).
+   *  Optional: when absent (unit tests, or before streams are wired) the
+   *  steam temperature/duration sliders degrade to a "connect to set" hint
+   *  and only steam flow (from machineSettings) renders. */
+  shotSettingsStream?: WsStream<ShotSettingsSnapshot>;
+}
+
+export const MachineTab: Component<MachineTabProps> = (p) => {
   // `/api/v1/machine/settings` doesn't have a WS stream — it's request /
   // response only — so a one-shot resource is the right shape. If the user
   // changes the value via another client we won't see it until the tab is
@@ -45,6 +56,21 @@ export const MachineTab: Component = () => {
       .catch((e) => console.warn('updateMachineSettings failed', e));
   };
 
+  // Steam temperature + duration live in `shotSettings`, not machineSettings.
+  // That endpoint is POST-only with a full body (no sparse PATCH) and has no
+  // GET, so we read the current snapshot off the WS stream and overlay the one
+  // changed field. The gateway echoes the new value back on the same stream,
+  // so the slider snaps to the confirmed value without an explicit refetch.
+  const shot = (): ShotSettingsSnapshot | null =>
+    p.shotSettingsStream?.latest() ?? null;
+  const commitShot = (partial: Partial<ShotSettingsSnapshot>) => {
+    const cur = shot();
+    if (!cur) return; // no base snapshot yet — can't build the full body
+    api
+      .updateShotSettings({ ...cur, ...partial })
+      .catch((e) => console.warn('updateShotSettings failed', e));
+  };
+
   return (
     <div class="settings-section-stack">
       <Show
@@ -62,10 +88,75 @@ export const MachineTab: Component = () => {
             <section class="settings-section" data-testid="machine-steam-section">
               <h2>Steam</h2>
               <p class="settings-help">
-                Set how fast steam flows through the wand. Lower values give
-                finer control of milk texture; higher values are faster.
-                Decent.app's default is 1.0 mL/s.
+                Defaults for steaming milk. Temperature and duration set the
+                auto-stop target; flow controls how fast steam leaves the wand
+                (lower gives finer control of milk texture). A duration of 0
+                means steam runs until you stop it.
               </p>
+
+              {/* Temperature + duration come from shotSettings (WS-only). They
+                  need a live snapshot to build the full POST body, so they
+                  render once the stream has pushed a frame. */}
+              <Show
+                when={shot()}
+                fallback={
+                  <p
+                    class="settings-help"
+                    data-testid="machine-steam-shotsettings-pending"
+                  >
+                    Connect to the machine to set steam temperature and
+                    duration.
+                  </p>
+                }
+              >
+                {(sh) => (
+                  <>
+                    <div class="settings-field settings-field--stack">
+                      <label
+                        class="settings-field__label"
+                        for="machine-steam-temp"
+                      >
+                        Steam temperature
+                      </label>
+                      <DebouncedSliderField
+                        testId="machine-steam-temp"
+                        value={sh().targetSteamTemp}
+                        onCommit={(targetSteamTemp) =>
+                          commitShot({ targetSteamTemp })
+                        }
+                        min={130}
+                        max={170}
+                        step={1}
+                        ariaLabel="Steam temperature in degrees Celsius"
+                        formatValue={(v) => `${v.toFixed(0)} °C`}
+                      />
+                    </div>
+                    <div class="settings-field settings-field--stack">
+                      <label
+                        class="settings-field__label"
+                        for="machine-steam-duration"
+                      >
+                        Steam duration
+                      </label>
+                      <DebouncedSliderField
+                        testId="machine-steam-duration"
+                        value={sh().targetSteamDuration}
+                        onCommit={(targetSteamDuration) =>
+                          commitShot({ targetSteamDuration })
+                        }
+                        min={0}
+                        max={120}
+                        step={1}
+                        ariaLabel="Steam duration in seconds"
+                        formatValue={(v) =>
+                          v <= 0 ? 'Until stopped' : `${v.toFixed(0)} s`
+                        }
+                      />
+                    </div>
+                  </>
+                )}
+              </Show>
+
               <div class="settings-field settings-field--stack">
                 <label class="settings-field__label" for="machine-steam-flow">
                   Steam flow

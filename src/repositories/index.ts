@@ -5,3 +5,6 @@ export type { RecipeRepository } from './recipe_repository';
 export { LocalRecipeRepository } from './local_recipe_repository';
 export { SEED_RECIPES, SEED_RECIPE_PROFILE_TITLES } from './seed_recipes';
 export { linkSeedRecipeProfiles } from './link_seed_profiles';
+export type { PitcherRepository } from './pitcher_repository';
+export { LocalPitcherRepository } from './local_pitcher_repository';
+export { SEED_PITCHERS } from './seed_pitchers';

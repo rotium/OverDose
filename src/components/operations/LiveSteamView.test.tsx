@@ -350,8 +350,8 @@ describe('LiveSteamView', () => {
   });
 
   describe('-5s / +5s adjust buttons', () => {
-    it('renders both buttons when a target duration is set, boiler is warm enough, and onExtend is provided', () => {
-      renderView({ snap: mkSnap({ steamTemperature: 144 }) }); // "ready" severity
+    it('renders both buttons when a target duration is set and onExtend is provided', () => {
+      renderView({ snap: mkSnap({ steamTemperature: 144 }) });
       expect(screen.getByTestId('steam-extend-minus')).toHaveTextContent(
         `−${STEAM_ADJUST_DELTA_SEC}s`,
       );
@@ -373,15 +373,10 @@ describe('LiveSteamView', () => {
       expect(screen.queryByTestId('steam-adjust-row')).not.toBeInTheDocument();
     });
 
-    it('is hidden while the boiler is still warming (cold severity)', () => {
-      // 100°C vs target 145°C → delta 45 → 'cold'.
+    it('is shown even while the boiler is still warming (no temp gate)', () => {
+      // 100°C vs target 145°C → delta 45 → 'cold'. The duration is settable
+      // regardless of boiler temp, so the adjusters stay available.
       renderView({ snap: mkSnap({ steamTemperature: 100 }) });
-      expect(screen.queryByTestId('steam-adjust-row')).not.toBeInTheDocument();
-    });
-
-    it('appears once the boiler is approaching target', () => {
-      // 140°C vs 145°C → delta 5 → 'near'.
-      renderView({ snap: mkSnap({ steamTemperature: 140 }) });
       expect(screen.getByTestId('steam-adjust-row')).toBeInTheDocument();
     });
 

@@ -63,6 +63,14 @@ export interface Recipe {
    * can tune profile per-bean (matches grind / dose / bean).
    */
   profileId?: string;
+  /**
+   * Milk pitcher used by the steam step. References Pitcher.id from the
+   * Steam library; the pitcher carries the steam parameters (duration,
+   * temp, flow) applied at brew time. Optional — when unset (or the
+   * referenced pitcher is gone) the steam step falls back to the machine's
+   * current steam settings.
+   */
+  pitcherId?: string;
   /** Optional path to a tile image displayed in the picker. */
   iconUrl?: string;
 }

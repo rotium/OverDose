@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
+import { createSignal, type JSX } from 'solid-js';
 import { MachineTab } from './MachineTab';
 import type { MachineSettingsSnapshot } from '../../api';
+import type { ShotSettingsSnapshot } from '../../snapshot';
+import type { WsStream } from '../../streams';
+
+const renderTab = (ui: () => JSX.Element) => render(ui);
 
 const baseSettings: MachineSettingsSnapshot = {
   fan: 50,
@@ -33,6 +38,25 @@ const mkFetchMock = (
   });
 };
 
+const baseShot: ShotSettingsSnapshot = {
+  steamSetting: 0,
+  targetSteamTemp: 150,
+  targetSteamDuration: 30,
+  targetHotWaterTemp: 85,
+  targetHotWaterVolume: 100,
+  targetHotWaterDuration: 35,
+  targetShotVolume: 36,
+  groupTemp: 94,
+};
+
+const mkShotStream = (
+  value: ShotSettingsSnapshot | null,
+): WsStream<ShotSettingsSnapshot> => {
+  const [latest] = createSignal<ShotSettingsSnapshot | null>(value);
+  const [status] = createSignal<'open'>('open');
+  return { latest, status };
+};
+
 describe('MachineTab — steam flow', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', mkFetchMock());
@@ -43,12 +67,12 @@ describe('MachineTab — steam flow', () => {
   });
 
   it('shows loading copy while machine settings are fetching', () => {
-    render(() => <MachineTab />);
+    renderTab(() => <MachineTab />);
     expect(screen.getByTestId('machine-settings-loading')).toBeInTheDocument();
   });
 
   it('renders the slider with the fetched steamFlow once loaded', async () => {
-    render(() => <MachineTab />);
+    renderTab(() => <MachineTab />);
     await waitFor(() =>
       expect(screen.queryByTestId('machine-settings-loading')).not.toBeInTheDocument(),
     );
@@ -63,7 +87,7 @@ describe('MachineTab — steam flow', () => {
     const fetchMock = mkFetchMock();
     vi.stubGlobal('fetch', fetchMock);
 
-    render(() => <MachineTab />);
+    renderTab(() => <MachineTab />);
     await waitFor(() => screen.getByTestId('machine-steam-flow'));
 
     const slider = screen.getByTestId('machine-steam-flow') as HTMLInputElement;
@@ -86,7 +110,7 @@ describe('MachineTab — steam flow', () => {
       'fetch',
       vi.fn().mockResolvedValue(new Response('', { status: 500 })),
     );
-    render(() => <MachineTab />);
+    renderTab(() => <MachineTab />);
     await waitFor(() =>
       expect(screen.getByTestId('machine-settings-loading')).toHaveTextContent(
         'Could not load machine settings.',
@@ -105,7 +129,7 @@ describe('MachineTab — flush defaults', () => {
   });
 
   it('renders the timeout + flow sliders with the fetched values once loaded', async () => {
-    render(() => <MachineTab />);
+    renderTab(() => <MachineTab />);
     await waitFor(() =>
       expect(screen.queryByTestId('machine-settings-loading')).not.toBeInTheDocument(),
     );
@@ -126,7 +150,7 @@ describe('MachineTab — flush defaults', () => {
     const fetchMock = mkFetchMock();
     vi.stubGlobal('fetch', fetchMock);
 
-    render(() => <MachineTab />);
+    renderTab(() => <MachineTab />);
     await waitFor(() => screen.getByTestId('machine-flush-timeout'));
 
     const slider = screen.getByTestId('machine-flush-timeout') as HTMLInputElement;
@@ -149,7 +173,7 @@ describe('MachineTab — flush defaults', () => {
     const fetchMock = mkFetchMock();
     vi.stubGlobal('fetch', fetchMock);
 
-    render(() => <MachineTab />);
+    renderTab(() => <MachineTab />);
     await waitFor(() => screen.getByTestId('machine-flush-flow'));
 
     const slider = screen.getByTestId('machine-flush-flow') as HTMLInputElement;
@@ -164,6 +188,89 @@ describe('MachineTab — flush defaults', () => {
       expect(postCall).toBeDefined();
       expect((postCall![1] as RequestInit).body).toBe(
         JSON.stringify({ flushFlow: 7.5 }),
+      );
+    });
+  });
+});
+
+describe('MachineTab — steam temperature + duration', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', mkFetchMock());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('shows the connect hint and no temp/duration sliders without a stream', async () => {
+    renderTab(() => <MachineTab />);
+    await waitFor(() =>
+      expect(
+        screen.queryByTestId('machine-settings-loading'),
+      ).not.toBeInTheDocument(),
+    );
+    expect(
+      screen.getByTestId('machine-steam-shotsettings-pending'),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('machine-steam-temp')).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId('machine-steam-duration'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('renders the temp + duration sliders from the shotSettings frame', async () => {
+    renderTab(() => <MachineTab shotSettingsStream={mkShotStream(baseShot)} />);
+    await waitFor(() => screen.getByTestId('machine-steam-temp'));
+
+    const temp = screen.getByTestId('machine-steam-temp') as HTMLInputElement;
+    expect(temp.value).toBe('150');
+    expect(temp.min).toBe('130');
+    expect(temp.max).toBe('170');
+    expect(screen.getByTestId('machine-steam-temp-value')).toHaveTextContent(
+      '150 °C',
+    );
+
+    const dur = screen.getByTestId('machine-steam-duration') as HTMLInputElement;
+    expect(dur.value).toBe('30');
+    expect(dur.max).toBe('120');
+    expect(
+      screen.getByTestId('machine-steam-duration-value'),
+    ).toHaveTextContent('30 s');
+  });
+
+  it('renders "Until stopped" when the steam duration is 0', async () => {
+    renderTab(() => (
+      <MachineTab
+        shotSettingsStream={mkShotStream({ ...baseShot, targetSteamDuration: 0 })}
+      />
+    ));
+    await waitFor(() => screen.getByTestId('machine-steam-duration'));
+    expect(
+      screen.getByTestId('machine-steam-duration-value'),
+    ).toHaveTextContent('Until stopped');
+  });
+
+  it('POSTs the full shotSettings body with the overlaid duration', async () => {
+    const fetchMock = mkFetchMock();
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderTab(() => <MachineTab shotSettingsStream={mkShotStream(baseShot)} />);
+    await waitFor(() => screen.getByTestId('machine-steam-duration'));
+
+    const dur = screen.getByTestId('machine-steam-duration') as HTMLInputElement;
+    dur.value = '45';
+    fireEvent.input(dur);
+    fireEvent.pointerUp(dur);
+
+    await waitFor(() => {
+      const postCall = fetchMock.mock.calls.find(
+        (call) =>
+          (call[1] as RequestInit | undefined)?.method === 'POST' &&
+          String(call[0]).includes('shotSettings'),
+      );
+      expect(postCall).toBeDefined();
+      expect((postCall![1] as RequestInit).body).toBe(
+        JSON.stringify({ ...baseShot, targetSteamDuration: 45 }),
       );
     });
   });

@@ -224,17 +224,15 @@ export const LiveSteamView: Component<LiveSteamViewProps> = (p) => {
     }
   };
 
-  // Adjust-button visibility + per-direction enablement. Hidden while the
-  // boiler is still warming (no point trimming a duration the user can't
-  // act on yet), when there's no countdown to adjust, and during the
-  // post-steam wand purge (firmware-driven; nothing to extend or trim).
-  // Per-button disabled-state enforces the bounds so the user doesn't burn
-  // taps hammering against a clamp.
+  // Adjust-button visibility + per-direction enablement. Shown whenever
+  // there's a countdown to adjust — the duration is just a number, settable
+  // regardless of boiler temp, so the buttons are available from the start of
+  // steam (no warming-up gate). Hidden only when there's no countdown and
+  // during the post-steam wand purge (firmware-driven; nothing to extend or
+  // trim). Per-button disabled-state enforces the bounds so the user doesn't
+  // burn taps hammering against a clamp.
   const showAdjusters = (): boolean =>
-    !!p.onExtend &&
-    heroTimer().mode === 'countdown' &&
-    tempSeverity() !== 'cold' &&
-    !isPurging();
+    !!p.onExtend && heroTimer().mode === 'countdown' && !isPurging();
   const currentDurationSec = (): number => targetDurationSec() ?? 0;
   const canDecreaseSteam = (): boolean =>
     currentDurationSec() > STEAM_DURATION_MIN_SEC;

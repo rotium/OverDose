@@ -7,6 +7,7 @@ import {
 import type {
   RoutineRepository,
   RecipeRepository,
+  PitcherRepository,
 } from './repositories';
 
 /**
@@ -21,6 +22,7 @@ import type {
 export interface RepositoriesContextValue {
   routines: RoutineRepository;
   recipes: RecipeRepository;
+  pitchers: PitcherRepository;
 }
 
 const Ctx = createContext<RepositoriesContextValue>();
@@ -28,6 +30,7 @@ const Ctx = createContext<RepositoriesContextValue>();
 export interface RepositoriesProviderProps {
   routines: RoutineRepository;
   recipes: RecipeRepository;
+  pitchers: PitcherRepository;
   children?: JSX.Element;
 }
 
@@ -36,6 +39,7 @@ export const RepositoriesProvider: Component<RepositoriesProviderProps> = (p) =>
   const value: RepositoriesContextValue = {
     routines: p.routines,
     recipes: p.recipes,
+    pitchers: p.pitchers,
   };
   return <Ctx.Provider value={value}>{p.children}</Ctx.Provider>;
 };

@@ -15,12 +15,18 @@ import { RecipeBrewScreen } from './components/RecipeBrewScreen';
 import { SleepOverlay } from './components/SleepOverlay';
 import { Settings } from './components/settings/Settings';
 import type { ExploreOp } from './components/ExploreTray';
-import { buildExploreBrewBundle, EXPLORE_BREW_RECIPE_ID } from './exploreBrew';
+import {
+  buildExploreBrewBundle,
+  buildExploreSteamBundle,
+  EXPLORE_BREW_RECIPE_ID,
+  EXPLORE_STEAM_RECIPE_ID,
+} from './exploreBrew';
 import { LiveShotProvider, useLiveShot } from './LiveShotContext';
 import { frozenToGatewayShotRecord } from './liveShotAdapter';
 import {
   LocalRoutineRepository,
   LocalRecipeRepository,
+  LocalPitcherRepository,
   linkSeedRecipeProfiles,
 } from './repositories';
 import { RepositoriesProvider } from './RepositoriesContext';
@@ -38,6 +44,7 @@ import type { WsStream } from './streams';
 
 const routineRepository = new LocalRoutineRepository();
 const recipeRepository = new LocalRecipeRepository();
+const pitcherRepository = new LocalPitcherRepository();
 
 const onSleep = () =>
   api.sleep().catch((e) => console.warn('sleep failed', e));
@@ -99,11 +106,13 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
   const onSelectRecipe = (r: Recipe) => setActiveBrewRecipeId(r.id);
   const onExitBrew = () => setActiveBrewRecipeId(null);
 
-  // Explore tray: run a machine op directly, no recipe. Steam/water/flush
-  // just request the state — the LiveBrewDrawer shows the live view and
-  // closes on idle. Brew opens an ad-hoc prep→live→summary built from the
-  // gateway's current workflow (fetched fresh each time the flow opens).
+  // Explore tray: run a machine op directly, no recipe. Brew and Steam open
+  // an ad-hoc prep→live→summary screen (Brew seeds from the gateway's current
+  // workflow; Steam runs the pitcher-pick prep). Water/flush have no prep, so
+  // they just request the state — the LiveBrewDrawer shows the live view and
+  // closes on idle.
   const [exploreBrewing, setExploreBrewing] = createSignal(false);
+  const [exploreSteaming, setExploreSteaming] = createSignal(false);
   const [exploreBundle] = createResource(exploreBrewing, async () => {
     const [workflow, profiles] = await Promise.all([
       api.workflow().catch(() => null),
@@ -116,8 +125,11 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
       setExploreBrewing(true);
       return;
     }
-    const state: MachineState =
-      op === 'steam' ? 'steam' : op === 'water' ? 'hotWater' : 'flush';
+    if (op === 'steam') {
+      setExploreSteaming(true);
+      return;
+    }
+    const state: MachineState = op === 'water' ? 'hotWater' : 'flush';
     void api.requestState(state).catch((e) => console.warn(`explore ${op} failed`, e));
   };
   // Frozen-shot hand-off to LastShotCard. The signal is *sticky*: it's set
@@ -163,7 +175,11 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
       <Show
         when={!settingsOpen()}
         fallback={
-          <Settings onBack={onCloseSettings} onClose={onCloseSettings} />
+          <Settings
+            onBack={onCloseSettings}
+            onClose={onCloseSettings}
+            shotSettingsStream={p.streams.shotSettings}
+          />
         }
       >
         <Switch
@@ -196,6 +212,8 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
               machineStream={() => p.streams.machine}
               isWaterCritical={isWaterCritical}
               requestState={api.requestState}
+              shotSettingsStream={() => p.streams.shotSettings}
+              showFlowSlider={() => prefs.showSteamFlowSlider()}
               fetchLatestShot={api.shotsLatest}
               fetchShot={api.shotById}
               optimisticShot={optimisticShot}
@@ -215,11 +233,28 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
                 machineStream={() => p.streams.machine}
                 isWaterCritical={isWaterCritical}
                 requestState={api.requestState}
+                shotSettingsStream={() => p.streams.shotSettings}
+                showFlowSlider={() => prefs.showSteamFlowSlider()}
                 fetchLatestShot={api.shotsLatest}
                 fetchShot={api.shotById}
                 optimisticShot={optimisticShot}
               />
             </Show>
+          </Match>
+          <Match when={exploreSteaming()}>
+            <RecipeBrewScreen
+              recipeId={EXPLORE_STEAM_RECIPE_ID}
+              bundleOverride={buildExploreSteamBundle()}
+              onExit={() => setExploreSteaming(false)}
+              machineStream={() => p.streams.machine}
+              isWaterCritical={isWaterCritical}
+              requestState={api.requestState}
+              shotSettingsStream={() => p.streams.shotSettings}
+              showFlowSlider={() => prefs.showSteamFlowSlider()}
+              fetchLatestShot={api.shotsLatest}
+              fetchShot={api.shotById}
+              optimisticShot={optimisticShot}
+            />
           </Match>
         </Switch>
       </Show>
@@ -254,6 +289,7 @@ export const App: Component = () => {
       <RepositoriesProvider
         routines={routineRepository}
         recipes={recipeRepository}
+        pitchers={pitcherRepository}
       >
         <LiveShotProvider
           machineStream={streams.machine}

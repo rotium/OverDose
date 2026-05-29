@@ -1,4 +1,6 @@
 import { Match, Switch, createSignal, type Component } from 'solid-js';
+import type { ShotSettingsSnapshot } from '../../snapshot';
+import type { WsStream } from '../../streams';
 import { AppTab } from './AppTab';
 import { GatewayTab } from './GatewayTab';
 import { LibraryTab } from './LibraryTab';
@@ -21,6 +23,10 @@ import { MachineTab } from './MachineTab';
 export interface SettingsProps {
   onBack: () => void;
   onClose: () => void;
+  /** Live shotSettings stream, passed through to the Machine tab for the
+   *  steam temperature/duration sliders. Optional so tests can mount Settings
+   *  without wiring streams. */
+  shotSettingsStream?: WsStream<ShotSettingsSnapshot>;
 }
 
 type Tab = 'app' | 'gateway' | 'machine' | 'library';
@@ -81,10 +87,10 @@ export const Settings: Component<SettingsProps> = (p) => {
             <GatewayTab />
           </Match>
           <Match when={tab() === 'machine'}>
-            <MachineTab />
+            <MachineTab shotSettingsStream={p.shotSettingsStream} />
           </Match>
           <Match when={tab() === 'library'}>
-            <LibraryTab />
+            <LibraryTab shotSettingsStream={p.shotSettingsStream} />
           </Match>
         </Switch>
       </div>

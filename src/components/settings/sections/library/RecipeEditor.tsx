@@ -8,7 +8,7 @@ import {
   type Component,
 } from 'solid-js';
 import { formatStepType } from '../../../../domain';
-import type { Routine, Recipe } from '../../../../domain';
+import type { Routine, Recipe, Pitcher } from '../../../../domain';
 import { useRepositories } from '../../../../RepositoriesContext';
 import { DebouncedNumberField } from './DebouncedNumberField';
 import { PickerDialog } from '../../../PickerDialog';
@@ -61,6 +61,7 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
   // detach-clone can still resolve its parent's name + step sequence in
   // the header. The picker below filters visible ones for user selection.
   const [routines] = createResource<Routine[]>(() => repos.routines.list());
+  const [pitchers] = createResource<Pitcher[]>(() => repos.pitchers.list());
   const visibleRoutines = (): Routine[] =>
     (routines() ?? []).filter((b) => !b.hidden);
   const parentRoutine = (): Routine | undefined => {
@@ -118,6 +119,18 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
     const r = recipe();
     if (!r || r.routineId === routineId) return;
     void saveRecipe({ ...r, routineId });
+  };
+
+  // The pitcher picker only matters when the routine actually steams.
+  const hasSteamStep = (): boolean =>
+    (parentRoutine()?.steps ?? []).some((s) => s.type === 'steam');
+
+  const handlePitcherChange = (value: string) => {
+    const r = recipe();
+    if (!r) return;
+    const pitcherId = value === '' ? undefined : value;
+    if (r.pitcherId === pitcherId) return;
+    void saveRecipe({ ...r, pitcherId });
   };
 
   const handleDoseCommit = (g: number | undefined) => {
@@ -246,6 +259,49 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
                   onClear={handleProfileClear}
                 />
               </section>
+
+              <Show when={hasSteamStep()}>
+                <section class="settings-section" data-testid="recipe-pitcher-section">
+                  <h3>Pitcher</h3>
+                  <p class="settings-help">
+                    Which milk pitcher this recipe steams with. The pitcher's
+                    steam settings are applied at brew time. Manage pitchers in
+                    Library → Steam.
+                  </p>
+                  <Show
+                    when={!pitchers.loading}
+                    fallback={<p class="muted">loading pitchers…</p>}
+                  >
+                    <select
+                      class="recipe-editor__routine-select"
+                      aria-label="Pitcher"
+                      data-testid="recipe-pitcher-select"
+                      value={r().pitcherId ?? ''}
+                      onChange={(e) => handlePitcherChange(e.currentTarget.value)}
+                    >
+                      <option value="">No pitcher (use machine default)</option>
+                      <For each={pitchers() ?? []}>
+                        {(pt) => (
+                          <option value={pt.id}>
+                            {pt.name} — {pt.capacityMl} mL
+                          </option>
+                        )}
+                      </For>
+                      <Show
+                        when={
+                          r().pitcherId &&
+                          !(pitchers() ?? []).some((pt) => pt.id === r().pitcherId)
+                        }
+                      >
+                        {/* Keep a dangling reference selectable + visible. */}
+                        <option value={r().pitcherId}>
+                          (missing pitcher — {r().pitcherId})
+                        </option>
+                      </Show>
+                    </select>
+                  </Show>
+                </section>
+              </Show>
 
               <section class="settings-section">
                 <h3>Brewing</h3>

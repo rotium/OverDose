@@ -8,8 +8,9 @@
  * (weighing dose, grinding) is derived from those Recipe fields at run
  * time, not declared as Beverage steps.
  *
- * `auto-purge` is NOT a step type — it's a SteamConfig field (see
- * `steps.ts`).
+ * Step-specific tunables (e.g. steam's per-pitcher durations) are NOT step
+ * types — they're config fields on the matching `*Config` interface in
+ * `steps.ts`, resolved through the Recipe-override chain.
  */
 export const STEP_TYPES = ['brew', 'steam', 'water', 'flush'] as const;
 export type StepType = (typeof STEP_TYPES)[number];

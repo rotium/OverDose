@@ -82,13 +82,13 @@ const renderEditor = (opts: SeedOpts, recipeId = 'rec-1') => {
     opts.loadProfileById ?? (() => Promise.resolve<ProfileRecord | null>(null));
   render(() => (
     <WithRepositories routines={repos.routines} recipes={repos.recipes}>
-      <RecipeEditor
-        recipeId={recipeId}
-        onClose={onClose}
-        debounceMs={0}
-        loadProfiles={loadProfiles}
-        loadProfileById={loadProfileById}
-      />
+        <RecipeEditor
+          recipeId={recipeId}
+          onClose={onClose}
+          debounceMs={0}
+          loadProfiles={loadProfiles}
+          loadProfileById={loadProfileById}
+        />
     </WithRepositories>
   ));
   return { repos, onClose };
@@ -527,6 +527,52 @@ describe('RecipeEditor', () => {
       expect(screen.queryByTestId('delete-confirm')).not.toBeInTheDocument();
       expect(await repos.recipes.get('rec-1')).not.toBeNull();
       expect(onClose).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('RecipeEditor — pitcher picker', () => {
+  it('hides the pitcher picker when the routine has no steam step', async () => {
+    renderEditor({
+      routines: [espressoBev()],
+      recipes: [sampleRecipe({ routineId: 'bev-esp' })],
+    });
+    await waitFor(() => screen.getByTestId('recipe-editor'));
+    expect(
+      screen.queryByTestId('recipe-pitcher-section'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows the picker for a steaming routine and persists the choice', async () => {
+    const { repos } = renderEditor({
+      routines: [cappuccinoBev()],
+      recipes: [sampleRecipe()],
+    });
+    const select = (await waitFor(() =>
+      screen.getByTestId('recipe-pitcher-select'),
+    )) as HTMLSelectElement;
+    // Seeded pitchers are available as options.
+    select.value = 'seed-pitcher-large';
+    fireEvent.change(select);
+    await waitFor(async () => {
+      expect((await repos.recipes.get('rec-1'))?.pitcherId).toBe(
+        'seed-pitcher-large',
+      );
+    });
+  });
+
+  it('clearing the pitcher stores undefined', async () => {
+    const { repos } = renderEditor({
+      routines: [cappuccinoBev()],
+      recipes: [sampleRecipe({ pitcherId: 'seed-pitcher-large' })],
+    });
+    const select = (await waitFor(() =>
+      screen.getByTestId('recipe-pitcher-select'),
+    )) as HTMLSelectElement;
+    select.value = '';
+    fireEvent.change(select);
+    await waitFor(async () => {
+      expect((await repos.recipes.get('rec-1'))?.pitcherId).toBeUndefined();
     });
   });
 });

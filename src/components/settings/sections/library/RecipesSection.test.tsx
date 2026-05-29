@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
 import { RecipesSection } from './RecipesSection';
 import { WithRepositories } from '../../../../test/repositories';
+import { WithPrefs } from '../../../../test/prefs';
 import {
   LocalRoutineRepository,
   LocalRecipeRepository,
@@ -53,9 +54,11 @@ describe('RecipesSection', () => {
       ],
     );
     render(() => (
-      <WithRepositories routines={repos.routines} recipes={repos.recipes}>
+      <WithPrefs>
+        <WithRepositories routines={repos.routines} recipes={repos.recipes}>
         <RecipesSection />
-      </WithRepositories>
+        </WithRepositories>
+      </WithPrefs>
     ));
     await waitFor(() => screen.getByTestId('recipes-list'));
     expect(screen.getByTestId('recipe-row-r1')).toHaveTextContent("Wife's");
@@ -75,9 +78,11 @@ describe('RecipesSection', () => {
       [{ id: 'empty-bev', name: 'Blank', steps: [] }],
     );
     render(() => (
-      <WithRepositories routines={repos.routines} recipes={repos.recipes}>
+      <WithPrefs>
+        <WithRepositories routines={repos.routines} recipes={repos.recipes}>
         <RecipesSection />
-      </WithRepositories>
+        </WithRepositories>
+      </WithPrefs>
     ));
     await waitFor(() =>
       expect(screen.getByTestId('recipe-row-r1-sequence')).toHaveTextContent(
@@ -99,9 +104,11 @@ describe('RecipesSection', () => {
       [],
     );
     render(() => (
-      <WithRepositories routines={repos.routines} recipes={repos.recipes}>
+      <WithPrefs>
+        <WithRepositories routines={repos.routines} recipes={repos.recipes}>
         <RecipesSection />
-      </WithRepositories>
+        </WithRepositories>
+      </WithPrefs>
     ));
     await waitFor(() =>
       expect(screen.getByTestId('recipe-row-orphan')).toHaveTextContent(
@@ -113,9 +120,11 @@ describe('RecipesSection', () => {
   it('shows an empty-state message when there are no recipes', async () => {
     const repos = seed([], []);
     render(() => (
-      <WithRepositories routines={repos.routines} recipes={repos.recipes}>
+      <WithPrefs>
+        <WithRepositories routines={repos.routines} recipes={repos.recipes}>
         <RecipesSection />
-      </WithRepositories>
+        </WithRepositories>
+      </WithPrefs>
     ));
     await waitFor(() => screen.getByText(/no recipes yet/i));
   });
@@ -133,9 +142,11 @@ describe('RecipesSection', () => {
         ],
       );
       render(() => (
+        <WithPrefs>
         <WithRepositories routines={repos.routines} recipes={repos.recipes}>
           <RecipesSection />
-        </WithRepositories>
+          </WithRepositories>
+      </WithPrefs>
       ));
       await waitFor(() => screen.getByTestId('recipe-row-r1'));
       fireEvent.click(screen.getByTestId('recipe-row-r1'));
@@ -157,9 +168,11 @@ describe('RecipesSection', () => {
         ],
       );
       render(() => (
+        <WithPrefs>
         <WithRepositories routines={repos.routines} recipes={repos.recipes}>
           <RecipesSection />
-        </WithRepositories>
+          </WithRepositories>
+      </WithPrefs>
       ));
       await waitFor(() => screen.getByTestId('recipe-row-r1'));
       fireEvent.click(screen.getByTestId('recipe-row-r1'));
@@ -177,9 +190,11 @@ describe('RecipesSection', () => {
     it('disables the + button when no routines exist', async () => {
       const repos = seed([], []);
       render(() => (
+        <WithPrefs>
         <WithRepositories routines={repos.routines} recipes={repos.recipes}>
           <RecipesSection />
-        </WithRepositories>
+          </WithRepositories>
+      </WithPrefs>
       ));
       const btn = (await waitFor(() =>
         screen.getByTestId('open-new-recipe'),
@@ -204,9 +219,11 @@ describe('RecipesSection', () => {
         ],
       );
       render(() => (
+        <WithPrefs>
         <WithRepositories routines={repos.routines} recipes={repos.recipes}>
           <RecipesSection />
-        </WithRepositories>
+          </WithRepositories>
+      </WithPrefs>
       ));
       fireEvent.click(await waitFor(() => screen.getByTestId('open-new-recipe')));
       const select = (await waitFor(() =>
@@ -234,9 +251,11 @@ describe('RecipesSection', () => {
         ],
       );
       render(() => (
+        <WithPrefs>
         <WithRepositories routines={repos.routines} recipes={repos.recipes}>
           <RecipesSection />
-        </WithRepositories>
+          </WithRepositories>
+      </WithPrefs>
       ));
       fireEvent.click(await waitFor(() => screen.getByTestId('open-new-recipe')));
 
@@ -282,9 +301,11 @@ describe('RecipesSection', () => {
         ],
       );
       render(() => (
+        <WithPrefs>
         <WithRepositories routines={repos.routines} recipes={repos.recipes}>
           <RecipesSection />
-        </WithRepositories>
+          </WithRepositories>
+      </WithPrefs>
       ));
       fireEvent.click(await waitFor(() => screen.getByTestId('open-new-recipe')));
       fireEvent.click(screen.getByTestId('cancel-new-recipe'));
@@ -313,9 +334,11 @@ describe('RecipesSection', () => {
       ],
     );
     render(() => (
-      <WithRepositories routines={repos.routines} recipes={repos.recipes}>
+      <WithPrefs>
+        <WithRepositories routines={repos.routines} recipes={repos.recipes}>
         <RecipesSection />
-      </WithRepositories>
+        </WithRepositories>
+      </WithPrefs>
     ));
     await waitFor(() =>
       expect(screen.getByTestId('recipe-row-detached')).toHaveTextContent(

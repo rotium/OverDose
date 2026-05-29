@@ -48,3 +48,26 @@ export const buildExploreBrewBundle = (
   };
   return { recipe, routine };
 };
+
+export const EXPLORE_STEAM_RECIPE_ID = 'explore-steam';
+
+/**
+ * Build the one-off steam that the Explore "Steam" tile runs. A synthetic
+ * single steam-step routine so `RecipeBrewScreen` runs its prep (pitcher
+ * pick) → live → summary pipeline via `bundleOverride`. No pitcher is set, so
+ * the steam prep seeds from the machine's current settings.
+ */
+export const buildExploreSteamBundle = (): BrewBundle => {
+  const routine: Routine = {
+    id: 'explore-steam-routine',
+    name: 'Steam',
+    steps: [routineStep('steam', {}, 'explore-steam-step')],
+  };
+  const recipe: Recipe = {
+    id: EXPLORE_STEAM_RECIPE_ID,
+    name: 'Steam',
+    routineId: routine.id,
+    overrides: {},
+  };
+  return { recipe, routine };
+};

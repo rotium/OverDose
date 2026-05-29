@@ -15,6 +15,7 @@ import {
 } from 'solid-js';
 import {
   formatStepType,
+  type Pitcher,
   type Routine,
   type RoutineStep,
   type Recipe,
@@ -26,6 +27,7 @@ import {
   isWarmingUp,
   type MachineSnapshot,
   type MachineState,
+  type ShotSettingsSnapshot,
 } from '../snapshot';
 import { PowerIcon, ThermometerIcon, WaterDropIcon } from './icons';
 import type { WsStream } from '../streams';
@@ -51,6 +53,7 @@ import { ProfileCurveChart } from './settings/sections/library/ProfileCurveChart
 import { ProfilePicker } from './settings/sections/library/ProfilePicker';
 import { PickerDialog } from './PickerDialog';
 import { DebouncedNumberField } from './settings/sections/library/DebouncedNumberField';
+import { DebouncedSliderField } from './settings/DebouncedSliderField';
 
 /**
  * Recipe-driven brewing runtime — full-screen replacement for Home that
@@ -116,6 +119,28 @@ export interface RecipeBrewScreenProps {
   isWaterCritical?: Accessor<boolean>;
   /** Fires a gateway state request (typically `api.requestState`). */
   requestState: (state: MachineState) => Promise<void>;
+  /** Live shotSettings stream — needed to build the full-body shotSettings
+   *  POST that applies the chosen pitcher's steam temp + duration when a
+   *  steam step starts. Optional: when absent (tests) the write is skipped
+   *  and the firmware keeps whatever settings it already has. */
+  shotSettingsStream?: () => WsStream<ShotSettingsSnapshot>;
+  /** Persists shotSettings (full body). Defaults to `api.updateShotSettings`. */
+  updateShotSettings?: (settings: ShotSettingsSnapshot) => Promise<void>;
+  /** Sparse machine-settings update — used to apply the steam flow (which
+   *  lives on machineSettings, not shotSettings). Defaults to
+   *  `api.updateMachineSettings`. */
+  updateMachineSettings?: (partial: { steamFlow: number }) => Promise<void>;
+  /** One-shot machine-settings fetch — seeds the steam-flow slider from the
+   *  machine's current value when no pitcher is preselected. Only `steamFlow`
+   *  is read. Defaults to `api.machineSettings` (null on failure). */
+  loadMachineSettings?: () => Promise<{ steamFlow: number } | null>;
+  /** Pitcher-list fetcher for the steam step's pitcher picker. Defaults to
+   *  the repository (`repos.pitchers.list`). */
+  loadPitchers?: () => Promise<Pitcher[]>;
+  /** Whether the steam-flow slider is shown in steam prep — mirrors the
+   *  "Show steam-flow slider during steaming" pref. Default false; flow is
+   *  still applied from the pitcher either way, just not editable here. */
+  showFlowSlider?: () => boolean;
   /** Single-profile fetcher used to render the brew step's prep card.
    *  Resolves to `null` on any failure (deleted, hidden, gateway offline)
    *  so the prep card degrades to a graceful "(missing profile)" hint
@@ -332,15 +357,117 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
     });
   };
 
-  const startCurrentStep = () => {
+  // ── Steam: pitcher presets + editable parameters ──
+  // Pitchers are presets; the three sliders are the values actually applied.
+  // Picking a pitcher loads its values into the sliders; editing a slider
+  // detaches from the pitcher (custom values). The recipe's pitcher, if any,
+  // seeds the initial selection.
+  const [pitchers] = createResource<Pitcher[]>(() =>
+    (p.loadPitchers ?? (() => repos.pitchers.list()))(),
+  );
+  const [machineSettings] = createResource<{ steamFlow: number } | null>(() =>
+    (p.loadMachineSettings ?? (() => api.machineSettings().catch(() => null)))(),
+  );
+
+  // Selected pitcher chip (null = custom / none). Steam parameters are null
+  // until seeded. `steamTouched` tracks whether the user has set anything
+  // (picked a pitcher or moved a slider) — when false we apply nothing and
+  // the machine keeps its current steam settings.
+  const [pitcherId, setPitcherId] = createSignal<string | null>(null);
+  const [steamDurationSec, setSteamDurationSec] = createSignal<number | null>(null);
+  const [steamTempC, setSteamTempC] = createSignal<number | null>(null);
+  const [steamFlow, setSteamFlow] = createSignal<number | null>(null);
+  const [steamTouched, setSteamTouched] = createSignal(false);
+  const steamReady = (): boolean => steamDurationSec() !== null;
+
+  const loadFromPitcher = (pt: Pitcher) => {
+    setSteamDurationSec(pt.steamDurationSec);
+    setSteamTempC(pt.steamTempC);
+    setSteamFlow(pt.steamFlow);
+    setPitcherId(pt.id);
+    setSteamTouched(false);
+  };
+
+  const selectPitcher = (id: string) => {
+    const pt = (pitchers() ?? []).find((x) => x.id === id);
+    if (pt) loadFromPitcher(pt);
+  };
+
+  // Editing any slider detaches from the pitcher and marks the params custom.
+  const editSteam = (set: (v: number) => void, v: number) => {
+    set(v);
+    setPitcherId(null);
+    setSteamTouched(true);
+  };
+
+  // Seed once the recipe + data are available. Prefer the recipe's pitcher;
+  // otherwise start the sliders from the machine's current steam settings so
+  // leaving them untouched is a no-op (machine default). Gated so a slow load
+  // doesn't seed from stale/empty values.
+  createEffect(() => {
+    if (steamReady()) return;
+    const list = pitchers();
+    if (!list || bundle.loading || machineSettings.loading) return;
+    const rec = bundle()?.recipe;
+    const pt = rec?.pitcherId
+      ? list.find((x) => x.id === rec.pitcherId)
+      : undefined;
+    if (pt) {
+      loadFromPitcher(pt);
+      return;
+    }
+    // No recipe pitcher: seed sliders from the machine's current settings.
+    // Needs a shotSettings frame for temp/duration; wait for it.
+    const ss = p.shotSettingsStream?.().latest();
+    if (!ss) return;
+    setSteamDurationSec(ss.targetSteamDuration);
+    setSteamTempC(ss.targetSteamTemp);
+    setSteamFlow(machineSettings()?.steamFlow ?? 0.8);
+    setPitcherId(null);
+    setSteamTouched(false);
+  });
+
+  // Apply the steam parameters before steaming. Temp + duration ride
+  // shotSettings (full-body overlay — no PATCH); flow rides machineSettings
+  // (sparse). When nothing was picked or changed, skip entirely so the
+  // machine keeps its current settings.
+  const applySteam = async (): Promise<void> => {
+    if (pitcherId() === null && !steamTouched()) return;
+    const dur = steamDurationSec();
+    const temp = steamTempC();
+    const flow = steamFlow();
+    if (dur == null || temp == null || flow == null) return;
+    const cur = p.shotSettingsStream?.().latest();
+    if (cur) {
+      const update =
+        p.updateShotSettings ??
+        ((s: ShotSettingsSnapshot) => api.updateShotSettings(s));
+      await update({
+        ...cur,
+        targetSteamTemp: temp,
+        targetSteamDuration: dur,
+      });
+    }
+    const updateMachine =
+      p.updateMachineSettings ??
+      ((partial: { steamFlow: number }) => api.updateMachineSettings(partial));
+    await updateMachine({ steamFlow: flow });
+  };
+
+  const startCurrentStep = async () => {
     const idx = currentIdx();
     const step = steps()[idx];
     if (!step) return;
     updateStatus(idx, 'requested');
-    void p.requestState(stepToGatewayState(step.type)).catch((e) => {
-      console.warn('requestState failed', e);
+    try {
+      // Steam: push the params first so they're in place before the machine
+      // enters steam. Other steps have nothing to pre-apply.
+      if (step.type === 'steam') await applySteam();
+      await p.requestState(stepToGatewayState(step.type));
+    } catch (e) {
+      console.warn('start step failed', e);
       updateStatus(idx, 'pending');
-    });
+    }
   };
 
   /** Click a future step in the step bar to skip ahead to it. */
@@ -423,6 +550,16 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
                 profile={() => profile() ?? null}
                 profileLoading={() => profile.loading}
                 loadProfiles={p.loadProfiles}
+                pitchers={() => pitchers() ?? []}
+                pitchersLoading={() => pitchers.loading}
+                selectedPitcherId={pitcherId}
+                onSelectPitcher={selectPitcher}
+                steamReady={steamReady}
+                steamDuration={steamDurationSec}
+                steamFlow={steamFlow}
+                showFlowSlider={() => p.showFlowSlider?.() ?? false}
+                onChangeSteamDuration={(v) => editSteam(setSteamDurationSec, v)}
+                onChangeSteamFlow={(v) => editSteam(setSteamFlow, v)}
               />
             </Show>
           </section>
@@ -555,6 +692,16 @@ const PrepCard: Component<{
   profile: Accessor<ProfileRecord | null>;
   profileLoading: Accessor<boolean>;
   loadProfiles?: () => Promise<ProfileRecord[]>;
+  pitchers: Accessor<Pitcher[]>;
+  pitchersLoading: Accessor<boolean>;
+  selectedPitcherId: Accessor<string | null>;
+  onSelectPitcher: (id: string) => void;
+  steamReady: Accessor<boolean>;
+  steamDuration: Accessor<number | null>;
+  steamFlow: Accessor<number | null>;
+  showFlowSlider: Accessor<boolean>;
+  onChangeSteamDuration: (v: number) => void;
+  onChangeSteamFlow: (v: number) => void;
 }> = (p) => (
   <section class="prep" data-testid="prep-card">
     <header class="prep__heading">
@@ -573,7 +720,21 @@ const PrepCard: Component<{
             loadProfiles={p.loadProfiles}
           />
         </Match>
-        <Match when={p.step().type !== 'brew'}>
+        <Match when={p.step().type === 'steam'}>
+          <SteamPrep
+            pitchers={p.pitchers}
+            loading={p.pitchersLoading}
+            selectedId={p.selectedPitcherId}
+            onSelect={p.onSelectPitcher}
+            ready={p.steamReady}
+            duration={p.steamDuration}
+            flow={p.steamFlow}
+            showFlow={p.showFlowSlider}
+            onChangeDuration={p.onChangeSteamDuration}
+            onChangeFlow={p.onChangeSteamFlow}
+          />
+        </Match>
+        <Match when={p.step().type === 'water' || p.step().type === 'flush'}>
           <p class="prep__no-params">No prep needed.</p>
         </Match>
       </Switch>
@@ -837,6 +998,119 @@ const BrewPrep: Component<{
     </>
   );
 };
+
+/**
+ * Steam-step prep: pick a pitcher (a preset), then fine-tune on the compact
+ * sliders. Pitcher chips show name + capacity only; tapping one loads its
+ * parameters. Moving a slider detaches from the pitcher (values become
+ * custom). Duration is always editable; the flow slider appears only when the
+ * "show steam-flow slider" pref is on (flow is still applied from the pitcher
+ * either way). Temperature comes from the pitcher and isn't edited here.
+ */
+const SteamPrep: Component<{
+  pitchers: Accessor<Pitcher[]>;
+  loading: Accessor<boolean>;
+  selectedId: Accessor<string | null>;
+  onSelect: (id: string) => void;
+  ready: Accessor<boolean>;
+  duration: Accessor<number | null>;
+  flow: Accessor<number | null>;
+  showFlow: Accessor<boolean>;
+  onChangeDuration: (v: number) => void;
+  onChangeFlow: (v: number) => void;
+}> = (p) => (
+  <div class="steam-prep" data-testid="steam-prep">
+    <span class="prep__field-label">Pitcher</span>
+    <Show
+      when={!p.loading()}
+      fallback={<p class="prep__no-params">loading pitchers…</p>}
+    >
+      <Show
+        when={p.pitchers().length > 0}
+        fallback={
+          <p class="prep__no-params" data-testid="steam-prep-empty">
+            No pitchers yet — add one in Library → Steam.
+          </p>
+        }
+      >
+        <div class="pitcher-chips" role="group" aria-label="Pitcher">
+          <For each={p.pitchers()}>
+            {(pt) => (
+              <button
+                type="button"
+                class="pitcher-chip"
+                data-testid={`pitcher-${pt.id}`}
+                data-selected={p.selectedId() === pt.id ? 'true' : undefined}
+                aria-pressed={p.selectedId() === pt.id}
+                onClick={() => p.onSelect(pt.id)}
+              >
+                <span class="pitcher-chip__name">{pt.name}</span>
+                <span class="pitcher-chip__cap">{pt.capacityMl} mL</span>
+              </button>
+            )}
+          </For>
+        </div>
+      </Show>
+    </Show>
+
+    {/* Compact parameter sliders — seeded from the pitcher (or the machine's
+        current settings). Editing detaches from the pitcher. */}
+    <Show when={p.ready()}>
+      <div class="steam-params" data-testid="steam-params">
+        <SteamParamSlider
+          label="Duration"
+          testId="steam-param-duration"
+          value={p.duration}
+          onChange={p.onChangeDuration}
+          min={5}
+          max={120}
+          step={1}
+          format={(v) => `${v.toFixed(0)} s`}
+        />
+        <Show when={p.showFlow()}>
+          <SteamParamSlider
+            label="Flow"
+            testId="steam-param-flow"
+            value={p.flow}
+            onChange={p.onChangeFlow}
+            min={0.4}
+            max={2}
+            step={0.1}
+            format={(v) => `${v.toFixed(1)} mL/s`}
+          />
+        </Show>
+      </div>
+    </Show>
+  </div>
+);
+
+/** One compact labelled steam-parameter slider row. */
+const SteamParamSlider: Component<{
+  label: string;
+  testId: string;
+  value: Accessor<number | null>;
+  onChange: (v: number) => void;
+  min: number;
+  max: number;
+  step: number;
+  format: (v: number) => string;
+}> = (p) => (
+  <div class="steam-param">
+    <span class="steam-param__label">{p.label}</span>
+    <DebouncedSliderField
+      class="steam-param__field"
+      testId={p.testId}
+      value={p.value() ?? undefined}
+      onCommit={p.onChange}
+      min={p.min}
+      max={p.max}
+      step={p.step}
+      debounceMs={0}
+      ariaLabel={p.label}
+      formatValue={p.format}
+    />
+  </div>
+);
 
 const fmtStat = (
   n: number | null | undefined,

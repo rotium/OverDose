@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { buildExploreBrewBundle, EXPLORE_BREW_RECIPE_ID } from './exploreBrew';
+import {
+  buildExploreBrewBundle,
+  buildExploreSteamBundle,
+  EXPLORE_BREW_RECIPE_ID,
+  EXPLORE_STEAM_RECIPE_ID,
+} from './exploreBrew';
 import type { ProfileRecord, WorkflowSnapshot } from './api';
 
 const mkProfile = (id: string, title: string): ProfileRecord =>
@@ -48,5 +53,15 @@ describe('buildExploreBrewBundle', () => {
     const { recipe } = buildExploreBrewBundle(null, []);
     expect(recipe?.doseGrams).toBeUndefined();
     expect(recipe?.profileId).toBeUndefined();
+  });
+});
+
+describe('buildExploreSteamBundle', () => {
+  it('builds a single steam-step routine with no pitcher pinned', () => {
+    const { recipe, routine } = buildExploreSteamBundle();
+    expect(recipe?.id).toBe(EXPLORE_STEAM_RECIPE_ID);
+    expect(recipe?.pitcherId).toBeUndefined();
+    expect(routine?.steps).toHaveLength(1);
+    expect(routine?.steps[0]?.type).toBe('steam');
   });
 });
