@@ -126,9 +126,36 @@ async function fetchEmpty(path: string, init?: RequestInit): Promise<void> {
   if (!res.ok) throw new Error(`${init?.method ?? 'GET'} ${path} → ${res.status}`);
 }
 
+/** The gateway KV store namespace OverDose owns. See docs/storage-sync.md. */
+const STORE_NAMESPACE = 'overdose';
+
+/** GET a KV-store value, resolving to null on 404 (key absent) or empty body. */
+async function fetchStore<T>(key: string): Promise<T | null> {
+  const res = await fetch(
+    `${gatewayHttpOrigin()}/api/v1/store/${STORE_NAMESPACE}/${encodeURIComponent(key)}`,
+  );
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`GET store/${key} → ${res.status}`);
+  const text = await res.text();
+  if (!text) return null;
+  return JSON.parse(text) as T;
+}
+
 export const api = {
   devices: () => fetchJson<Device[]>('/api/v1/devices'),
   machineInfo: () => fetchJson<MachineInfo>('/api/v1/machine/info'),
+
+  /** Read a value from the gateway KV store (namespace `overdose`). Resolves
+   *  to null when the key doesn't exist. Backs the library sync — see
+   *  docs/storage-sync.md and src/librarySync.ts. */
+  storeGet: <T>(key: string): Promise<T | null> => fetchStore<T>(key),
+  /** Write a JSON value to the gateway KV store (namespace `overdose`). */
+  storeSet: (key: string, value: unknown): Promise<void> =>
+    fetchEmpty(`/api/v1/store/${STORE_NAMESPACE}/${encodeURIComponent(key)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(value),
+    }),
 
   requestState: (state: MachineState) =>
     fetchEmpty(`/api/v1/machine/state/${encodeURIComponent(state)}`, {

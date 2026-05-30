@@ -25,12 +25,8 @@ import {
 } from './exploreBrew';
 import { LiveShotProvider, useLiveShot } from './LiveShotContext';
 import { frozenToGatewayShotRecord } from './liveShotAdapter';
-import {
-  LocalRoutineRepository,
-  LocalRecipeRepository,
-  LocalPitcherRepository,
-  linkSeedRecipeProfiles,
-} from './repositories';
+import { linkSeedRecipeProfiles } from './repositories';
+import { createLibrarySync } from './librarySync';
 import { RepositoriesProvider } from './RepositoriesContext';
 import { UserPrefsProvider, useUserPrefs } from './UserPrefsContext';
 import { setDebugLogging as setDebugLoggingEnabled, dlog } from './debugLog';
@@ -46,9 +42,11 @@ import type {
 } from './snapshot';
 import type { WsStream } from './streams';
 
-const routineRepository = new LocalRoutineRepository();
-const recipeRepository = new LocalRecipeRepository();
-const pitcherRepository = new LocalPitcherRepository();
+// One library sync for the app: owns the local repos (the mirror) and the
+// gateway push/pull. `syncNow` runs on load + focus; see docs/storage-sync.md.
+const librarySync = createLibrarySync();
+const { recipes: recipeRepository, routines: routineRepository, pitchers: pitcherRepository } =
+  librarySync.repos;
 
 const onSleep = () =>
   api.sleep().catch((e) => console.warn('sleep failed', e));
@@ -264,6 +262,7 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
             <div class="home-host" inert={homeInert()} data-testid="home-host">
               <Home
                 recipeRepository={recipeRepository}
+                recipeRevision={librarySync.revision}
                 machineStream={() => p.streams.machine}
                 scaleStream={() => p.streams.scale}
                 shotSettingsStream={() => p.streams.shotSettings}
@@ -350,15 +349,34 @@ export const App: Component = () => {
     waterLevels: defaultStreams.waterLevels(),
   };
 
-  // Link the seed Recipes to their intended profiles by title, once the
-  // gateway's profile list is available. Fire-and-forget + non-destructive
-  // (only fills an empty profileId), so a gateway hiccup just leaves them
-  // unlinked until the next launch and a user's own pick is never clobbered.
   onMount(() => {
-    void api
-      .profiles({})
-      .then((profiles) => linkSeedRecipeProfiles(recipeRepository, profiles))
-      .catch((e) => console.warn('link seed profiles failed', e));
+    void (async () => {
+      // Sync the library FIRST so a populated gateway is pulled before any
+      // local enrichment runs — otherwise linkSeed could bump the local
+      // timestamp and push fresh seeds over real gateway data. See the
+      // first-run rule in docs/storage-sync.md.
+      await librarySync.syncNow();
+      // Then link seed Recipes to their gateway profiles by title. Idempotent +
+      // non-destructive (only fills an empty profileId); after a pull the
+      // recipes are already linked, so this is a no-op on existing libraries.
+      try {
+        const profiles = await api.profiles({});
+        await linkSeedRecipeProfiles(recipeRepository, profiles);
+      } catch (e) {
+        console.warn('link seed profiles failed', e);
+      }
+    })();
+
+    // Re-sync when the tab/window regains focus — catches edits made on other
+    // devices. No interval polling (see docs/storage-sync.md).
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void librarySync.syncNow();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    onCleanup(() => {
+      document.removeEventListener('visibilitychange', onVisible);
+      librarySync.dispose();
+    });
   });
 
   return (
@@ -367,6 +385,7 @@ export const App: Component = () => {
         routines={routineRepository}
         recipes={recipeRepository}
         pitchers={pitcherRepository}
+        revision={librarySync.revision}
       >
         <LiveShotProvider
           machineStream={streams.machine}

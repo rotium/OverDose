@@ -14,4 +14,7 @@ export interface RecipeRepository {
   create(recipe: Recipe): Promise<Recipe>;
   update(recipe: Recipe): Promise<Recipe>;
   delete(id: string): Promise<void>;
+  /** Replace the whole collection in one shot — used by the library sync to
+   *  adopt the gateway's copy on pull. See docs/storage-sync.md. */
+  replaceAll(recipes: Recipe[]): Promise<void>;
 }

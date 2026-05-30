@@ -9,7 +9,6 @@ import {
   onMount,
   type Component,
 } from 'solid-js';
-import type { Pitcher } from '../../../../domain';
 import { makePitcher } from '../../../../domain';
 import type { ShotSettingsSnapshot } from '../../../../snapshot';
 import type { WsStream } from '../../../../streams';
@@ -40,7 +39,8 @@ export interface SteamSectionProps {
  */
 export const SteamSection: Component<SteamSectionProps> = (props) => {
   const repos = useRepositories();
-  const [pitchers, { refetch }] = createResource<Pitcher[]>(() =>
+  // Sourced on `repos.revision` so a gateway sync pull re-runs the list.
+  const [pitchers, { refetch }] = createResource(repos.revision, () =>
     repos.pitchers.list(),
   );
 

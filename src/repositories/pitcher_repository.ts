@@ -14,4 +14,6 @@ export interface PitcherRepository {
   create(pitcher: Pitcher): Promise<Pitcher>;
   update(pitcher: Pitcher): Promise<Pitcher>;
   delete(id: string): Promise<void>;
+  /** Replace the whole collection — library sync pull. See docs/storage-sync.md. */
+  replaceAll(pitchers: Pitcher[]): Promise<void>;
 }

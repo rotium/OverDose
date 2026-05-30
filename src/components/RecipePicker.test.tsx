@@ -37,6 +37,7 @@ const repo = (
   create: async (r: Recipe) => r,
   update: async (r: Recipe) => r,
   delete: async () => {},
+  replaceAll: async () => {},
 });
 
 describe('RecipePicker', () => {
@@ -152,6 +153,7 @@ describe('RecipePicker', () => {
       create: async (x: Recipe) => x,
       update: async (x: Recipe) => x,
       delete: async () => {},
+      replaceAll: async () => {},
     };
     let handle: { refresh: () => void } | undefined;
     render(() => (

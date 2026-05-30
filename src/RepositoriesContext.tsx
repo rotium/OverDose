@@ -1,6 +1,7 @@
 import {
   createContext,
   useContext,
+  type Accessor,
   type Component,
   type JSX,
 } from 'solid-js';
@@ -23,6 +24,10 @@ export interface RepositoriesContextValue {
   routines: RoutineRepository;
   recipes: RecipeRepository;
   pitchers: PitcherRepository;
+  /** Library revision — bumps on any local mutation or a gateway sync pull.
+   *  List resources take this as a `createResource` source so a pull (or a
+   *  cross-screen edit) re-renders them. See docs/storage-sync.md. */
+  revision: Accessor<number>;
 }
 
 const Ctx = createContext<RepositoriesContextValue>();
@@ -31,6 +36,9 @@ export interface RepositoriesProviderProps {
   routines: RoutineRepository;
   recipes: RecipeRepository;
   pitchers: PitcherRepository;
+  /** Optional so test harnesses can mount without the sync coordinator; falls
+   *  back to a constant (no live pulls in tests). */
+  revision?: Accessor<number>;
   children?: JSX.Element;
 }
 
@@ -40,6 +48,7 @@ export const RepositoriesProvider: Component<RepositoriesProviderProps> = (p) =>
     routines: p.routines,
     recipes: p.recipes,
     pitchers: p.pitchers,
+    revision: p.revision ?? (() => 0),
   };
   return <Ctx.Provider value={value}>{p.children}</Ctx.Provider>;
 };

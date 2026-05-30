@@ -38,6 +38,7 @@ const fakeRepo: RecipeRepository = {
   create: async (r: Recipe) => r,
   update: async (r: Recipe) => r,
   delete: async () => {},
+  replaceAll: async () => {},
 };
 
 const settings: ShotSettingsSnapshot = {

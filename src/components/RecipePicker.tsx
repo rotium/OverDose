@@ -38,6 +38,10 @@ export interface RecipePickerProps {
    *  catches its own errors so an offline gateway just hides the
    *  subtitle on every tile). */
   loadProfiles?: () => Promise<ProfileRecord[]>;
+  /** Library revision — when provided, the recipe list re-runs on a gateway
+   *  sync pull (see docs/storage-sync.md). Optional so tests/standalone use
+   *  still work (falls back to a one-shot load + the imperative refresh). */
+  revision?: Accessor<number>;
 }
 
 export interface RecipePickerHandle {
@@ -48,7 +52,13 @@ export interface RecipePickerHandle {
 export const RecipePicker: Component<
   RecipePickerProps & { ref?: (h: RecipePickerHandle) => void }
 > = (p) => {
-  const [recipes, { refetch }] = createResource(() => p.repository.list());
+  // Constant source when no revision is supplied → fetcher runs once (0 is a
+  // valid, non-nullish createResource source); a real revision re-runs it on
+  // each pull. The imperative refresh handle still works either way.
+  const [recipes, { refetch }] = createResource(
+    () => (p.revision ?? (() => 0))(),
+    () => p.repository.list(),
+  );
   p.ref?.({ recipes, refresh: () => void refetch() });
 
   // Profile list — fetched once on mount, used to look up each tile's

@@ -54,7 +54,9 @@ export const RoutineEditor: Component<RoutineEditorProps> = (p) => {
     () => p.routineId,
     (id) => repos.routines.get(id),
   );
-  const [recipes] = createResource<Recipe[]>(() => repos.recipes.list());
+  const [recipes] = createResource(repos.revision, () =>
+    repos.recipes.list(),
+  );
   const [confirmingDelete, setConfirmingDelete] = createSignal(false);
   const [cascadeAcknowledged, setCascadeAcknowledged] = createSignal(false);
   const [showStepPicker, setShowStepPicker] = createSignal(false);

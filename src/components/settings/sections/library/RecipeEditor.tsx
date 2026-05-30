@@ -8,7 +8,7 @@ import {
   type Component,
 } from 'solid-js';
 import { formatStepType } from '../../../../domain';
-import type { Routine, Recipe, Pitcher } from '../../../../domain';
+import type { Routine, Recipe } from '../../../../domain';
 import { useRepositories } from '../../../../RepositoriesContext';
 import { DebouncedNumberField } from './DebouncedNumberField';
 import { PickerDialog } from '../../../PickerDialog';
@@ -60,8 +60,12 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
   // Pulls the full list (incl. hidden) so a recipe that points at a hidden
   // detach-clone can still resolve its parent's name + step sequence in
   // the header. The picker below filters visible ones for user selection.
-  const [routines] = createResource<Routine[]>(() => repos.routines.list());
-  const [pitchers] = createResource<Pitcher[]>(() => repos.pitchers.list());
+  const [routines] = createResource(repos.revision, () =>
+    repos.routines.list(),
+  );
+  const [pitchers] = createResource(repos.revision, () =>
+    repos.pitchers.list(),
+  );
   const visibleRoutines = (): Routine[] =>
     (routines() ?? []).filter((b) => !b.hidden);
   const parentRoutine = (): Routine | undefined => {

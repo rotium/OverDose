@@ -34,7 +34,8 @@ export const RoutinesSection: Component = () => {
   const repos = useRepositories();
   const [selectedId, setSelectedId] = createSignal<string | null>(null);
   const [animatingOut, setAnimatingOut] = createSignal(false);
-  const [routines, { refetch }] = createResource(() =>
+  // Sourced on `repos.revision` so a gateway sync pull re-runs the list.
+  const [routines, { refetch }] = createResource(repos.revision, () =>
     repos.routines.listVisible(),
   );
   const [creating, setCreating] = createSignal(false);

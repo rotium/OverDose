@@ -11,7 +11,7 @@ import {
   type Component,
 } from 'solid-js';
 import { formatStepType } from '../../../../domain';
-import type { Routine, Recipe } from '../../../../domain';
+import type { Routine } from '../../../../domain';
 import { useRepositories } from '../../../../RepositoriesContext';
 import { RecipeEditor } from './RecipeEditor';
 
@@ -34,11 +34,16 @@ const SHEET_ANIM_MS = 280;
  */
 export const RecipesSection: Component = () => {
   const repos = useRepositories();
-  const [recipes, { refetch: refetchRecipes }] = createResource<Recipe[]>(() =>
-    repos.recipes.list(),
+  // Sourced on `repos.revision` so a gateway sync pull (or a cross-screen
+  // edit) re-runs the list — see docs/storage-sync.md.
+  const [recipes, { refetch: refetchRecipes }] = createResource(
+    repos.revision,
+    () => repos.recipes.list(),
   );
-  const [routines] = createResource<Routine[]>(() => repos.routines.list());
-  const [visibleRoutines] = createResource<Routine[]>(() =>
+  const [routines] = createResource(repos.revision, () =>
+    repos.routines.list(),
+  );
+  const [visibleRoutines] = createResource(repos.revision, () =>
     repos.routines.listVisible(),
   );
 

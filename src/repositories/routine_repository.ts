@@ -17,4 +17,7 @@ export interface RoutineRepository {
   create(routine: Routine): Promise<Routine>;
   update(routine: Routine): Promise<Routine>;
   delete(id: string): Promise<void>;
+  /** Replace the whole collection (incl. hidden clones) — library sync pull.
+   *  See docs/storage-sync.md. */
+  replaceAll(routines: Routine[]): Promise<void>;
 }

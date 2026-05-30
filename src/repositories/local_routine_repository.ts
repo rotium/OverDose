@@ -11,7 +11,12 @@ const SEEDED_FLAG = 'starter-skin.routines.seeded.v1';
  * interface. Storage injected so tests get a clean per-run store.
  */
 export class LocalRoutineRepository implements RoutineRepository {
-  constructor(private readonly storage: Storage = globalThis.localStorage) {
+  /** @param onChange fired after a user mutation so the library sync can push.
+   *   Not fired by `seedIfFirstRun` / `replaceAll` (bootstrap + sync-pull). */
+  constructor(
+    private readonly storage: Storage = globalThis.localStorage,
+    private readonly onChange?: () => void,
+  ) {
     this.seedIfFirstRun();
   }
 
@@ -34,6 +39,7 @@ export class LocalRoutineRepository implements RoutineRepository {
     }
     all.push(routine);
     this.writeAll(all);
+    this.onChange?.();
     return routine;
   }
 
@@ -43,6 +49,7 @@ export class LocalRoutineRepository implements RoutineRepository {
     if (idx === -1) throw new Error(`Routine "${routine.id}" not found`);
     all[idx] = routine;
     this.writeAll(all);
+    this.onChange?.();
     return routine;
   }
 
@@ -52,6 +59,13 @@ export class LocalRoutineRepository implements RoutineRepository {
     if (idx === -1) return;
     all.splice(idx, 1);
     this.writeAll(all);
+    this.onChange?.();
+  }
+
+  /** Replace the whole collection (incl. hidden clones) — library sync pull.
+   *  Does not fire `onChange`. */
+  async replaceAll(routines: Routine[]): Promise<void> {
+    this.writeAll(routines);
   }
 
   private seedIfFirstRun(): void {

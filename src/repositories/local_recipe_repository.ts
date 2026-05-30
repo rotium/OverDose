@@ -11,7 +11,16 @@ const SEEDED_FLAG = 'starter-skin.recipes.seeded.v1';
  * the interface. Storage injected for tests.
  */
 export class LocalRecipeRepository implements RecipeRepository {
-  constructor(private readonly storage: Storage = globalThis.localStorage) {
+  /**
+   * @param onChange called after a user-initiated mutation (create/update/
+   *   delete) so the library sync can bump its timestamp + schedule a push.
+   *   Deliberately NOT called by `seedIfFirstRun` or `replaceAll` — those are
+   *   bootstrap / sync-pull writes that must not trigger a push back.
+   */
+  constructor(
+    private readonly storage: Storage = globalThis.localStorage,
+    private readonly onChange?: () => void,
+  ) {
     this.seedIfFirstRun();
   }
 
@@ -30,6 +39,7 @@ export class LocalRecipeRepository implements RecipeRepository {
     }
     all.push(recipe);
     this.writeAll(all);
+    this.onChange?.();
     return recipe;
   }
 
@@ -39,6 +49,7 @@ export class LocalRecipeRepository implements RecipeRepository {
     if (idx === -1) throw new Error(`Recipe "${recipe.id}" not found`);
     all[idx] = recipe;
     this.writeAll(all);
+    this.onChange?.();
     return recipe;
   }
 
@@ -48,6 +59,13 @@ export class LocalRecipeRepository implements RecipeRepository {
     if (idx === -1) return;
     all.splice(idx, 1);
     this.writeAll(all);
+    this.onChange?.();
+  }
+
+  /** Replace the whole collection — used by the library sync on pull. Does
+   *  not fire `onChange` (adopting gateway data must not push back). */
+  async replaceAll(recipes: Recipe[]): Promise<void> {
+    this.writeAll(recipes);
   }
 
   private seedIfFirstRun(): void {

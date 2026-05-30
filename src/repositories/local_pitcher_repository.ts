@@ -11,7 +11,12 @@ const SEEDED_FLAG = 'starter-skin.pitchers.seeded.v1';
  * injected for tests. Seeds the two default jugs on first run only.
  */
 export class LocalPitcherRepository implements PitcherRepository {
-  constructor(private readonly storage: Storage = globalThis.localStorage) {
+  /** @param onChange fired after a user mutation so the library sync can push.
+   *   Not fired by `seedIfFirstRun` / `replaceAll` (bootstrap + sync-pull). */
+  constructor(
+    private readonly storage: Storage = globalThis.localStorage,
+    private readonly onChange?: () => void,
+  ) {
     this.seedIfFirstRun();
   }
 
@@ -30,6 +35,7 @@ export class LocalPitcherRepository implements PitcherRepository {
     }
     all.push(pitcher);
     this.writeAll(all);
+    this.onChange?.();
     return pitcher;
   }
 
@@ -39,6 +45,7 @@ export class LocalPitcherRepository implements PitcherRepository {
     if (idx === -1) throw new Error(`Pitcher "${pitcher.id}" not found`);
     all[idx] = pitcher;
     this.writeAll(all);
+    this.onChange?.();
     return pitcher;
   }
 
@@ -48,6 +55,12 @@ export class LocalPitcherRepository implements PitcherRepository {
     if (idx === -1) return;
     all.splice(idx, 1);
     this.writeAll(all);
+    this.onChange?.();
+  }
+
+  /** Replace the whole collection — library sync pull. Does not fire onChange. */
+  async replaceAll(pitchers: Pitcher[]): Promise<void> {
+    this.writeAll(pitchers);
   }
 
   private seedIfFirstRun(): void {

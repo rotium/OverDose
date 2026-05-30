@@ -172,6 +172,17 @@ Distinguish failure kinds:
 
 ## Status
 
-Design only — not yet implemented. Local-first repositories
-(`src/repositories/local_*`) are the current backing; the gateway-backed
-implementation described here is the planned swap-in behind the same interfaces.
+**v1 implemented (recipes / routines / pitchers).** `src/librarySync.ts`
+(`createLibrarySync`) owns the local repos (the mirror) + the gateway push/pull;
+`api.storeGet`/`storeSet` back the KV calls; repos gained `replaceAll` (pull)
+and an `onChange` write hook (push). `App.tsx` runs `syncNow()` on load +
+`visibilitychange` (and *before* seed-profile linking). Reactivity: a
+`revision` signal on `RepositoriesContext`, sourced into the Library list
+resources + the Home recipe picker, so a pull re-renders them. Debounced push
+(800 ms); `appVersion` stamped, informational only. First-run uses the
+"absent gateway = oldest" ordering (seed-then-sync converges correctly).
+
+**Deferred:** `prefs` sync (UserPrefsContext hydrate-from-pull wiring; would
+sync all but `debugLogging`), the cross-version **downgrade guard**, and the
+keyed single-entity editor / brew-screen resources (they refetch on navigation
+rather than live-updating on a pull).

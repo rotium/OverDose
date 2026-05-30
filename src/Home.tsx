@@ -36,6 +36,9 @@ import { isWaterBlocked, waterSeverity, type WaterSeverity } from './water';
  */
 export interface HomeProps {
   recipeRepository: RecipeRepository;
+  /** Library revision — passed to the recipe picker so it re-runs on a gateway
+   *  sync pull. Optional (tests omit it). See docs/storage-sync.md. */
+  recipeRevision?: Accessor<number>;
   /** Stream factories — defaulted to the real reaprime WS endpoints in App.tsx. */
   machineStream: () => WsStream<MachineSnapshot>;
   scaleStream: () => WsStream<ScaleMessage>;
@@ -180,6 +183,7 @@ export const Home: Component<HomeProps> = (p) => {
             <RecipePicker
               repository={p.recipeRepository}
               onSelect={p.onSelectRecipe}
+              revision={p.recipeRevision}
             />
           </div>
           <ExploreTray
