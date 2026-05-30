@@ -73,8 +73,15 @@ export const MachineTab: Component<MachineTabProps> = (p) => {
 
   return (
     <div class="settings-section-stack">
+      {/* Gate on the value, NOT on `loading`. A post-commit refetch flips
+          `loading` true while keeping the last value, so gating on `loading`
+          would drop the whole section to the fallback on every slider step
+          (a visible "refresh"/remount). `settings()` retains its value across
+          a refetch, so the section stays mounted; the loading copy only shows
+          on the initial load (value still undefined) and the error copy when
+          a fetch resolves to null. */}
       <Show
-        when={!settings.loading && settings()}
+        when={settings()}
         fallback={
           <p class="settings-help" data-testid="machine-settings-loading">
             {settings.loading
