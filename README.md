@@ -7,6 +7,16 @@ A community skin for [Decent.app](https://github.com/tadelv/reaprime) —
 the gateway that drives Decent Espresso machines. OverDose adds a
 recipe-driven brewing UI, designed for the tablet on your espresso bar.
 
+*The name is just my espresso intake, rounded down.*
+
+> The reason it exists is simple: my own daily routine. I usually have
+> three or four bags of beans open at once, each dialed in differently —
+> plus the cappuccinos my family drinks, each with its own steam. Keeping
+> all that in my head, or on scribbled notes, never held up. So I dial a
+> new bag in with **Explore**, and once it tastes right I save it as a
+> Recipe — then it's one tap to brew it the same way every time. Right now
+> I keep three espresso recipes and two cappuccinos ready.
+
 ## Recipes
 
 OverDose is built around one idea: **a great espresso is a recipe,
