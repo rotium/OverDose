@@ -17,7 +17,7 @@ import {
   type TraceVisibility,
   type WaterUnit,
 } from './prefs';
-import { WATER_BLOCK_MM, WATER_WARN_MM } from './water';
+import { WATER_WARN_MM } from './water';
 
 const STORAGE_KEY = 'starter-skin.prefs.v1';
 
@@ -29,7 +29,6 @@ const STORAGE_KEY = 'starter-skin.prefs.v1';
 interface PersistedPrefs {
   waterUnit?: WaterUnit;
   waterWarnMm?: number;
-  waterBlockMm?: number;
   chartSmoothing?: ChartSmoothing;
   traceVisibility?: TraceVisibility;
   showSteamFlowSlider?: boolean;
@@ -44,8 +43,6 @@ export interface UserPrefsContextValue {
   setWaterUnit: (u: WaterUnit) => void;
   waterWarnMm: Accessor<number>;
   setWaterWarnMm: (mm: number) => void;
-  waterBlockMm: Accessor<number>;
-  setWaterBlockMm: (mm: number) => void;
   chartSmoothing: Accessor<ChartSmoothing>;
   setChartSmoothing: (s: ChartSmoothing) => void;
   traceVisibility: Accessor<TraceVisibility>;
@@ -106,9 +103,6 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
   const [waterWarnMm, setWaterWarnMm] = createSignal<number>(
     initial.waterWarnMm ?? WATER_WARN_MM,
   );
-  const [waterBlockMm, setWaterBlockMm] = createSignal<number>(
-    initial.waterBlockMm ?? WATER_BLOCK_MM,
-  );
   const [chartSmoothing, setChartSmoothing] = createSignal<ChartSmoothing>(
     initial.chartSmoothing ?? DEFAULT_CHART_SMOOTHING,
   );
@@ -140,7 +134,6 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
     const shape: PersistedPrefs = {
       waterUnit: waterUnit(),
       waterWarnMm: waterWarnMm(),
-      waterBlockMm: waterBlockMm(),
       chartSmoothing: chartSmoothing(),
       traceVisibility: traceVisibility(),
       showSteamFlowSlider: showSteamFlowSlider(),
@@ -157,8 +150,6 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
     setWaterUnit,
     waterWarnMm,
     setWaterWarnMm,
-    waterBlockMm,
-    setWaterBlockMm,
     chartSmoothing,
     setChartSmoothing,
     traceVisibility,

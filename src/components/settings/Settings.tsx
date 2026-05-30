@@ -1,5 +1,5 @@
 import { Match, Switch, createSignal, type Component } from 'solid-js';
-import type { ShotSettingsSnapshot } from '../../snapshot';
+import type { ShotSettingsSnapshot, WaterLevelsSnapshot } from '../../snapshot';
 import type { WsStream } from '../../streams';
 import { AppTab } from './AppTab';
 import { GatewayTab } from './GatewayTab';
@@ -27,6 +27,9 @@ export interface SettingsProps {
    *  steam temperature/duration sliders. Optional so tests can mount Settings
    *  without wiring streams. */
   shotSettingsStream?: WsStream<ShotSettingsSnapshot>;
+  /** Live water-levels stream, passed to the App tab's Alerts section so the
+   *  Critical threshold can read/write the machine's refill level. */
+  waterLevelsStream?: WsStream<WaterLevelsSnapshot>;
 }
 
 type Tab = 'app' | 'gateway' | 'machine' | 'library';
@@ -81,7 +84,7 @@ export const Settings: Component<SettingsProps> = (p) => {
       <div class="settings__content" role="tabpanel">
         <Switch>
           <Match when={tab() === 'app'}>
-            <AppTab />
+            <AppTab waterLevelsStream={p.waterLevelsStream} />
           </Match>
           <Match when={tab() === 'gateway'}>
             <GatewayTab />

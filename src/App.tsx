@@ -88,11 +88,13 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
   const prefs = useUserPrefs();
   // Water-critical state — shared by the prep-screen Start gate (here)
   // and the ExploreTray's direct-op tile lock (computed independently
-  // inside Home, since Home consumes the same stream + pref directly).
+  // inside Home, since Home consumes the same stream directly). Critical
+  // is the machine's own refill level, reported in the same water frame —
+  // so the gate matches when the DE1 itself considers the tank too low.
   const isWaterCritical = (): boolean => {
     const w = p.streams.waterLevels.latest();
     if (!w) return false;
-    return isWaterBlocked(w.currentLevel, prefs.waterBlockMm());
+    return isWaterBlocked(w.currentLevel, w.refillLevel);
   };
   // Settings overlay is a single-screen swap today (no router). The header's
   // menu button opens it; back / × close it. A future menu drawer would
@@ -253,6 +255,7 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
             onBack={onCloseSettings}
             onClose={onCloseSettings}
             shotSettingsStream={p.streams.shotSettings}
+            waterLevelsStream={p.streams.waterLevels}
           />
         }
       >

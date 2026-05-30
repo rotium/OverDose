@@ -1,4 +1,6 @@
 import { Match, Switch, createSignal, type Component } from 'solid-js';
+import type { WaterLevelsSnapshot } from '../../snapshot';
+import type { WsStream } from '../../streams';
 import { DisplaySection } from './sections/DisplaySection';
 import { AlertsSection } from './sections/AlertsSection';
 import { AboutSection } from './sections/AboutSection';
@@ -19,7 +21,9 @@ const SECTIONS: { id: SectionId; label: string }[] = [
   { id: 'developer', label: 'Developer' },
 ];
 
-export const AppTab: Component = () => {
+export const AppTab: Component<{
+  waterLevelsStream?: WsStream<WaterLevelsSnapshot>;
+}> = (p) => {
   const [section, setSection] = createSignal<SectionId>('display');
 
   return (
@@ -45,7 +49,7 @@ export const AppTab: Component = () => {
             <DisplaySection />
           </Match>
           <Match when={section() === 'alerts'}>
-            <AlertsSection />
+            <AlertsSection waterLevels={p.waterLevelsStream?.latest} />
           </Match>
           <Match when={section() === 'about'}>
             <AboutSection />

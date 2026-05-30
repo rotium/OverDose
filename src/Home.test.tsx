@@ -263,7 +263,9 @@ describe('Home', () => {
 
   it('at warn level: header pill + tinted Water row; no Explore tile lock', async () => {
     render(() =>
-      buildHome({ stubs: { water: { currentLevel: 4, refillLevel: 5 } } }),
+      // Critical = the machine's refillLevel (3); warn pref defaults to 5, so
+      // currentLevel 4 is in the warn band (3 < 4 ≤ 5).
+      buildHome({ stubs: { water: { currentLevel: 4, refillLevel: 3 } } }),
     );
     await waitFor(() => screen.getByTestId('recipe-tile-seed-espresso'));
     expect(screen.getByTestId('header-water-pill')).toHaveAttribute(

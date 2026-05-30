@@ -1,10 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { Settings } from './Settings';
 import { UserPrefsProvider, useUserPrefs } from '../../UserPrefsContext';
 import { MemoryStorage } from '../../test/memoryStorage';
 import { WithRepositories } from '../../test/repositories';
+import { api } from '../../api';
 import type { UserPrefsContextValue } from '../../UserPrefsContext';
+import type { WsStream } from '../../streams';
+import type { WaterLevelsSnapshot } from '../../snapshot';
 
 // The Machine tab calls `GET /api/v1/machine/settings` on mount. jsdom's
 // fetch chokes on relative URLs, so stub it for the whole Settings suite.
@@ -42,14 +46,33 @@ interface Harness {
   onClose: ReturnType<typeof vi.fn>;
 }
 
-const setup = (): Harness => {
+const setup = (opts: { refillLevel?: number | null } = {}): Harness => {
   const onBack = vi.fn();
   const onClose = vi.fn();
   let capturedPrefs!: UserPrefsContextValue;
 
+  // Critical = the machine's refill level, read from this stream. Provide a
+  // refillLevel to render the Critical field; omit it (null) to exercise the
+  // "no machine connected" placeholder.
+  const [water] = createSignal<WaterLevelsSnapshot | null>(
+    opts.refillLevel == null
+      ? null
+      : { currentLevel: 50, refillLevel: opts.refillLevel },
+  );
+  const waterLevelsStream: WsStream<WaterLevelsSnapshot> = {
+    latest: water,
+    status: createSignal<'open'>('open')[0],
+  };
+
   const PrefsBridge = () => {
     capturedPrefs = useUserPrefs();
-    return <Settings onBack={onBack} onClose={onClose} />;
+    return (
+      <Settings
+        onBack={onBack}
+        onClose={onClose}
+        waterLevelsStream={waterLevelsStream}
+      />
+    );
   };
 
   render(() => (
@@ -167,28 +190,39 @@ describe('Settings', () => {
       expect(prefs.waterWarnMm()).toBe(8);
     });
 
-    it('clamps the critical threshold so it cannot exceed warn', () => {
-      const { prefs } = setup();
+    it('writes the critical threshold to the machine, clamped at/below warn', () => {
+      const setRefill = vi
+        .spyOn(api, 'setRefillLevel')
+        .mockResolvedValue(undefined);
+      const { prefs } = setup({ refillLevel: 3 }); // machine reports a level
       openAlerts();
-      // warn defaults to 5, so trying to set critical to 9 should clamp to 5.
-      const block = screen.getByLabelText('Critical threshold') as HTMLInputElement;
-      block.value = '9';
-      fireEvent.change(block);
-      expect(prefs.waterBlockMm()).toBe(prefs.waterWarnMm());
+      // warn defaults to 5, so trying to set critical to 9 should clamp to 5
+      // and write that to the machine (not a skin pref).
+      const crit = screen.getByLabelText('Critical threshold') as HTMLInputElement;
+      // Debounced field: commit fires on input (debounced) + blur (flush).
+      fireEvent.input(crit, { target: { value: '9' } });
+      fireEvent.blur(crit);
+      expect(setRefill).toHaveBeenCalledWith(prefs.waterWarnMm());
+      setRefill.mockRestore();
     });
 
-    it('clamps the warn threshold floor to the critical threshold', () => {
-      const { prefs } = setup();
+    it('clamps the warn threshold floor to the machine refill level', () => {
+      const { prefs } = setup({ refillLevel: 3 }); // machine critical = 3 mm
       openAlerts();
-      // Set critical first so warn has a meaningful floor.
-      const block = screen.getByLabelText('Critical threshold') as HTMLInputElement;
-      block.value = '3';
-      fireEvent.change(block);
-      // Now try to drop warn below critical.
+      // Try to drop warn below the machine's refill level → clamps up to it.
       const warn = screen.getByLabelText('Warn threshold') as HTMLInputElement;
       warn.value = '1';
       fireEvent.change(warn);
-      expect(prefs.waterWarnMm()).toBe(prefs.waterBlockMm());
+      expect(prefs.waterWarnMm()).toBe(3);
+    });
+
+    it('shows a no-machine placeholder for critical when disconnected', () => {
+      setup(); // no refill level
+      openAlerts();
+      expect(screen.getByTestId('critical-no-machine')).toBeInTheDocument();
+      expect(
+        screen.queryByLabelText('Critical threshold'),
+      ).not.toBeInTheDocument();
     });
   });
 });

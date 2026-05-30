@@ -149,6 +149,19 @@ export const api = {
       body: JSON.stringify({ brightness }),
     }),
 
+  /**
+   * Set the machine's water refill threshold (mm) — the level at which the DE1
+   * considers the tank critically low. This is the single source of truth for
+   * "critical water": the skin reads it from the waterLevels stream and writes
+   * it here. The gateway only reads `refillLevel` from the body.
+   */
+  setRefillLevel: (refillLevel: number) =>
+    fetchEmpty('/api/v1/machine/waterLevels', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refillLevel }),
+    }),
+
   tareScale: () => fetchEmpty('/api/v1/scale/tare', { method: 'PUT' }),
 
   /**

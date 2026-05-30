@@ -4,10 +4,13 @@
 // DE1 tank: full at ~65mm.
 export const WATER_TANK_MAX_MM = 65;
 
-// Default low-water alert thresholds (mm). Seeded into UserPrefsContext on
-// first run; runtime values come from the prefs context so the Settings
-// screen can tune them. `warn` is visual only; `block` gates workflow
-// continuation. Compared as `currentLevel <= threshold`.
+// Water-alert thresholds (mm), compared as `currentLevel <= threshold`.
+// `warn` is the skin-only visual nudge — a UserPrefs setting seeded from
+// WATER_WARN_MM. `block`/critical is NOT a skin value: it comes from the
+// machine's reported `refillLevel` (see WaterLevelsSnapshot), so the skin's
+// critical alert always matches when the DE1 itself decides it needs water.
+// WATER_BLOCK_MM is only a fallback default for the helpers below when no
+// machine refill level is available (e.g. tests).
 export const WATER_WARN_MM = 5;
 export const WATER_BLOCK_MM = 3;
 

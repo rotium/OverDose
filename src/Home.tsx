@@ -82,7 +82,7 @@ export const Home: Component<HomeProps> = (p) => {
   const severity = (): WaterSeverity => {
     const w = waterLevels.latest();
     return w
-      ? waterSeverity(w.currentLevel, prefs.waterWarnMm(), prefs.waterBlockMm())
+      ? waterSeverity(w.currentLevel, prefs.waterWarnMm(), w.refillLevel)
       : 'normal';
   };
 
@@ -155,7 +155,7 @@ export const Home: Component<HomeProps> = (p) => {
   const exploreBlockReason = (): ExploreBlockReason | null => {
     if (heaterOff()) return 'heater-off';
     const w = waterLevels.latest();
-    if (w && isWaterBlocked(w.currentLevel, prefs.waterBlockMm())) {
+    if (w && isWaterBlocked(w.currentLevel, w.refillLevel)) {
       return 'water-critical';
     }
     return null;

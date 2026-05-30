@@ -157,7 +157,9 @@ describe('StatusPanel', () => {
     });
 
     it('tints the Water row at warn severity but does not add an inline banner', () => {
-      setup({ waterLevels: { currentLevel: 5, refillLevel: 5 } });
+      // Critical = the machine's refillLevel (3); warn pref defaults to 5, so
+      // currentLevel 5 lands in the warn band (3 < 5 ≤ 5).
+      setup({ waterLevels: { currentLevel: 5, refillLevel: 3 } });
       const cell = screen.getByTestId('status-water');
       expect(cell).toHaveAttribute('data-severity', 'warn');
       const fill = cell.querySelector('.bar__fill') as HTMLElement;
@@ -166,7 +168,7 @@ describe('StatusPanel', () => {
     });
 
     it('adds an inline "Refill water tank" banner inside the Water cell at critical', () => {
-      setup({ waterLevels: { currentLevel: 2, refillLevel: 5 } });
+      setup({ waterLevels: { currentLevel: 2, refillLevel: 3 } });
       const cell = screen.getByTestId('status-water');
       expect(cell).toHaveAttribute('data-severity', 'critical');
       const fill = cell.querySelector('.bar__fill') as HTMLElement;
@@ -228,12 +230,12 @@ describe('StatusPanel', () => {
     // outer truthy/falsy flip, so updates to the level didn't propagate.
     it('hides the inline critical banner when the water signal moves back above the block threshold', () => {
       const { setWaterLevels } = setup({
-        waterLevels: { currentLevel: 2, refillLevel: 5 },
+        waterLevels: { currentLevel: 2, refillLevel: 3 },
       });
       expect(screen.getByTestId('status-water-alert')).toBeInTheDocument();
       expect(screen.getByTestId('status-water')).toHaveAttribute('data-severity', 'critical');
 
-      setWaterLevels({ currentLevel: 40, refillLevel: 5 });
+      setWaterLevels({ currentLevel: 40, refillLevel: 3 });
 
       expect(screen.queryByTestId('status-water-alert')).not.toBeInTheDocument();
       expect(screen.getByTestId('status-water')).toHaveAttribute('data-severity', 'normal');
@@ -241,15 +243,15 @@ describe('StatusPanel', () => {
 
     it('shows the inline banner only after the level drops to critical (not at warn)', () => {
       const { setWaterLevels } = setup({
-        waterLevels: { currentLevel: 40, refillLevel: 5 },
+        waterLevels: { currentLevel: 40, refillLevel: 3 },
       });
       expect(screen.queryByTestId('status-water-alert')).not.toBeInTheDocument();
 
-      setWaterLevels({ currentLevel: 5, refillLevel: 5 }); // warn
+      setWaterLevels({ currentLevel: 5, refillLevel: 3 }); // warn (3 < 5 ≤ 5)
       expect(screen.queryByTestId('status-water-alert')).not.toBeInTheDocument();
       expect(screen.getByTestId('status-water')).toHaveAttribute('data-severity', 'warn');
 
-      setWaterLevels({ currentLevel: 2, refillLevel: 5 }); // critical
+      setWaterLevels({ currentLevel: 2, refillLevel: 3 }); // critical (≤ 3)
       expect(screen.getByTestId('status-water-alert')).toBeInTheDocument();
     });
   });

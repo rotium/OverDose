@@ -65,8 +65,10 @@ export const StatusPanel: Component<StatusPanelProps> = (p) => {
   const prefs = useUserPrefs();
   const steamOn = () => (p.shotSettings()?.steamSetting ?? 0) > 0;
   const scaleData = () => dataFrame(p.scale());
+  // Critical = the machine's reported refill level (same water frame). 0 when
+  // unknown → fail-open (no critical) until the machine reports a level.
   const sev = (mm: number) =>
-    waterSeverity(mm, prefs.waterWarnMm(), prefs.waterBlockMm());
+    waterSeverity(mm, prefs.waterWarnMm(), p.waterLevels()?.refillLevel ?? 0);
 
   return (
     <section class="card status">

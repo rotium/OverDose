@@ -3,7 +3,7 @@ import { createRoot } from 'solid-js';
 import { render } from '@solidjs/testing-library';
 import { UserPrefsProvider, useUserPrefs } from './UserPrefsContext';
 import { MemoryStorage } from './test/memoryStorage';
-import { WATER_BLOCK_MM, WATER_WARN_MM } from './water';
+import { WATER_WARN_MM } from './water';
 import {
   DEFAULT_CHART_SMOOTHING,
   DEFAULT_TRACE_VISIBILITY,
@@ -33,7 +33,6 @@ describe('UserPrefsContext', () => {
 
       expect(prefs.waterUnit()).toBe(DEFAULT_WATER_UNIT);
       expect(prefs.waterWarnMm()).toBe(WATER_WARN_MM);
-      expect(prefs.waterBlockMm()).toBe(WATER_BLOCK_MM);
       expect(prefs.chartSmoothing()).toBe(DEFAULT_CHART_SMOOTHING);
       expect(prefs.traceVisibility()).toEqual(DEFAULT_TRACE_VISIBILITY);
       // Steam-flow slider opts in — hidden by default.
@@ -56,7 +55,6 @@ describe('UserPrefsContext', () => {
         JSON.stringify({
           waterUnit: 'both',
           waterWarnMm: 7,
-          waterBlockMm: 2,
           chartSmoothing: 'linear',
           traceVisibility: {
             pressure: false,
@@ -73,7 +71,6 @@ describe('UserPrefsContext', () => {
 
       expect(prefs.waterUnit()).toBe('both');
       expect(prefs.waterWarnMm()).toBe(7);
-      expect(prefs.waterBlockMm()).toBe(2);
       expect(prefs.chartSmoothing()).toBe('linear');
       expect(prefs.traceVisibility().pressure).toBe(false);
       expect(prefs.traceVisibility().targets).toBe(true);
