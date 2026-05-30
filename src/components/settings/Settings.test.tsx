@@ -107,23 +107,10 @@ describe('Settings', () => {
   });
 
   describe('tabs', () => {
-    it('starts on the App tab', () => {
+    it('starts on the Library tab', () => {
       setup();
-      const tab = screen.getByRole('tab', { name: 'App' });
+      const tab = screen.getByRole('tab', { name: 'Library' });
       expect(tab).toHaveAttribute('aria-selected', 'true');
-    });
-
-    it('switches to Gateway when clicked', () => {
-      setup();
-      fireEvent.click(screen.getByRole('tab', { name: 'Gateway' }));
-      expect(screen.getByRole('tab', { name: 'Gateway' })).toHaveAttribute(
-        'aria-selected',
-        'true',
-      );
-      expect(screen.getByRole('tab', { name: 'App' })).toHaveAttribute(
-        'aria-selected',
-        'false',
-      );
     });
 
     it('switches to Machine when clicked', () => {
@@ -151,6 +138,7 @@ describe('Settings', () => {
   describe('App tab — Display subsection', () => {
     it('starts on Display', () => {
       setup();
+      fireEvent.click(screen.getByRole('tab', { name: 'App' }));
       expect(screen.getByRole('tab', { name: 'Display' })).toHaveAttribute(
         'aria-selected',
         'true',
@@ -159,18 +147,21 @@ describe('Settings', () => {
 
     it('changing water unit updates the context immediately', () => {
       const { prefs } = setup();
+      fireEvent.click(screen.getByRole('tab', { name: 'App' }));
       fireEvent.click(screen.getByRole('radio', { name: 'mm' }));
       expect(prefs.waterUnit()).toBe('mm');
     });
 
     it('changing chart smoothing updates the context', () => {
       const { prefs } = setup();
+      fireEvent.click(screen.getByRole('tab', { name: 'App' }));
       fireEvent.click(screen.getByRole('radio', { name: 'Spline' }));
       expect(prefs.chartSmoothing()).toBe('spline');
     });
 
     it('toggling a trace checkbox updates the context', () => {
       const { prefs } = setup();
+      fireEvent.click(screen.getByRole('tab', { name: 'App' }));
       const before = prefs.traceVisibility().mixTemp;
       fireEvent.click(screen.getByRole('checkbox', { name: 'Mix temp' }));
       expect(prefs.traceVisibility().mixTemp).toBe(!before);
@@ -178,8 +169,12 @@ describe('Settings', () => {
   });
 
   describe('App tab — Alerts subsection', () => {
-    const openAlerts = () =>
+    const openAlerts = () => {
+      // Library is the default tab now; navigate into App, then its Alerts
+      // subsection.
+      fireEvent.click(screen.getByRole('tab', { name: 'App' }));
       fireEvent.click(screen.getByRole('tab', { name: 'Alerts' }));
+    };
 
     it('updating the warn threshold persists the new value', () => {
       const { prefs } = setup();

@@ -14,7 +14,7 @@ import { MachineTab } from './MachineTab';
  *
  * Tab switching is local state — no URL routing yet. Tab choice does not
  * persist across opens (intentional: re-opening from the header should land
- * back on App, the most common tab).
+ * back on Library, the most-used tab).
  *
  * `onBack` and `onClose` both dismiss the screen today. They're kept distinct
  * so when sub-pages land (e.g. an editor opened from within Settings), `←`
@@ -35,14 +35,15 @@ export interface SettingsProps {
 type Tab = 'app' | 'gateway' | 'machine' | 'library';
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'app', label: 'App' },
-  { id: 'gateway', label: 'Gateway' },
-  { id: 'machine', label: 'Machine' },
   { id: 'library', label: 'Library' },
+  { id: 'app', label: 'App' },
+  { id: 'machine', label: 'Machine' },
+  // Gateway tab hidden for now — the GatewayTab component + its Match arm are
+  // kept below so re-enabling is just restoring this entry.
 ];
 
 export const Settings: Component<SettingsProps> = (p) => {
-  const [tab, setTab] = createSignal<Tab>('app');
+  const [tab, setTab] = createSignal<Tab>('library');
 
   return (
     <div class="settings" data-testid="settings">
