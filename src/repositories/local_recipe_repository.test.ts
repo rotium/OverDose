@@ -84,6 +84,18 @@ describe('LocalRecipeRepository', () => {
     });
   });
 
+  describe('listVisible', () => {
+    it('excludes hidden recipes; list() still returns them', async () => {
+      storage.setItem('starter-skin.recipes.seeded.v1', '1'); // skip seeding
+      const repo = new LocalRecipeRepository(storage);
+      await repo.create(sampleRecipe('a'));
+      await repo.create({ ...sampleRecipe('b'), hidden: true });
+
+      expect((await repo.list()).map((r) => r.id)).toEqual(['a', 'b']);
+      expect((await repo.listVisible()).map((r) => r.id)).toEqual(['a']);
+    });
+  });
+
   describe('storage corruption', () => {
     it('recovers from garbage data by returning empty list', async () => {
       storage.setItem('starter-skin.recipes.v1', '{not json');

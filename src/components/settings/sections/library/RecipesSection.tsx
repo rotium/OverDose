@@ -11,8 +11,9 @@ import {
   type Component,
 } from 'solid-js';
 import { formatStepType } from '../../../../domain';
-import type { Routine } from '../../../../domain';
+import type { Routine, Recipe } from '../../../../domain';
 import { useRepositories } from '../../../../RepositoriesContext';
+import { EyeIcon, EyeOffIcon } from '../../../icons';
 import { RecipeEditor } from './RecipeEditor';
 
 const SHEET_ANIM_MS = 280;
@@ -65,6 +66,13 @@ export const RecipesSection: Component = () => {
     const steps = routineById()[routineId]?.steps ?? [];
     if (steps.length === 0) return '(no steps yet)';
     return steps.map((s) => formatStepType(s.type)).join(' → ');
+  };
+
+  // Quick hide/show toggle — keeps a recipe off the Home picker without
+  // deleting it (e.g. its bean ran out). The same toggle lives in the editor.
+  const toggleHidden = async (r: Recipe) => {
+    await repos.recipes.update({ ...r, hidden: !r.hidden });
+    void refetchRecipes();
   };
 
   const loading = () =>
@@ -235,7 +243,11 @@ export const RecipesSection: Component = () => {
                 <ul class="library-list" data-testid="recipes-list">
                   <For each={recipes()}>
                     {(r) => (
-                      <li class="library-list__row library-list__row--clickable">
+                      <li
+                        class="library-list__row library-list__row--clickable"
+                        data-hidden={r.hidden ? 'true' : undefined}
+                        data-testid={`recipe-row-${r.id}-item`}
+                      >
                         <button
                           type="button"
                           class="library-list__button"
@@ -255,6 +267,25 @@ export const RecipesSection: Component = () => {
                               {stepSequence(r.routineId)}
                             </span>
                           </span>
+                        </button>
+                        <button
+                          type="button"
+                          class="library-list__action"
+                          data-testid={`recipe-row-${r.id}-toggle-hidden`}
+                          aria-pressed={r.hidden ? 'true' : 'false'}
+                          aria-label={
+                            r.hidden
+                              ? `Show "${r.name}" on the home screen`
+                              : `Hide "${r.name}" from the home screen`
+                          }
+                          title={r.hidden ? 'Hidden — tap to show' : 'Hide from home'}
+                          onClick={() => void toggleHidden(r)}
+                        >
+                          {r.hidden ? (
+                            <EyeOffIcon size={18} />
+                          ) : (
+                            <EyeIcon size={18} />
+                          )}
                         </button>
                       </li>
                     )}

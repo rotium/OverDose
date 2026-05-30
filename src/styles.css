@@ -1365,6 +1365,13 @@ html {
   background: var(--bg);
 }
 
+/* Low-emphasis visibility toggle in the recipe editor — the eye on each
+   Library row is the primary affordance, so this sits quietly above Delete. */
+.recipe-editor__hide-toggle {
+  margin: 0.25rem 0 0.75rem;
+  color: var(--muted);
+}
+
 .settings-radio:has(input:checked),
 .settings-checkbox:has(input:checked) {
   border-color: var(--accent);
@@ -1576,6 +1583,7 @@ html {
    the whole row is the tap target (consistent with tile pattern). */
 .library-list__row--clickable {
   padding: 0;
+  align-items: stretch;
 }
 
 .library-list__button {
@@ -1583,7 +1591,8 @@ html {
   align-items: baseline;
   justify-content: space-between;
   gap: 1rem;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 0.55rem 0.75rem;
   background: transparent;
   border: none;
@@ -1596,6 +1605,31 @@ html {
 
 .library-list__button:hover {
   background: rgba(255, 255, 255, 0.04);
+}
+
+/* Trailing per-row action (e.g. the hide/show eye). Sibling of the main
+   button so the two aren't nested. */
+.library-list__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.75rem;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.library-list__action:hover {
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* Hidden recipe: dim the row content (not the action, so the eye stays
+   tappable to bring it back). */
+.library-list__row[data-hidden='true'] .library-list__button {
+  opacity: 0.45;
 }
 
 /* ─── Side sheet (Routine editor host) ───────────────────────────── */

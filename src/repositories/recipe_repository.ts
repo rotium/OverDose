@@ -10,6 +10,10 @@ import type { Recipe } from '../domain';
  */
 export interface RecipeRepository {
   list(): Promise<Recipe[]>;
+  /** Recipes shown on the Home picker — excludes ones the user has hidden
+   *  (`Recipe.hidden`). The Library uses `list()` so hidden recipes stay
+   *  visible (dimmed) there for un-hiding. */
+  listVisible(): Promise<Recipe[]>;
   get(id: string): Promise<Recipe | null>;
   create(recipe: Recipe): Promise<Recipe>;
   update(recipe: Recipe): Promise<Recipe>;

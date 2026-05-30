@@ -28,6 +28,10 @@ export class LocalRecipeRepository implements RecipeRepository {
     return this.readAll();
   }
 
+  async listVisible(): Promise<Recipe[]> {
+    return this.readAll().filter((r) => !r.hidden);
+  }
+
   async get(id: string): Promise<Recipe | null> {
     return this.readAll().find((r) => r.id === id) ?? null;
   }

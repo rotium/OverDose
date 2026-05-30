@@ -55,9 +55,11 @@ export const RecipePicker: Component<
   // Constant source when no revision is supplied → fetcher runs once (0 is a
   // valid, non-nullish createResource source); a real revision re-runs it on
   // each pull. The imperative refresh handle still works either way.
+  // listVisible() — hidden recipes (e.g. a bean that ran out) are kept out of
+  // the home picker but stay in the Library. See docs + RecipeRepository.
   const [recipes, { refetch }] = createResource(
     () => (p.revision ?? (() => 0))(),
-    () => p.repository.list(),
+    () => p.repository.listVisible(),
   );
   p.ref?.({ recipes, refresh: () => void refetch() });
 
@@ -101,7 +103,9 @@ export const RecipePicker: Component<
           <Show
             when={(recipes() ?? []).length > 0}
             fallback={
-              <p class="muted">no recipes yet — add one from the library</p>
+              <p class="muted">
+                no recipes shown — add or unhide one in the library
+              </p>
             }
           >
             <div class="picker__grid" data-testid="picker-grid">

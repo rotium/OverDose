@@ -34,6 +34,7 @@ const sampleRecipe: Recipe = {
 
 const fakeRepo: RecipeRepository = {
   list: async () => [sampleRecipe],
+  listVisible: async () => [sampleRecipe],
   get: async () => sampleRecipe,
   create: async (r: Recipe) => r,
   update: async (r: Recipe) => r,

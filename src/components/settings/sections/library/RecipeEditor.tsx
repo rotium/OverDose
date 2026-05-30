@@ -400,6 +400,25 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
                 </ul>
               </section>
 
+              {/* Low-emphasis management toggle — the primary affordance is
+                  the eye on each Library row. Sits just above Delete (the
+                  other "what to do with this recipe" action) but as a
+                  reversible switch, not a destructive button. */}
+              <label
+                class="settings-checkbox recipe-editor__hide-toggle"
+                data-testid="recipe-hide-toggle"
+              >
+                <input
+                  type="checkbox"
+                  data-testid="recipe-hide-from-home"
+                  checked={!!r().hidden}
+                  onChange={(e) =>
+                    void saveRecipe({ ...r(), hidden: e.currentTarget.checked })
+                  }
+                />
+                <span>Hide from the home screen</span>
+              </label>
+
               <section class="settings-section">
                 <h3>Delete</h3>
                 <Show

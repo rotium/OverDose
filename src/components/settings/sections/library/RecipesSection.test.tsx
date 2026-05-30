@@ -346,4 +346,44 @@ describe('RecipesSection', () => {
       ),
     );
   });
+
+  it('hides a recipe via the row eye toggle', async () => {
+    const repos = seed(
+      [{ id: 'r1', name: 'Indonesia X', routineId: 'cappuccino', overrides: {} }],
+      [
+        {
+          id: 'cappuccino',
+          name: 'Cappuccino',
+          steps: [routineStep('brew', {})],
+        },
+      ],
+    );
+    render(() => (
+      <WithPrefs>
+        <WithRepositories routines={repos.routines} recipes={repos.recipes}>
+          <RecipesSection />
+        </WithRepositories>
+      </WithPrefs>
+    ));
+
+    const toggle = await waitFor(() =>
+      screen.getByTestId('recipe-row-r1-toggle-hidden'),
+    );
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(toggle);
+
+    // Row reflects hidden (dimmed marker) + the toggle flips, and it's
+    // persisted on the recipe.
+    await waitFor(() =>
+      expect(
+        screen.getByTestId('recipe-row-r1-toggle-hidden'),
+      ).toHaveAttribute('aria-pressed', 'true'),
+    );
+    expect(screen.getByTestId('recipe-row-r1-item')).toHaveAttribute(
+      'data-hidden',
+      'true',
+    );
+    expect((await repos.recipes.list())[0].hidden).toBe(true);
+  });
 });

@@ -73,4 +73,11 @@ export interface Recipe {
   pitcherId?: string;
   /** Optional path to a tile image displayed in the picker. */
   iconUrl?: string;
+  /**
+   * Hidden from the Home recipe picker when true (e.g. its bean ran out and
+   * it's temporarily out of rotation). Still fully editable + brewable — it
+   * just drops off the main page. The Library shows hidden recipes (dimmed)
+   * so they can be un-hidden. Filtered by `RecipeRepository.listVisible()`.
+   */
+  hidden?: boolean;
 }

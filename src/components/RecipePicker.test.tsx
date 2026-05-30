@@ -33,6 +33,8 @@ const repo = (
   recipes: Recipe[] | (() => Promise<Recipe[]>),
 ): RecipeRepository => ({
   list: typeof recipes === 'function' ? recipes : () => Promise.resolve(recipes),
+  listVisible:
+    typeof recipes === 'function' ? recipes : () => Promise.resolve(recipes),
   get: async () => null,
   create: async (r: Recipe) => r,
   update: async (r: Recipe) => r,
@@ -112,7 +114,7 @@ describe('RecipePicker', () => {
   it('renders an empty-state message when there are no recipes', async () => {
     render(() => <RecipePicker repository={repo([])} onSelect={() => {}} />);
     await waitFor(() => {
-      expect(screen.getByText(/no recipes yet/i)).toBeInTheDocument();
+      expect(screen.getByText(/no recipes shown/i)).toBeInTheDocument();
     });
   });
 
@@ -149,6 +151,7 @@ describe('RecipePicker', () => {
     let current: Recipe[] = [rec('a', 'A')];
     const r: RecipeRepository = {
       list: async () => current,
+      listVisible: async () => current,
       get: async () => null,
       create: async (x: Recipe) => x,
       update: async (x: Recipe) => x,
