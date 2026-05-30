@@ -3,8 +3,10 @@ import {
   Switch,
   Match,
   createEffect,
+  createMemo,
   createResource,
   createSignal,
+  onCleanup,
   onMount,
   type Component,
 } from 'solid-js';
@@ -12,7 +14,7 @@ import { api, type GatewayShotRecord } from './api';
 import { Home, defaultStreams } from './Home';
 import { LiveBrewDrawer } from './components/LiveBrewDrawer';
 import { RecipeBrewScreen } from './components/RecipeBrewScreen';
-import { SleepOverlay } from './components/SleepOverlay';
+import { SleepOverlay, SLEEP_DARKEN_MS } from './components/SleepOverlay';
 import { Settings } from './components/settings/Settings';
 import type { ExploreOp } from './components/ExploreTray';
 import {
@@ -190,9 +192,57 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
 
   // Standby veil. Driven straight off the machine state, so it appears
   // whenever the DE1 sleeps (header button, its own timeout, physical GHC)
-  // and clears the moment it reports any non-sleeping state.
-  const isSleeping = (): boolean =>
-    p.streams.machine.latest()?.state.state === 'sleeping';
+  // and clears the moment it reports any non-sleeping state. A memo so the
+  // screen-off effect below fires only on real sleep/wake transitions, not on
+  // every (~10 Hz) machine snapshot.
+  const isSleeping = createMemo(
+    () => p.streams.machine.latest()?.state.state === 'sleeping',
+  );
+
+  // ── Screen-off on sleep (backlight to 0) ──
+  // The SleepOverlay paints the screen black, but that's a black page at full
+  // backlight. To actually darken the panel we drop the gateway's brightness
+  // to 0 — but only AFTER the overlay's darkening animation has run
+  // (SLEEP_DARKEN_MS), so the fade + "tap to wake" reveal stays visible.
+  // Cutting earlier would hide it; by then the page is already black, so the
+  // cut is invisible. Restored to OS-managed brightness on wake.
+  //
+  // Brightness 0 is a *software* off: the screen only comes back if a restore
+  // lands. So we re-assert it on every wake transition, immediately on the wake
+  // gesture (don't wait for the idle snapshot), and on mount/reload (the awake
+  // branch). The gateway also restores on sleeping→idle independently, so a
+  // one-off failed restore self-heals instead of stranding a black screen.
+  const restoreBrightness = (): void => {
+    void api.setBrightness(100).catch(() => {}); // 100 = OS-managed
+  };
+  let darkenTimer: number | undefined;
+  const clearDarken = (): void => {
+    if (darkenTimer !== undefined) {
+      clearTimeout(darkenTimer);
+      darkenTimer = undefined;
+    }
+  };
+  createEffect(() => {
+    if (isSleeping()) {
+      clearDarken();
+      darkenTimer = window.setTimeout(() => {
+        darkenTimer = undefined;
+        if (isSleeping()) void api.setBrightness(0).catch(() => {});
+      }, SLEEP_DARKEN_MS);
+    } else {
+      clearDarken();
+      restoreBrightness();
+    }
+  });
+  onCleanup(clearDarken);
+
+  // Wake from the veil: re-light instantly (don't wait for the machine to
+  // report idle), cancel any pending backlight cut, then request wake.
+  const onWakeFromOverlay = (): void => {
+    clearDarken();
+    restoreBrightness();
+    onWake();
+  };
 
   return (
     <>
@@ -284,7 +334,7 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
       </Show>
       <LiveBrewDrawer />
       {/* Always mounted; it owns its own enter/leave fade off `active`. */}
-      <SleepOverlay active={isSleeping} onWake={onWake} />
+      <SleepOverlay active={isSleeping} onWake={onWakeFromOverlay} />
     </>
   );
 };

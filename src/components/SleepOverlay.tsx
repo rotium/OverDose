@@ -28,6 +28,14 @@ import { Logo } from './Logo';
  */
 const FADE_OUT_MS = 600;
 
+/**
+ * Total run of the `sleep-overlay-content` darkening animation in styles.css —
+ * the point at which the screen is "completely dark" (logo + hint fully faded).
+ * Mirrored here (like FADE_OUT_MS) so App can time the real backlight cut to
+ * the END of the reveal, not mid-animation. Keep in sync with the CSS.
+ */
+export const SLEEP_DARKEN_MS = 4500;
+
 export interface SleepOverlayProps {
   /** Whether the machine is asleep — drives mount + the enter/leave fade. */
   active: Accessor<boolean>;

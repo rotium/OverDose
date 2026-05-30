@@ -136,6 +136,19 @@ export const api = {
     }),
   sleep: () => api.requestState('sleeping'),
 
+  /**
+   * Set screen brightness 0–100 (100 = OS-managed / auto-brightness). Drives
+   * the gateway's display brightness; no-ops server-side on platforms without
+   * brightness control. Used to actually darken the panel on sleep — see
+   * SleepOverlay + App's screen-off effect.
+   */
+  setBrightness: (brightness: number) =>
+    fetchEmpty('/api/v1/display/brightness', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brightness }),
+    }),
+
   tareScale: () => fetchEmpty('/api/v1/scale/tare', { method: 'PUT' }),
 
   /**
