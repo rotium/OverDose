@@ -8,7 +8,7 @@ fidelity. Three layers:
 2. **Gateway domain** — reaprime's `MachineState` / `MachineSubstate`
    (`reaprime/.../device/machine.dart`), produced by the mapping in
    `de1.utils.dart`. Serialized to the skin by enum **`.name`**.
-3. **Skin** — the TS unions in `starter-skin/src/snapshot.ts`. These must
+3. **Skin** — the TS unions in `overdose/src/snapshot.ts`. These must
    match the gateway-domain names exactly, or the value arrives as an
    unmodelled string.
 
