@@ -1020,6 +1020,76 @@ describe('RecipeBrewScreen', () => {
         /prep\s*for\s*steam/i,
       );
     });
+
+    it('adopts a physically-started step (no app Start) and advances', async () => {
+      // GHC machines: the app Start only arms; the user begins with the
+      // physical button, so the step enters its target state without ever
+      // passing through `requested`. The step must still advance.
+      const env = renderScreen({
+        routines: [
+          {
+            id: 'bev-cap',
+            name: 'Cappuccino',
+            steps: [
+              routineStep('brew', {}, 'step-brew'),
+              routineStep('steam', {}, 'step-steam'),
+            ],
+          },
+        ],
+        recipes: [sampleRecipe()],
+      });
+      // Wait for the prep card, then DO NOT click Start — simulate the
+      // machine entering espresso on its own (physical GHC start).
+      await waitFor(() => screen.getByTestId('prep-card-start'));
+      env.setMachineSnap(snapshotWithState('espresso'));
+      // Step is adopted as running: prep card flips to "in progress".
+      await waitFor(() =>
+        expect(screen.getByTestId('prep-card-running')).toBeInTheDocument(),
+      );
+      expect(screen.queryByTestId('prep-card-start')).not.toBeInTheDocument();
+      // Leaving the state advances exactly as the app-started path does.
+      env.setMachineSnap(snapshotWithState('idle'));
+      await waitFor(() =>
+        expect(screen.getByTestId('step-bar-item-0')).toHaveAttribute(
+          'data-variant',
+          'done',
+        ),
+      );
+      expect(screen.getByTestId('step-bar-item-1')).toHaveAttribute(
+        'data-variant',
+        'current',
+      );
+    });
+
+    it('does not adopt an out-of-order operation that mismatches the step', async () => {
+      // Current step is brew; the machine enters steam (out of order). The
+      // brew step must NOT be adopted — advancement only matches the current
+      // step's target state.
+      const env = renderScreen({
+        routines: [
+          {
+            id: 'bev-cap',
+            name: 'Cappuccino',
+            steps: [
+              routineStep('brew', {}, 'step-brew'),
+              routineStep('steam', {}, 'step-steam'),
+            ],
+          },
+        ],
+        recipes: [sampleRecipe()],
+      });
+      const start = await waitFor(() => screen.getByTestId('prep-card-start'));
+      // Mismatched op (steam) while the brew step is current.
+      env.setMachineSnap(snapshotWithState('steam'));
+      // The brew step stays pending: Start button still shown, no "in progress".
+      await Promise.resolve();
+      expect(start).toBeInTheDocument();
+      expect(screen.queryByTestId('prep-card-running')).not.toBeInTheDocument();
+      expect(screen.getByTestId('step-bar-item-0')).toHaveAttribute(
+        'data-variant',
+        'current',
+      );
+    });
   });
 
   describe('skipping', () => {

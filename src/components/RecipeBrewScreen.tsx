@@ -329,10 +329,17 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
   const isFinished = (): boolean =>
     statuses().length > 0 && currentIdx() === statuses().length;
 
-  // Detect step-end via the machine snapshot. The per-step status itself
-  // acts as memory — `requested` ⇒ waiting to enter the target state;
-  // `running` ⇒ waiting to leave it — so we don't need to track previous
-  // states externally.
+  // Detect step start + end via the machine snapshot. The per-step status
+  // itself acts as memory — waiting-to-enter the target state ⇒ flip to
+  // `running`; `running` ⇒ waiting to leave it — so we don't need to track
+  // previous states externally.
+  //
+  // We adopt `pending` as well as `requested` for the entry transition: on a
+  // GHC machine the app's Start request only *arms* the machine, and the user
+  // begins the operation with the physical button — so a step can enter its
+  // target state without ever passing through `requested`. Keying on the
+  // *current* step's `target` means an out-of-order operation (e.g. steam
+  // while a brew step is current) won't match and won't advance anything.
   createEffect(() => {
     const snap = machine.latest();
     if (!snap) return;
@@ -342,7 +349,7 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
     const step = steps()[idx];
     if (!step) return;
     const target = stepToGatewayState(step.type);
-    if (ss[idx] === 'requested' && cur === target) {
+    if ((ss[idx] === 'requested' || ss[idx] === 'pending') && cur === target) {
       dlog('step', `${idx} ${step.type}: running (state=${cur})`);
       updateStatus(idx, 'running');
     } else if (ss[idx] === 'running' && cur !== target) {
