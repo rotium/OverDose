@@ -49,44 +49,57 @@ tray on the home screen runs the four machine operations directly.
 
 ## Installing OverDose
 
-OverDose installs onto a running Decent.app gateway as a "skin." The
-gateway has its own settings UI for managing skins — it lives outside
-the skin itself, on the gateway's dashboard.
+> **Note:** OverDose is a skin for the new Decent.app gateway
+> ([tadelv/reaprime](https://github.com/tadelv/reaprime)), not the
+> original DE1 tablet app (`de1app`). It won't load on the old app.
 
-### Getting to skin settings
+OverDose installs as a "skin." You manage skins from the gateway's
+settings dashboard, not from inside OverDose. There are two ways to
+install it.
 
-Skin management isn't reachable from inside OverDose. From wherever
-you are:
+### 1. From the settings dashboard (recommended)
 
-1. Tap your browser's **back** button until you're at the Decent.app
+On the Decent tablet, open
+[**localhost:8080/api/v1/plugins/settings.reaplugin/ui**](http://localhost:8080/api/v1/plugins/settings.reaplugin/ui)
+— tappable straight from this README in the tablet's browser (from
+another device, use the gateway's IP instead of `localhost`). Scroll to
+the **Web Interface** section.
+
+<img src="docs/screenshots/setting-ui.png" alt="Web Interface section with the Install Skin field" width="500">
+
+Type `rotium/OverDose` into the **Install Skin** field and click
+**Install**. The gateway downloads the latest release itself.
+
+### 2. From a downloaded zip
+
+For a gateway that can't reach GitHub. First open the skin settings:
+
+1. Tap your browser's **back** button until you reach the Decent.app
    dashboard.
-2. Open **Settings** from the dashboard.
-3. Go to the **Web Interface** section.
-4. Open the **Skin** dropdown — the install actions live there.
+2. Open **Settings**, then go to the **Web Interface** section.
+3. Open the **Skin** dropdown — the install actions live there.
 
 <img src="docs/screenshots/gateway-settings.png" alt="Gateway dashboard → Settings → Web Interface → Skin dropdown" width="500">
 
-### Three ways to install
+Download the latest `overdose-vX.Y.Z.zip` from the
+[Releases page](https://github.com/rotium/OverDose/releases), then in
+the **Skin** dropdown choose **Install from .zip** and pick the file.
 
-**From a zip release (recommended).** Download the latest
-`overdose-vX.Y.Z.zip` from the
-[Releases page](https://github.com/rotium/OverDose/releases). In the
-Skin dropdown, choose **Install from .zip** and pick the file.
+### Other ways
 
-**From a URL.** If your gateway is reachable on the network:
-
-    POST http://<gateway-ip>:8080/api/v1/webui/skins/install/url
-    Content-Type: application/json
-    {"url": "https://github.com/rotium/OverDose/releases/download/vX.Y.Z/overdose-vX.Y.Z.zip"}
-
-**Live-edit (for development).** `npm run build`, then in the Skin
-dropdown choose **Live-edit from folder** and point at this repo's
-`dist/` path. Rebuilds appear in the gateway without re-installing.
+- **Live-edit (development):** `npm run build`, then the **Skin**
+  dropdown → **Live-edit from folder** pointed at this repo's `dist/` —
+  rebuilds show up without re-installing.
+- **Command line:** scriptable equivalent of method 1 —
+  `POST http://<gateway-ip>:8080/api/v1/webui/skins/install/url` with
+  body `{"url": "https://github.com/rotium/OverDose/releases/download/vX.Y.Z/overdose-vX.Y.Z.zip"}`.
 
 ### Upgrading
 
-Install the new zip over the old one. The gateway replaces the
-previous install in place.
+Re-run the install. Typing `rotium/OverDose` in the **Install Skin**
+field again pulls the newest release, or you can install a newer zip
+over the old one. Either way the gateway replaces the previous install
+in place.
 
 ### Accessing OverDose from another device
 
