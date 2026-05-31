@@ -1,6 +1,7 @@
 import type { MachineState } from './snapshot';
 import type { ShotSettingsSnapshot } from './snapshot';
 import { gatewayHttpOrigin } from './gateway';
+import { dlog } from './debugLog';
 
 export interface Device {
   name: string;
@@ -157,10 +158,21 @@ export const api = {
       body: JSON.stringify(value),
     }),
 
-  requestState: (state: MachineState) =>
-    fetchEmpty(`/api/v1/machine/state/${encodeURIComponent(state)}`, {
+  requestState: (state: MachineState) => {
+    // Log every outgoing state command so a steam/purge trace can tell apart
+    // "we asked for idle and the firmware purged" from "it purged/parked on
+    // its own" (no preceding cmd line) — the crux of the steam-stuck bug.
+    dlog('cmd', `→ requestState(${state})`);
+    return fetchEmpty(`/api/v1/machine/state/${encodeURIComponent(state)}`, {
       method: 'PUT',
-    }),
+    }).then(
+      () => dlog('cmd', `✓ requestState(${state}) acked`),
+      (e) => {
+        dlog('cmd', `✗ requestState(${state}) failed: ${e}`);
+        throw e;
+      },
+    );
+  },
   sleep: () => api.requestState('sleeping'),
 
   /**

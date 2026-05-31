@@ -5,8 +5,15 @@ import { MachineTab } from './MachineTab';
 import type { MachineSettingsSnapshot } from '../../api';
 import type { ShotSettingsSnapshot } from '../../snapshot';
 import type { WsStream } from '../../streams';
+import { UserPrefsProvider } from '../../UserPrefsContext';
+import { MemoryStorage } from '../../test/memoryStorage';
 
-const renderTab = (ui: () => JSX.Element) => render(ui);
+// MachineTab reads the purge-strategy user pref, so it must render inside a
+// UserPrefsProvider. A fresh in-memory store per render keeps tests isolated.
+const renderTab = (ui: () => JSX.Element) =>
+  render(() => (
+    <UserPrefsProvider storage={new MemoryStorage()}>{ui()}</UserPrefsProvider>
+  ));
 
 const baseSettings: MachineSettingsSnapshot = {
   fan: 50,
@@ -116,6 +123,46 @@ describe('MachineTab — steam flow', () => {
         'Could not load machine settings.',
       ),
     );
+  });
+});
+
+describe('MachineTab — steam purge strategy', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', mkFetchMock());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('defaults to "firmware" with the delay slider hidden', async () => {
+    renderTab(() => <MachineTab />);
+    await waitFor(() =>
+      screen.getByTestId('machine-steam-purge-strategy'),
+    );
+    const radios = screen
+      .getByTestId('machine-steam-purge-strategy')
+      .querySelectorAll('input[type="radio"]');
+    const firmware = Array.from(radios).find(
+      (r) => (r as HTMLInputElement).value === 'firmware',
+    ) as HTMLInputElement;
+    expect(firmware.checked).toBe(true);
+    expect(
+      screen.queryByTestId('machine-steam-autoflush'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('reveals the delay slider only for "autoFlush"', async () => {
+    renderTab(() => <MachineTab />);
+    await waitFor(() => screen.getByTestId('machine-steam-purge-strategy'));
+    const autoFlush = screen.getByDisplayValue('autoFlush') as HTMLInputElement;
+    fireEvent.click(autoFlush);
+    expect(screen.getByTestId('machine-steam-autoflush')).toBeInTheDocument();
+
+    const manual = screen.getByDisplayValue('manual') as HTMLInputElement;
+    fireEvent.click(manual);
+    expect(
+      screen.queryByTestId('machine-steam-autoflush'),
+    ).not.toBeInTheDocument();
   });
 });
 

@@ -62,12 +62,14 @@ describe('LiveSteamView', () => {
     snap?: MachineSnapshot | null;
     settings?: ShotSettingsSnapshot | null;
     startedAtMs?: number;
+    steamingStartedAtMs?: number;
     onStop?: () => void;
     onExtend?: ((deltaSec: number) => void) | null;
     steamFlow?: number | undefined;
     onChangeSteamFlow?: ((v: number) => void) | null;
     showSlider?: boolean;
     phase?: 'steaming' | 'purging' | 'idle';
+    purgeStrategy?: 'firmware' | 'autoFlush' | 'manual';
   } = {}) => {
     // Distinguish "not specified" (undefined → use defaults) from "explicitly
     // null" (preserve null so the view renders its empty state).
@@ -88,7 +90,13 @@ describe('LiveSteamView', () => {
         machineSnapshot={snap}
         shotSettings={settings}
         startedAtMs={() => over.startedAtMs ?? Date.parse('2026-05-25T08:00:00.000Z')}
+        steamingStartedAtMs={
+          'steamingStartedAtMs' in over
+            ? () => over.steamingStartedAtMs!
+            : undefined
+        }
         phase={over.phase ? () => over.phase! : undefined}
+        purgeStrategy={over.purgeStrategy ? () => over.purgeStrategy! : undefined}
         onStop={over.onStop ?? (() => {})}
         onExtend={onExtendProp}
         steamFlow={() => over.steamFlow}
@@ -232,6 +240,22 @@ describe('LiveSteamView', () => {
     expect(timer).not.toHaveTextContent('left');
   });
 
+  it('countdown uses the steaming origin while TIME uses the session origin', () => {
+    // Session started at 08:00:00 (warm-up), steam began flowing at 08:00:05,
+    // now 08:00:15. TIME readout = 15 s (open-duration). Countdown = 30 s
+    // target − 10 s of real steam = 20 s left (warm-up not counted).
+    renderView({
+      snap: mkSnap({ timestamp: '2026-05-25T08:00:15.000Z' }),
+      settings: mkSettings({ targetSteamDuration: 30 }),
+      startedAtMs: Date.parse('2026-05-25T08:00:00.000Z'),
+      steamingStartedAtMs: Date.parse('2026-05-25T08:00:05.000Z'),
+    });
+    expect(screen.getByTestId('readout-time')).toHaveTextContent('15.0 s');
+    const timer = screen.getByTestId('live-view-timer');
+    expect(timer).toHaveAttribute('data-mode', 'countdown');
+    expect(timer).toHaveTextContent('20');
+  });
+
   it('readouts row TIME stays elapsed even when the hero is counting down', () => {
     renderView({
       snap: mkSnap({ timestamp: '2026-05-25T08:00:10.000Z' }),
@@ -252,6 +276,24 @@ describe('LiveSteamView', () => {
       renderView({ phase: 'purging' });
       expect(screen.getByTestId('steam-hero-purge')).toBeInTheDocument();
       expect(screen.queryByTestId('live-view-timer')).not.toBeInTheDocument();
+    });
+
+    it('shows the passive indicator (no button) for firmware/autoFlush', () => {
+      renderView({ phase: 'purging', purgeStrategy: 'autoFlush' });
+      expect(screen.getByTestId('steam-hero-purge')).toBeInTheDocument();
+      expect(
+        screen.queryByTestId('steam-hero-purge-button'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('manual strategy shows a Purge button that fires onStop (second idle)', () => {
+      const onStop = vi.fn();
+      renderView({ phase: 'purging', purgeStrategy: 'manual', onStop });
+      // The passive indicator is replaced by an actionable button.
+      expect(screen.queryByTestId('steam-hero-purge')).not.toBeInTheDocument();
+      const btn = screen.getByTestId('steam-hero-purge-button');
+      fireEvent.click(btn);
+      expect(onStop).toHaveBeenCalledTimes(1);
     });
 
     it('annotates the hero with data-phase="purging"', () => {

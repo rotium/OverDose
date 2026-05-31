@@ -54,10 +54,14 @@ describe('deriveActivity', () => {
     ['espresso', 'pouring', { kind: 'espresso', phase: 'pouring' }],
     ['espresso', 'pouringDone', { kind: 'espresso', phase: 'done' }],
 
-    // steam phases (paused/finished both read as 'steaming' — pure fn limit)
+    // steam phases. Real hardware: `pouring` = steaming; once steam stops the
+    // firmware parks under `steam` with `pouringDone`/`idle` while it purges.
+    // Single-snapshot, so `steam`+`idle` reads as purging (the stateful opPhase
+    // in LiveShotContext disambiguates warm-up from stopped using history).
     ['steam', 'preparingForShot', { kind: 'steam', phase: 'heating' }],
     ['steam', 'pouring', { kind: 'steam', phase: 'steaming' }],
-    ['steam', 'idle', { kind: 'steam', phase: 'steaming' }],
+    ['steam', 'pouringDone', { kind: 'steam', phase: 'purging' }],
+    ['steam', 'idle', { kind: 'steam', phase: 'purging' }],
     ['airPurge', 'idle', { kind: 'steam', phase: 'purging' }],
 
     // hot water + flush

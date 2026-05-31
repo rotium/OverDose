@@ -51,13 +51,22 @@ const { recipes: recipeRepository, routines: routineRepository, pitchers: pitche
 const onSleep = () =>
   api.sleep().catch((e) => console.warn('sleep failed', e));
 
-const onWake = () =>
-  api.requestState('idle').catch((e) => console.warn('wake failed', e));
+const onWake = () => {
+  dlog('intent', 'wake (idle)');
+  return api.requestState('idle').catch((e) => console.warn('wake failed', e));
+};
 
-const onStop = () =>
-  api.requestState('idle').catch((e) => {
+// Shared stop path: hit by both the app STOP button and the steam auto
+// time-down (which logs its own `steam.autostop` line just before calling
+// this). A physical-button stop produces NO line here — the machine state
+// just changes — which is exactly how a trace distinguishes app-driven stops
+// from physical-button stops.
+const onStop = () => {
+  dlog('intent', 'stop (idle)');
+  return api.requestState('idle').catch((e) => {
     console.warn('stop failed', e);
   });
+};
 
 const onUpdateShotSettings = (settings: ShotSettingsSnapshot) =>
   api.updateShotSettings(settings).catch((e) =>
@@ -189,6 +198,65 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
     lastSteamDur = ss.targetSteamDuration;
     dlog('steamDur', `${ss.targetSteamDuration}s`);
   });
+
+  // ── Steam purge strategy: firmware write-through ──
+  // The skin owns the purge strategy; mirror it onto the firmware
+  // `steamPurgeMode` (0 = machine auto-purge, 1 = two-tap so the skin/user
+  // drives the purge). Write once per connection and whenever the strategy
+  // changes — `connected` is a memo so this doesn't run on every (~10 Hz)
+  // frame, only on connect/disconnect edges.
+  const machineConnected = createMemo(() => p.streams.machine.latest() !== null);
+  let lastWrittenPurgeMode: number | null = null;
+  createEffect(() => {
+    const strat = prefs.steamPurgeStrategy();
+    if (!machineConnected()) {
+      lastWrittenPurgeMode = null; // re-sync on the next connection
+      return;
+    }
+    const desired = strat === 'firmware' ? 0 : 1;
+    if (desired === lastWrittenPurgeMode) return;
+    lastWrittenPurgeMode = desired;
+    dlog('steam', `write steamPurgeMode=${desired} (strategy=${strat})`);
+    void api
+      .updateMachineSettings({ steamPurgeMode: desired })
+      .catch((e) => console.warn('write steamPurgeMode failed', e));
+  });
+
+  // ── Steam purge orchestration (autoFlush) ──
+  // When steam stops the firmware parks (phase → 'purging'). In `autoFlush`
+  // mode we deliberately fire the purge (a second idle) after the configured
+  // dwell, instead of leaving the machine parked until its own steam-length
+  // timeout. `firmware` needs nothing (mode 0 already purged on the single
+  // stop); `manual` waits for the user's Purge button. Fires once per session
+  // (`purgeFired`); the timer is cancelled if the session ends first.
+  let purgeTimer: ReturnType<typeof setTimeout> | undefined;
+  let purgeFired = false;
+  const cancelPurgeTimer = (): void => {
+    if (purgeTimer !== undefined) {
+      clearTimeout(purgeTimer);
+      purgeTimer = undefined;
+    }
+  };
+  createEffect(() => {
+    const session = live.operationSession;
+    const active = session.status() === 'active' && session.kind() === 'steam';
+    if (!active) {
+      cancelPurgeTimer();
+      purgeFired = false;
+      return;
+    }
+    if (session.phase() !== 'purging' || purgeFired) return;
+    if (prefs.steamPurgeStrategy() !== 'autoFlush') return;
+    purgeFired = true;
+    const dwellMs = Math.max(0, prefs.steamAutoFlushSec()) * 1000;
+    dlog('steam', `autoFlush: purge in ${dwellMs}ms`);
+    purgeTimer = setTimeout(() => {
+      purgeTimer = undefined;
+      dlog('steam', 'autoFlush: firing purge (idle)');
+      void onStop().catch((e) => console.warn('auto-flush purge failed', e));
+    }, dwellMs);
+  });
+  onCleanup(cancelPurgeTimer);
 
   // Standby veil. Driven straight off the machine state, so it appears
   // whenever the DE1 sleeps (header button, its own timeout, physical GHC)

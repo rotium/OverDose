@@ -37,14 +37,27 @@ export interface LiveSteamViewProps {
    *  em-dashes. */
   shotSettings: Accessor<ShotSettingsSnapshot | null>;
   /** Epoch ms when the steam session began (snapshot.timestamp of the
-   *  frame where state entered 'steam'). 0 → not started. */
+   *  frame where state entered 'steam'). 0 → not started. Drives the
+   *  readouts' TIME (open-duration, includes boiler warm-up). */
   startedAtMs: Accessor<number>;
+  /** Epoch ms when steam actually started flowing (first `pouring` frame),
+   *  excluding warm-up. Drives the countdown + STOP-fill so they reflect real
+   *  steam time and match the firmware's `TargetSteamLength`. Defaults to
+   *  `startedAtMs` when not provided (older callers / tests). 0 → not steaming
+   *  yet, so the countdown shows idle. */
+  steamingStartedAtMs?: Accessor<number>;
   /** Sub-phase of the steam session — distinguishes active steaming from
    *  the firmware's trailing wand purge (`airPurge` state). When `'purging'`
    *  the hero swaps to "Purging steam wand…" copy and the +/- adjusters
    *  hide (no useful action during the firmware-driven purge). Defaults to
    *  'steaming' when not provided, preserving older callers / tests. */
   phase?: Accessor<'steaming' | 'purging' | 'idle'>;
+  /** Purge strategy (from user prefs). Only `manual` changes this view: while
+   *  `phase === 'purging'` it shows a "Purge wand" button (which calls
+   *  `onStop` — a second idle that fires the purge) instead of the passive
+   *  "Purging…" indicator. `firmware`/`autoFlush` show the indicator (the
+   *  purge is firmware- or skin-timer-driven). Defaults to `firmware`. */
+  purgeStrategy?: Accessor<'firmware' | 'autoFlush' | 'manual'>;
   onStop: () => void;
   /** Add this many seconds to `targetSteamDuration` mid-session. The
    *  button is hidden when undefined or when no target is set. */
@@ -143,6 +156,12 @@ export const LiveSteamView: Component<LiveSteamViewProps> = (p) => {
   const phase = (): 'steaming' | 'purging' | 'idle' =>
     p.phase ? p.phase() : 'steaming';
   const isPurging = (): boolean => phase() === 'purging';
+  const purgeStrategy = (): 'firmware' | 'autoFlush' | 'manual' =>
+    p.purgeStrategy ? p.purgeStrategy() : 'firmware';
+  // Manual mode parks the wand on stop and waits for an explicit purge; show a
+  // Purge button in place of the passive "Purging…" indicator.
+  const showManualPurge = (): boolean =>
+    isPurging() && purgeStrategy() === 'manual';
 
   const steamTemp = (): number | undefined => {
     const t = snap()?.steamTemperature;
@@ -157,17 +176,27 @@ export const LiveSteamView: Component<LiveSteamViewProps> = (p) => {
     return typeof d === 'number' && d > 0 ? d : undefined;
   };
 
-  // Elapsed is "now (latest snapshot time) − startedAtMs". Tracks the
-  // machine clock so playback / replay paths stay correct, and doesn't
-  // depend on wall-clock drift between client and gateway.
-  const elapsedSec = (): number | undefined => {
-    const startMs = p.startedAtMs();
+  // Elapsed since a given origin = "now (latest snapshot time) − origin".
+  // Tracks the machine clock so playback / replay paths stay correct, and
+  // doesn't depend on wall-clock drift between client and gateway.
+  const elapsedSince = (startMs: number): number | undefined => {
     const s = snap();
     if (startMs === 0 || !s) return undefined;
     const nowMs = Date.parse(s.timestamp);
     if (Number.isNaN(nowMs)) return undefined;
     return Math.max(0, (nowMs - startMs) / 1000);
   };
+
+  // Two origins:
+  //  - TIME readout: session start (open-duration, incl. warm-up).
+  //  - countdown / STOP-fill: first `pouring` frame, so the timer reflects
+  //    real steam time and freezes naturally once steaming stops (the
+  //    steaming origin stops advancing relative to a frozen `phase`).
+  const timeElapsedSec = (): number | undefined => elapsedSince(p.startedAtMs());
+  const steamingStartMs = (): number =>
+    p.steamingStartedAtMs ? p.steamingStartedAtMs() : p.startedAtMs();
+  const countdownElapsedSec = (): number | undefined =>
+    elapsedSince(steamingStartMs());
 
   // "At-target" once within a small tolerance of setpoint. Pure UI cue —
   // doesn't gate anything; just lets the user see "ready" at a glance.
@@ -182,7 +211,7 @@ export const LiveSteamView: Component<LiveSteamViewProps> = (p) => {
   });
 
   const stopProgress = createMemo<{ value: number; trigger: 'time' | 'none' }>(() =>
-    computeSteamStopProgress(elapsedSec() ?? 0, targetDurationSec() ?? 0),
+    computeSteamStopProgress(countdownElapsedSec() ?? 0, targetDurationSec() ?? 0),
   );
   const stopSeverity = createMemo<'normal' | 'near' | 'over'>(() =>
     severityFor(stopProgress().value * 100),
@@ -192,7 +221,7 @@ export const LiveSteamView: Component<LiveSteamViewProps> = (p) => {
   // The same severity thresholds as the STOP fill drive the countdown's
   // urgency tint, so the visual cue lines up across the view.
   const heroTimer = createMemo<HeaderTimer>(() =>
-    computeHeaderTimer(elapsedSec(), targetDurationSec()),
+    computeHeaderTimer(countdownElapsedSec(), targetDurationSec()),
   );
   const heroTimerSeverity = createMemo<'normal' | 'near' | 'over'>(() => {
     if (heroTimer().mode !== 'countdown') return 'normal';
@@ -283,24 +312,40 @@ export const LiveSteamView: Component<LiveSteamViewProps> = (p) => {
         <Show
           when={!isPurging()}
           fallback={
-            // Firmware-driven wand purge after steam ends. ~5 s, not
-            // configurable on our side (see [[starter-skin-vocabulary]] for
-            // the protocol notes). No countdown shown — we don't actually
-            // know the exact remaining time, and a fake one would lie. The
-            // hero just communicates "the machine is doing its thing,
-            // wait" while the readouts row keeps the temp/time numbers
-            // visible for anyone watching.
-            <div
-              class="steam-hero__purge"
-              data-testid="steam-hero-purge"
-              role="status"
-              aria-live="polite"
-            >
-              <span class="steam-hero__purge-glyph" aria-hidden="true">
-                ⟳
-              </span>
-              <span class="steam-hero__purge-label">Purging steam wand…</span>
-            </div>
+            showManualPurge() ? (
+              // Manual purge: steam has stopped and the wand is parked. The
+              // user fires the purge (a second idle) when ready — e.g. after
+              // lifting the wand clear of the milk.
+              <button
+                type="button"
+                class="steam-hero__purge-button"
+                data-testid="steam-hero-purge-button"
+                onClick={p.onStop}
+                aria-label="Purge steam wand"
+              >
+                <span class="steam-hero__purge-glyph" aria-hidden="true">
+                  ⟳
+                </span>
+                <span class="steam-hero__purge-label">Purge wand</span>
+              </button>
+            ) : (
+              // Firmware- or auto-flush-driven wand purge after steam ends.
+              // ~5 s, timing not known precisely on our side (see
+              // [[starter-skin-vocabulary]]). No countdown — a fake one would
+              // lie. The hero communicates "the machine is doing its thing,
+              // wait" while the readouts keep the temp/time numbers visible.
+              <div
+                class="steam-hero__purge"
+                data-testid="steam-hero-purge"
+                role="status"
+                aria-live="polite"
+              >
+                <span class="steam-hero__purge-glyph" aria-hidden="true">
+                  ⟳
+                </span>
+                <span class="steam-hero__purge-label">Purging steam wand…</span>
+              </div>
+            )
           }
         >
           <div
@@ -388,7 +433,7 @@ export const LiveSteamView: Component<LiveSteamViewProps> = (p) => {
         </div>
         <div class="readout" data-testid="readout-time">
           <div class="readout__label">TIME</div>
-          <div class="readout__value">{fmtElapsed(elapsedSec())}</div>
+          <div class="readout__value">{fmtElapsed(timeElapsedSec())}</div>
         </div>
         <div class="readout" data-testid="readout-duration">
           <div class="readout__label">DURATION</div>

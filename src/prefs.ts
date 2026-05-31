@@ -77,3 +77,28 @@ export const DEFAULT_HAS_SCALE = true;
  * (Settings → App → Developer).
  */
 export const DEFAULT_DEBUG_LOGGING = false;
+
+/**
+ * How the wand purge after a steam stop is triggered. The DE1 needs a stop
+ * command to *also* drive the purge; on a two-tap machine (`steamPurgeMode=1`)
+ * one stop only parks the wand and a second is needed to purge. We model the
+ * choice as a skin strategy that also writes the firmware `steamPurgeMode`:
+ *
+ *  - `firmware`  — let the machine purge itself: write `steamPurgeMode=0`, so a
+ *                  single stop both ends steam and runs the ~5 s purge. No dwell
+ *                  control (firmware-fixed). Default — deterministic, no waiting.
+ *  - `autoFlush` — write `steamPurgeMode=1` (machine parks on stop), then the
+ *                  skin auto-fires the purge after `steamAutoFlushSec`. Gives a
+ *                  configurable dwell to keep the wand in the milk before it
+ *                  puffs.
+ *  - `manual`    — write `steamPurgeMode=1`; the skin shows a Purge button and
+ *                  the user fires the purge when ready.
+ *
+ * `autoFlush`/`manual` set the machine to two-tap, which ALSO makes the
+ * physical steam button require two presses — surfaced in the Machine tab copy.
+ */
+export type SteamPurgeStrategy = 'firmware' | 'autoFlush' | 'manual';
+export const DEFAULT_STEAM_PURGE_STRATEGY: SteamPurgeStrategy = 'firmware';
+
+/** Dwell (seconds) the wand stays parked before `autoFlush` fires the purge. */
+export const DEFAULT_STEAM_AUTO_FLUSH_SEC = 3;

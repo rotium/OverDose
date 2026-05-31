@@ -1074,6 +1074,34 @@ html {
   color: var(--muted);
 }
 
+/* Manual-purge variant: the purge indicator is an actionable button. Inherits
+   the glyph + label styling; adds a tappable surface sized for the hero. */
+.steam-hero__purge-button {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 2rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2, rgba(255, 255, 255, 0.04));
+  color: var(--fg);
+  font-size: 2rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.steam-hero__purge-button:hover,
+.steam-hero__purge-button:focus-visible {
+  background: var(--surface-3, rgba(255, 255, 255, 0.08));
+  border-color: var(--accent, var(--fg));
+}
+
+.steam-hero__purge-button .steam-hero__purge-label {
+  color: var(--fg);
+}
+
 @keyframes steam-hero-purge-spin {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }

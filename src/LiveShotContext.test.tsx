@@ -393,38 +393,53 @@ describe('LiveShotProvider', () => {
       expect(liveCtx().accumulator.frameCount()).toBe(0);
     });
 
-    it('phase tracks the steam → airPurge → idle firmware sequence', () => {
-      // The DE1 runs an autonomous ~5 s wand purge after a steam stop. From
-      // the skin's perspective: state enters 'steam' (phase: steaming) →
-      // transitions to 'airPurge' (phase: purging, session still active) →
-      // eventually 'idle' (session ends, phase idle). The gateway maps the
-      // brief firmware 'puffing' substate to 'idle' under steam, so we
-      // don't see it directly — but we're still in state=steam for the
-      // whole window before the airPurge state, so no extra handling.
+    it('phase tracks the real warm-up → steam → purge → idle sequence', () => {
+      // Real hardware: state enters `steam` with substate `preparingForShot`
+      // (boiler warm-up, phase: heating-ish but modelled as steaming with no
+      // countdown) → `pouring` (real steaming) → on stop the firmware parks
+      // under `steam` with `pouringDone`/`idle` while it purges (phase:
+      // purging) → top-level `idle` (session ends). The clock for steaming
+      // starts at the first `pouring` frame, not session start.
       const rig = buildRig();
       mount(rig);
       expect(liveCtx().operationSession.phase()).toBe('idle');
 
+      // Warm-up: session is active but steaming hasn't started — no pouring.
       rig.setMachine(
         mkSnap({
           timestamp: '2026-05-25T08:00:00.000Z',
-          state: { state: 'steam', substate: 'idle' },
+          state: { state: 'steam', substate: 'preparingForShot' },
         }),
       );
       expect(liveCtx().operationSession.status()).toBe('active');
-      expect(liveCtx().operationSession.phase()).toBe('steaming');
+      expect(liveCtx().operationSession.startedAtMs()).toBe(
+        Date.parse('2026-05-25T08:00:00.000Z'),
+      );
+      expect(liveCtx().operationSession.steamingStartedAtMs()).toBe(0);
 
+      // Steam starts flowing — pouring. Steaming clock anchors here.
+      rig.setMachine(
+        mkSnap({
+          timestamp: '2026-05-25T08:00:03.000Z',
+          state: { state: 'steam', substate: 'pouring' },
+        }),
+      );
+      expect(liveCtx().operationSession.phase()).toBe('steaming');
+      expect(liveCtx().operationSession.steamingStartedAtMs()).toBe(
+        Date.parse('2026-05-25T08:00:03.000Z'),
+      );
+
+      // Steam stops → parks under `steam`/`pouringDone` for the purge.
       rig.setMachine(
         mkSnap({
           timestamp: '2026-05-25T08:00:25.000Z',
-          state: { state: 'airPurge', substate: 'idle' },
+          state: { state: 'steam', substate: 'pouringDone' },
         }),
       );
       expect(liveCtx().operationSession.status()).toBe('active');
       expect(liveCtx().operationSession.phase()).toBe('purging');
-      // startedAtMs should still be the steam-entry timestamp so the
-      // TIME readout keeps counting from session start, not from
-      // purge start.
+      // startedAtMs stays at session start so the TIME readout (open-duration)
+      // keeps counting across the purge.
       expect(liveCtx().operationSession.startedAtMs()).toBe(
         Date.parse('2026-05-25T08:00:00.000Z'),
       );
@@ -438,19 +453,22 @@ describe('LiveShotProvider', () => {
       expect(liveCtx().operationSession.status()).toBe('idle');
       expect(liveCtx().operationSession.phase()).toBe('idle');
       expect(liveCtx().operationSession.startedAtMs()).toBe(0);
+      expect(liveCtx().operationSession.steamingStartedAtMs()).toBe(0);
     });
 
-    it('two-tap-stop path: steam → idle (no airPurge) ends the session immediately', () => {
-      // In two-tap-stop mode the firmware parks in the puffing substate
-      // until a second tap. If the user never taps and the machine
-      // eventually goes idle without an airPurge transition, the session
-      // should still end cleanly.
+    it('legacy airPurge state still maps to the purge phase', () => {
+      // Some firmware may surface a top-level `airPurge` state; keep folding
+      // it into the steam session as the purge phase.
       const rig = buildRig();
       mount(rig);
       rig.setMachine(
-        mkSnap({ state: { state: 'steam', substate: 'idle' } }),
+        mkSnap({ state: { state: 'steam', substate: 'pouring' } }),
       );
       expect(liveCtx().operationSession.phase()).toBe('steaming');
+      rig.setMachine(
+        mkSnap({ state: { state: 'airPurge', substate: 'idle' } }),
+      );
+      expect(liveCtx().operationSession.phase()).toBe('purging');
       rig.setMachine(
         mkSnap({ state: { state: 'idle', substate: 'idle' } }),
       );
@@ -504,6 +522,55 @@ describe('LiveShotProvider', () => {
         }),
       );
       expect(rig.onStop).toHaveBeenCalledTimes(1);
+    });
+
+    it('counts the duration from the pouring start, not the warm-up start', async () => {
+      // Bug guard: the auto-stop clock anchors at the first `pouring` frame,
+      // not the session start. A long `preparingForShot` warm-up must NOT eat
+      // into the steam duration (previously it did, cutting short steams to
+      // ~0 s and breaking the purge).
+      const rig = buildRig({ shotSettings: steamSettings({ targetSteamDuration: 10 }) });
+      mount(rig);
+      // 8 s of warm-up before any steam flow.
+      rig.setMachine(
+        mkSnap({
+          timestamp: '2026-05-22T08:00:00.000Z',
+          state: { state: 'steam', substate: 'preparingForShot' },
+        }),
+      );
+      rig.setMachine(
+        mkSnap({
+          timestamp: '2026-05-22T08:00:08.000Z',
+          state: { state: 'steam', substate: 'pouring' },
+        }),
+      );
+      // 9 s into the *session* but only 1 s of actual steam — must not stop,
+      // even though 9 s > the 10 s target would falsely fire under the old
+      // session-anchored clock at... (it wouldn't yet here, but the next
+      // assertion is the real guard).
+      rig.setMachine(
+        mkSnap({
+          timestamp: '2026-05-22T08:00:09.000Z',
+          state: { state: 'steam', substate: 'pouring' },
+        }),
+      );
+      expect(rig.onStop).not.toHaveBeenCalled();
+      // 11 s into the session = 3 s of steam — still under the 10 s target.
+      rig.setMachine(
+        mkSnap({
+          timestamp: '2026-05-22T08:00:11.000Z',
+          state: { state: 'steam', substate: 'pouring' },
+        }),
+      );
+      expect(rig.onStop).not.toHaveBeenCalled();
+      // 18.5 s into the session = 10.5 s of real steam ≥ 10 s target → stop.
+      rig.setMachine(
+        mkSnap({
+          timestamp: '2026-05-22T08:00:18.500Z',
+          state: { state: 'steam', substate: 'pouring' },
+        }),
+      );
+      await waitFor(() => expect(rig.onStop).toHaveBeenCalledTimes(1));
     });
 
     it('never auto-stops steam when the duration is 0 (steam until stopped)', () => {

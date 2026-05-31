@@ -1,8 +1,19 @@
-import { Show, createResource, type Component } from 'solid-js';
+import { For, Show, createResource, type Component } from 'solid-js';
 import { api, type MachineSettingsSnapshot } from '../../api';
 import type { ShotSettingsSnapshot } from '../../snapshot';
 import type { WsStream } from '../../streams';
+import type { SteamPurgeStrategy } from '../../prefs';
+import { useUserPrefs } from '../../UserPrefsContext';
 import { DebouncedSliderField } from './DebouncedSliderField';
+
+const PURGE_STRATEGY_OPTIONS: {
+  value: SteamPurgeStrategy;
+  label: string;
+}[] = [
+  { value: 'firmware', label: 'Machine auto-purge' },
+  { value: 'autoFlush', label: 'Auto-purge after delay' },
+  { value: 'manual', label: 'Manual purge' },
+];
 
 /**
  * Machine tab — DE1 settings, all routed through the gateway. Steam + Flush
@@ -24,6 +35,7 @@ export interface MachineTabProps {
 }
 
 export const MachineTab: Component<MachineTabProps> = (p) => {
+  const prefs = useUserPrefs();
   // `/api/v1/machine/settings` has no WS stream — it's request/response only —
   // so a one-shot resource is the right shape: it fetches the machine's
   // current values each time the tab is opened (the tab unmounts/remounts via
@@ -179,6 +191,64 @@ export const MachineTab: Component<MachineTabProps> = (p) => {
                   formatValue={(v) => `${v.toFixed(1)} mL/s`}
                 />
               </div>
+
+              {/* Wand purge. This is a skin preference that writes the
+                  firmware's `steamPurgeMode` through (Machine auto = 0,
+                  the other two = 1 / two-tap). */}
+              <div class="settings-field settings-field--stack">
+                <span class="settings-field__label">Wand purge</span>
+                <div
+                  class="settings-radio-row"
+                  role="radiogroup"
+                  aria-label="Wand purge"
+                  data-testid="machine-steam-purge-strategy"
+                >
+                  <For each={PURGE_STRATEGY_OPTIONS}>
+                    {(opt) => (
+                      <label class="settings-radio">
+                        <input
+                          type="radio"
+                          name="steam-purge-strategy"
+                          value={opt.value}
+                          checked={prefs.steamPurgeStrategy() === opt.value}
+                          onChange={() => prefs.setSteamPurgeStrategy(opt.value)}
+                        />
+                        <span>{opt.label}</span>
+                      </label>
+                    )}
+                  </For>
+                </div>
+                <p class="settings-help">
+                  {prefs.steamPurgeStrategy() === 'firmware'
+                    ? 'The machine runs its own ~5 s purge the moment steam stops.'
+                    : prefs.steamPurgeStrategy() === 'autoFlush'
+                      ? 'The wand parks when steam stops, then auto-purges after the delay below. Also makes the physical steam button two-tap.'
+                      : 'The wand parks when steam stops; tap “Purge wand” to finish. Also makes the physical steam button two-tap.'}
+                </p>
+              </div>
+
+              <Show when={prefs.steamPurgeStrategy() === 'autoFlush'}>
+                <div class="settings-field settings-field--stack">
+                  <label
+                    class="settings-field__label"
+                    for="machine-steam-autoflush"
+                  >
+                    Auto-purge delay
+                  </label>
+                  <DebouncedSliderField
+                    testId="machine-steam-autoflush"
+                    value={prefs.steamAutoFlushSec()}
+                    onCommit={(v) => prefs.setSteamAutoFlushSec(v)}
+                    min={0}
+                    max={15}
+                    step={1}
+                    ariaLabel="Auto-purge delay in seconds"
+                    formatValue={(v) =>
+                      v <= 0 ? 'Immediate' : `${v.toFixed(0)} s`
+                    }
+                  />
+                </div>
+              </Show>
             </section>
 
             <section class="settings-section" data-testid="machine-flush-section">

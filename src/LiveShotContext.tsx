@@ -16,6 +16,7 @@ import {
   isScaleStatusFrame,
   type MachineSnapshot,
   type MachineState,
+  type MachineSubstate,
   type ScaleMessage,
   type ShotSettingsSnapshot,
 } from './snapshot';
@@ -78,8 +79,15 @@ export interface OperationSession {
   kind: Accessor<LiveOpKind | null>;
   /** Steam-only sub-phase (steaming/purging). Always `'idle'` for water/flush. */
   phase: Accessor<OperationSessionPhase>;
-  /** Epoch ms of the first snapshot of the operation. 0 when idle. */
+  /** Epoch ms of the first snapshot of the operation. 0 when idle. Counts the
+   *  warm-up (`preparingForShot`) too — used for the readouts' open-duration. */
   startedAtMs: Accessor<number>;
+  /** Steam-only: epoch ms of the first `steam/pouring` frame — i.e. when steam
+   *  actually started flowing, excluding boiler warm-up. 0 until steaming
+   *  begins (and for water/flush). Drives the countdown + auto-stop so the
+   *  duration reflects real steam time, matching the firmware's own
+   *  `TargetSteamLength`. */
+  steamingStartedAtMs: Accessor<number>;
 }
 
 /** Map a machine state onto the live-operation it represents (or null). The
@@ -148,6 +156,9 @@ export const LiveShotProvider: Component<LiveShotProviderProps> = (p) => {
   const [opKind, setOpKind] = createSignal<LiveOpKind | null>(null);
   const [opPhase, setOpPhase] = createSignal<OperationSessionPhase>('idle');
   const [opStartedAtMs, setOpStartedAtMs] = createSignal(0);
+  // Epoch ms of the first `steam/pouring` frame this session — when steam
+  // actually started flowing (boiler warm-up excluded). 0 until then.
+  const [steamingStartedAtMs, setSteamingStartedAtMs] = createSignal(0);
 
   // Cached machine-settings blob. Fetched on each operation-session start; an
   // in-flight session can refetch via the optimistic merge in
@@ -167,6 +178,26 @@ export const LiveShotProvider: Component<LiveShotProviderProps> = (p) => {
   // want that extension to drift the saved default across future sessions.
   // Null when no session is active or when shotSettings hadn't arrived yet.
   let originalSteamDurationSec: number | null = null;
+
+  // Whether this steam session has shown the `pouring` substate yet (steam
+  // actually flowing). Distinguishes "warming up / pre-pour" (phase steaming,
+  // no countdown) from "stopped & purging" (phase purging) — both of which
+  // sit under parent state `steam` with a non-`pouring` substate.
+  let steamSawPouring = false;
+
+  // Steam sub-phase from the raw (state, substate) + whether we've seen real
+  // steaming this session. The firmware parks under parent `steam` with
+  // substate `pouringDone`/`idle` during the wand purge, so "stopped" is "left
+  // `pouring` after having steamed", not "parent state changed".
+  const steamPhaseFor = (
+    state: MachineState | undefined,
+    substate: MachineSubstate | undefined,
+  ): OperationSessionPhase => {
+    if (state === 'airPurge') return 'purging'; // legacy/fallback
+    if (substate === 'pouring') return 'steaming';
+    if (steamSawPouring) return 'purging';
+    return 'steaming'; // warming up / pre-pour
+  };
 
   const scaleWeight = (): number => {
     const msg = p.scaleStream.latest();
@@ -242,6 +273,16 @@ export const LiveShotProvider: Component<LiveShotProviderProps> = (p) => {
         .catch((e) => console.warn('fetch machineSettings failed', e));
     };
 
+    // Steam-only: register the `pouring` substate (real steam flow). Starts the
+    // steaming clock at the first `pouring` frame so warm-up isn't counted.
+    const registerSteamPour = (): void => {
+      if (substate === 'pouring' && !steamSawPouring) {
+        steamSawPouring = true;
+        setSteamingStartedAtMs(Date.parse(snap.timestamp));
+        dlog('steam', 'steaming started (pouring)');
+      }
+    };
+
     if (inSession && !wasInSession) {
       // Session start. Steam always starts on `steam` in practice —
       // `airPurge` without a preceding `steam` would be unusual, but we still
@@ -249,13 +290,18 @@ export const LiveShotProvider: Component<LiveShotProviderProps> = (p) => {
       setOpStartedAtMs(Date.parse(snap.timestamp));
       setOpStatus('active');
       setOpKind(op);
-      setOpPhase(op === 'steam' ? (state === 'steam' ? 'steaming' : 'purging') : 'idle');
-      // Steam-only: snapshot the saved duration before any mid-session edits,
-      // so we can restore it on session-end. `null` if shotSettings hasn't
-      // arrived yet — restore is then skipped (nothing to put back).
       if (op === 'steam') {
+        steamSawPouring = false;
+        setSteamingStartedAtMs(0);
+        registerSteamPour(); // cold subscribe already mid-pour
+        setOpPhase(steamPhaseFor(state, substate));
+        // Snapshot the saved duration before any mid-session edits, so we can
+        // restore it on session-end. `null` if shotSettings hasn't arrived
+        // yet — restore is then skipped (nothing to put back).
         originalSteamDurationSec =
           p.shotSettingsStream?.latest()?.targetSteamDuration ?? null;
+      } else {
+        setOpPhase('idle');
       }
       fetchMachineSettings();
     } else if (inSession && wasInSession) {
@@ -265,24 +311,32 @@ export const LiveShotProvider: Component<LiveShotProviderProps> = (p) => {
         // restart the session cleanly so the view + `startedAtMs` match.
         setOpStartedAtMs(Date.parse(snap.timestamp));
         setOpKind(op);
-        setOpPhase(op === 'steam' ? 'steaming' : 'idle');
-        originalSteamDurationSec =
-          op === 'steam'
-            ? (p.shotSettingsStream?.latest()?.targetSteamDuration ?? null)
-            : null;
+        if (op === 'steam') {
+          steamSawPouring = false;
+          setSteamingStartedAtMs(0);
+          registerSteamPour();
+          setOpPhase(steamPhaseFor(state, substate));
+          originalSteamDurationSec =
+            p.shotSettingsStream?.latest()?.targetSteamDuration ?? null;
+        } else {
+          setOpPhase('idle');
+          originalSteamDurationSec = null;
+        }
         fetchMachineSettings();
       } else if (op === 'steam') {
-        // Within steam: the only interesting transition is `steam` →
-        // `airPurge` (start of the firmware purge). Flip phase without
-        // resetting `startedAtMs` — the readouts TIME counter keeps running
-        // through the purge, which honestly reflects how long we've been open.
-        if (state === 'airPurge' && prevState !== 'airPurge') {
-          setOpPhase('purging');
-        } else if (state === 'steam' && prevState === 'airPurge') {
-          // Defensive — if the firmware ever bounced back to steam. Not
-          // expected on real hardware.
-          setOpPhase('steaming');
+        // Within steam: track real steam flow (`pouring`) and keep the phase
+        // in sync. "Stopped/purging" is detected as leaving `pouring` after
+        // having steamed — the parent state stays `steam` through the
+        // firmware purge (substate `pouringDone`/`idle`), so we can't key off
+        // it. `startedAtMs` is untouched: the readouts' open-duration keeps
+        // running across the purge.
+        registerSteamPour();
+        if (prevSubstate === 'pouring' && substate !== 'pouring') {
+          dlog('steam', `steam stopped → purging (state=${state}, substate=${substate})`);
         }
+        // setOpPhase with an unchanged value is a no-op (Object.is), so this
+        // is safe to call every frame without re-triggering subscribers.
+        setOpPhase(steamPhaseFor(state, substate));
       }
     } else if (!inSession && wasInSession) {
       // Session end. Steam-only: restore the saved steam duration if we (or
@@ -316,10 +370,13 @@ export const LiveShotProvider: Component<LiveShotProviderProps> = (p) => {
         }
       }
       originalSteamDurationSec = null;
+      steamSawPouring = false;
+      setSteamingStartedAtMs(0);
       setOpStatus('idle');
       setOpKind(null);
       setOpPhase('idle');
       setOpStartedAtMs(0);
+      dlog('op', `${prevOp} session end → ${state}`);
     }
 
     if (prevState === 'espresso' && state !== 'espresso') {
@@ -366,11 +423,17 @@ export const LiveShotProvider: Component<LiveShotProviderProps> = (p) => {
   // has run for `targetSteamDuration`, request idle — matching the countdown
   // the user sees in LiveSteamView. Fires once per session; skipped during the
   // trailing wand purge and when no duration is set (0 = steam until stopped).
+  //
+  // The clock is `steamingStartedAtMs` (first `pouring` frame), NOT session
+  // start — so boiler warm-up (`preparingForShot`) isn't counted against the
+  // duration. This matches the firmware's own `TargetSteamLength`, which also
+  // counts from actual steam start. Until steaming begins the clock is 0 and
+  // this is a no-op.
   let steamStopFired = false;
   createEffect(() => {
     const snap = p.machineStream.latest();
     const steaming =
-      opStatus() === 'active' && opKind() === 'steam' && opPhase() !== 'purging';
+      opStatus() === 'active' && opKind() === 'steam' && opPhase() === 'steaming';
     if (!steaming) {
       // Reset once the steam session is fully over (not merely purging).
       if (opStatus() !== 'active' || opKind() !== 'steam') {
@@ -380,7 +443,7 @@ export const LiveShotProvider: Component<LiveShotProviderProps> = (p) => {
     }
     if (!snap || steamStopFired) return;
     const dur = p.shotSettingsStream?.latest()?.targetSteamDuration ?? 0;
-    const startMs = opStartedAtMs();
+    const startMs = steamingStartedAtMs();
     if (dur <= 0 || startMs === 0) return;
     const elapsedSec = (Date.parse(snap.timestamp) - startMs) / 1000;
     if (Number.isNaN(elapsedSec) || elapsedSec < dur) return;
@@ -425,6 +488,7 @@ export const LiveShotProvider: Component<LiveShotProviderProps> = (p) => {
       kind: opKind,
       phase: opPhase,
       startedAtMs: opStartedAtMs,
+      steamingStartedAtMs,
     },
     machineStream: p.machineStream,
     scaleStream: p.scaleStream,

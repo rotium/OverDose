@@ -168,7 +168,9 @@ export const LiveBrewDrawer: Component = () => {
               machineSnapshot={() => machineStream.latest() ?? null}
               shotSettings={shotSettingsAccessor}
               startedAtMs={operationSession.startedAtMs}
+              steamingStartedAtMs={operationSession.steamingStartedAtMs}
               phase={operationSession.phase}
+              purgeStrategy={prefs.steamPurgeStrategy}
               onStop={() => void stop()}
               onExtend={(delta) => void extendSteam(delta)}
               steamFlow={() => machineSettings()?.steamFlow}

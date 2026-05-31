@@ -114,13 +114,21 @@ export const deriveActivity = (
     case 'steamRinse':
       return { kind: 'steamRinse' };
     case 'steam':
-      return {
-        kind: 'steam',
-        phase: substate === 'preparingForShot' ? 'heating' : 'steaming',
-      };
+      // Real hardware: active steaming reports substate `pouring`. Once steam
+      // stops, the firmware parks under parent `steam` with substate
+      // `pouringDone` (or `idle` — the gateway flattens the firmware
+      // `puffing`/`pausedSteam` substates to `idle`) while it runs the wand
+      // purge, then goes to top-level `idle`. `preparingForShot` is boiler
+      // warm-up. NOTE: single-snapshot, so a cold subscribe landing on
+      // `steam`+`idle` reads as `purging`; the live UI uses the stateful
+      // `opPhase` in LiveShotContext, which tracks whether steaming was seen.
+      if (substate === 'preparingForShot') return { kind: 'steam', phase: 'heating' };
+      if (substate === 'pouring') return { kind: 'steam', phase: 'steaming' };
+      return { kind: 'steam', phase: 'purging' };
     case 'airPurge':
-      // The firmware-driven wand purge after steam — folded into the steam
-      // session (matches the live drawer + operationSession behaviour).
+      // Legacy/fallback. On current firmware the purge surfaces as
+      // `steam/pouringDone`, not a top-level `airPurge` — but keep it mapped
+      // so a firmware that does expose it still folds into the steam session.
       return { kind: 'steam', phase: 'purging' };
     case 'cleaning':
       return { kind: 'cleaning', phase: cleanPhase(substate) };

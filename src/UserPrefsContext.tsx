@@ -11,9 +11,12 @@ import {
   DEFAULT_CHART_SMOOTHING,
   DEFAULT_DEBUG_LOGGING,
   DEFAULT_HAS_SCALE,
+  DEFAULT_STEAM_AUTO_FLUSH_SEC,
+  DEFAULT_STEAM_PURGE_STRATEGY,
   DEFAULT_TRACE_VISIBILITY,
   DEFAULT_WATER_UNIT,
   type ChartSmoothing,
+  type SteamPurgeStrategy,
   type TraceVisibility,
   type WaterUnit,
 } from './prefs';
@@ -36,6 +39,8 @@ interface PersistedPrefs {
   showFlushFlowSlider?: boolean;
   hasScale?: boolean;
   debugLogging?: boolean;
+  steamPurgeStrategy?: SteamPurgeStrategy;
+  steamAutoFlushSec?: number;
 }
 
 export interface UserPrefsContextValue {
@@ -72,6 +77,13 @@ export interface UserPrefsContextValue {
   /** Developer console/debug logging. Default off. */
   debugLogging: Accessor<boolean>;
   setDebugLogging: (v: boolean) => void;
+  /** How the post-steam wand purge is triggered (and the firmware
+   *  `steamPurgeMode` it writes through). Default `firmware`. */
+  steamPurgeStrategy: Accessor<SteamPurgeStrategy>;
+  setSteamPurgeStrategy: (v: SteamPurgeStrategy) => void;
+  /** Dwell seconds before `autoFlush` fires the purge. */
+  steamAutoFlushSec: Accessor<number>;
+  setSteamAutoFlushSec: (v: number) => void;
 }
 
 const Ctx = createContext<UserPrefsContextValue>();
@@ -124,6 +136,13 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
   const [debugLogging, setDebugLogging] = createSignal<boolean>(
     initial.debugLogging ?? DEFAULT_DEBUG_LOGGING,
   );
+  const [steamPurgeStrategy, setSteamPurgeStrategy] =
+    createSignal<SteamPurgeStrategy>(
+      initial.steamPurgeStrategy ?? DEFAULT_STEAM_PURGE_STRATEGY,
+    );
+  const [steamAutoFlushSec, setSteamAutoFlushSec] = createSignal<number>(
+    initial.steamAutoFlushSec ?? DEFAULT_STEAM_AUTO_FLUSH_SEC,
+  );
 
   const setTraceVisible = (k: keyof TraceVisibility, v: boolean) =>
     setTraceVisibility({ ...traceVisibility(), [k]: v });
@@ -141,6 +160,8 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
       showFlushFlowSlider: showFlushFlowSlider(),
       hasScale: hasScale(),
       debugLogging: debugLogging(),
+      steamPurgeStrategy: steamPurgeStrategy(),
+      steamAutoFlushSec: steamAutoFlushSec(),
     };
     storage.setItem(STORAGE_KEY, JSON.stringify(shape));
   });
@@ -165,6 +186,10 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
     setHasScale,
     debugLogging,
     setDebugLogging,
+    steamPurgeStrategy,
+    setSteamPurgeStrategy,
+    steamAutoFlushSec,
+    setSteamAutoFlushSec,
   };
 
   return <Ctx.Provider value={value}>{p.children}</Ctx.Provider>;

@@ -233,17 +233,18 @@ describe('LiveBrewDrawer', () => {
 
     it('hero timer shows a whole-second countdown to targetSteamDuration', () => {
       const { setMachine } = setupDrawer({ shotSettings: mkSteamSettings() });
+      // `pouring` = real steam flow; the countdown anchors here (not warm-up).
       setMachine(
         mkSnap({
           timestamp: '2026-05-25T08:00:00.000Z',
-          state: { state: 'steam', substate: 'idle' },
+          state: { state: 'steam', substate: 'pouring' },
         }),
       );
       // 10s elapsed, 30s target → 20s remaining.
       setMachine(
         mkSnap({
           timestamp: '2026-05-25T08:00:10.000Z',
-          state: { state: 'steam', substate: 'idle' },
+          state: { state: 'steam', substate: 'pouring' },
           steamTemperature: 144,
         }),
       );
