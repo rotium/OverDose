@@ -38,18 +38,28 @@ call-site changes.
 One namespace, `overdose`, one key per collection, plus a `meta` key:
 
 ```
-GET /api/v1/store/overdose/recipes    →  Recipe[]   (JSON array)
-GET /api/v1/store/overdose/routines   →  Routine[]
-GET /api/v1/store/overdose/pitchers   →  Pitcher[]
-GET /api/v1/store/overdose/prefs      →  UserPrefs
-GET /api/v1/store/overdose/meta       →  { updatedAt, appVersion }
+GET /api/v1/store/overdose/recipes     →  Recipe[]   (JSON array)
+GET /api/v1/store/overdose/routines    →  Routine[]
+GET /api/v1/store/overdose/pitchers    →  Pitcher[]
+GET /api/v1/store/overdose/steamPurge  →  { strategy, autoFlushSec }
+GET /api/v1/store/overdose/prefs       →  UserPrefs   (aspirational)
+GET /api/v1/store/overdose/meta        →  { updatedAt, appVersion }
 ```
 
 There are **no device-local-only settings.** `hasScale` etc. describe the
 *machine* (the scale connects to the gateway, not the skin), so they're the
-same for every client and ride along in the synced `prefs`. (Aside: `hasScale`
+same for every client and ride along in the synced prefs. (Aside: `hasScale`
 would arguably be better *derived* from the live scale-snapshot WS than
 persisted at all — separate cleanup, not part of this design.)
+
+> **Status.** `recipes`/`routines`/`pitchers`/`meta` are synced via
+> `librarySync`. The **`steamPurge`** key (wand-purge `strategy` + dwell, which
+> drive the firmware `steamPurgeMode`) is the first *pref* to go cross-client:
+> it's synced as its own key by `UserPrefsContext` (gateway-canonical, pulled on
+> mount + window focus, pushed debounced on change; localStorage is the
+> cold-start mirror). The general **`prefs` blob is still aspirational** — the
+> rest of UserPrefs stay localStorage-only until that lands. `steamPurge`
+> collapses into the blob if/when it does.
 
 ### The `meta` key
 

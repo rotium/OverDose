@@ -448,7 +448,9 @@ export const App: Component = () => {
   });
 
   return (
-    <UserPrefsProvider>
+    <UserPrefsProvider
+      gatewayStore={{ get: api.storeGet, set: api.storeSet }}
+    >
       <RepositoriesProvider
         routines={routineRepository}
         recipes={recipeRepository}
