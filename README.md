@@ -17,6 +17,11 @@ recipe-driven brewing UI, designed for the tablet on your espresso bar.
 > Recipe — then it's one tap to brew it the same way every time. Right now
 > I keep three espresso recipes and two cappuccinos ready.
 
+## Core design decisions
+
+- Light and responsive
+- Smooth daily flow
+
 ## Recipes
 
 OverDose is built around one idea: **a great espresso is a recipe,
