@@ -892,8 +892,10 @@ describe('RecipeBrewScreen', () => {
 
       fireEvent.click(screen.getByTestId('prep-card-start'));
       await waitFor(() => expect(env.updateShotSettings).toHaveBeenCalled());
-      const body = env.updateShotSettings.mock
-        .calls[0]![0] as ShotSettingsSnapshot;
+      // Steam params push reactively during prep (so a physical-button start
+      // gets them too), so there may be several calls — the latest reflects
+      // the value in effect at Start.
+      const body = env.updateShotSettings.mock.calls.at(-1)![0] as ShotSettingsSnapshot;
       // Custom duration applied; temp stays the small pitcher's seeded value.
       expect(body.targetSteamDuration).toBe(42);
       expect(body.targetSteamTemp).toBe(150);
@@ -911,8 +913,8 @@ describe('RecipeBrewScreen', () => {
       fireEvent.click(screen.getByTestId('prep-card-start'));
 
       await waitFor(() => expect(env.updateShotSettings).toHaveBeenCalled());
-      const body = env.updateShotSettings.mock
-        .calls[0]![0] as ShotSettingsSnapshot;
+      // Latest push reflects the chosen pitcher (large) at Start.
+      const body = env.updateShotSettings.mock.calls.at(-1)![0] as ShotSettingsSnapshot;
       // shotSettings carries temp + duration (overlaid on the live snapshot).
       expect(body.targetSteamDuration).toBe(50);
       expect(body.targetSteamTemp).toBe(160);
@@ -925,6 +927,33 @@ describe('RecipeBrewScreen', () => {
       await waitFor(() =>
         expect(env.requestState).toHaveBeenCalledWith('steam'),
       );
+    });
+
+    it('pushes edited steam params during prep, before Start (physical-button start)', async () => {
+      // Regression: a physical GHC steam-button start bypasses the app's Start
+      // button, so params must already be on the firmware. Editing the duration
+      // should push to the gateway without any Start click.
+      const env = renderScreen({
+        routines: [steamRoutine()],
+        recipes: [sampleRecipe({ pitcherId: 'p-small' })],
+        shotSettingsSnap: baseShot,
+        loadPitchers: () => Promise.resolve(PITCHERS),
+      });
+      const dur = (await waitFor(() =>
+        screen.getByTestId('steam-param-duration'),
+      )) as HTMLInputElement;
+      dur.value = '47';
+      fireEvent.input(dur);
+      fireEvent.pointerUp(dur);
+
+      // No Start click. The edited value reaches the gateway anyway.
+      await waitFor(() => {
+        const body = env.updateShotSettings.mock.calls.at(-1)?.[0] as
+          | ShotSettingsSnapshot
+          | undefined;
+        expect(body?.targetSteamDuration).toBe(47);
+      });
+      expect(env.requestState).not.toHaveBeenCalled();
     });
 
     it('shows a "no prep needed" caption for water and flush', async () => {

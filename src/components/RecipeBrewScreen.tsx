@@ -447,7 +447,10 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
     const temp = steamTempC();
     const flow = steamFlow();
     if (dur == null || temp == null || flow == null) return;
-    const cur = p.shotSettingsStream?.().latest();
+    // Read the base snapshot non-reactively: the reactive prep-push effect
+    // (below) calls applySteam, and we don't want it re-firing on every
+    // shotSettings frame — only on prep-param edits.
+    const cur = untrack(() => p.shotSettingsStream?.().latest());
     dlog(
       'steam.apply',
       `pitcher=${pitcherId() ?? 'custom'} dur=${dur}s temp=${temp}°C flow=${flow} (shotSettings ${cur ? 'present' : 'MISSING'})`,
@@ -467,6 +470,25 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
       ((partial: { steamFlow: number }) => api.updateMachineSettings(partial));
     await updateMachine({ steamFlow: flow });
   };
+
+  // Push the steam params to the gateway reactively *during prep* — mirroring
+  // the brew-workflow effect above — so they're in place no matter how steam
+  // starts. Without this, the params only reached the firmware via the app's
+  // Start button (`startCurrentStep`); a physical GHC steam-button start
+  // bypassed it and ran the machine's stale `targetSteamDuration`. Deps are
+  // the prep params (the shotSettings base is read untracked inside
+  // applySteam, so this doesn't loop on the gateway echo); the guard inside
+  // applySteam keeps it a no-op until the user picks a pitcher or edits a
+  // value. SteamPrep commits on release, so this fires at edit cadence.
+  createEffect(() => {
+    // Touch the params so the effect tracks them.
+    void steamDurationSec();
+    void steamTempC();
+    void steamFlow();
+    void steamTouched();
+    void pitcherId();
+    void applySteam().catch((e) => console.warn('prep steam push failed', e));
+  });
 
   const startCurrentStep = async () => {
     const idx = currentIdx();
