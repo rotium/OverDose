@@ -13,7 +13,8 @@ import { useRepositories } from '../../../../RepositoriesContext';
 import { DebouncedNumberField } from './DebouncedNumberField';
 import { PickerDialog } from '../../../PickerDialog';
 import { ProfilePicker } from './ProfilePicker';
-import { api, type ProfileRecord } from '../../../../api';
+import { BeanPicker } from './BeanPicker';
+import { api, type Bean, type ProfileRecord } from '../../../../api';
 
 export interface RecipeEditorProps {
   recipeId: string;
@@ -30,6 +31,11 @@ export interface RecipeEditorProps {
    *  fallback instead of crashing the resource. Default mirrors that
    *  null-on-error contract. */
   loadProfileById?: (id: string) => Promise<ProfileRecord | null>;
+  /** Bean-list fetcher seam for the picker (defaults to `api.beans({})`). */
+  loadBeans?: () => Promise<Bean[]>;
+  /** Single-bean fetcher for the collapsed "selected bean" row. Returns null
+   *  when the id no longer resolves (deleted / gateway offline). */
+  loadBeanById?: (id: string) => Promise<Bean | null>;
 }
 
 /**
@@ -105,6 +111,33 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
     const r = recipe();
     if (!r || r.profileId === undefined) return;
     void saveRecipe({ ...r, profileId: undefined });
+  };
+
+  const [beanDialogOpen, setBeanDialogOpen] = createSignal(false);
+
+  // Resolve the recipe's chosen bean for the collapsed field row. Resolves
+  // archived beans too (GET /beans/{id} ignores `archived`), so a recipe
+  // pointing at a retired bean still shows "Roaster — Name" (with a tag)
+  // rather than "missing". Null only on real failure (deleted / offline).
+  const loadBeanById = (id: string): Promise<Bean | null> =>
+    (p.loadBeanById ?? ((x) => api.beanById(x).catch(() => null)))(id);
+  const [selectedBean] = createResource<Bean | null, string>(
+    () => recipe()?.beanId,
+    (id) => loadBeanById(id),
+  );
+
+  const handleBeanSelect = (beanId: string) => {
+    const r = recipe();
+    if (!r) return;
+    setBeanDialogOpen(false);
+    if (r.beanId === beanId) return;
+    void saveRecipe({ ...r, beanId });
+  };
+
+  const handleBeanClear = () => {
+    const r = recipe();
+    if (!r || r.beanId === undefined) return;
+    void saveRecipe({ ...r, beanId: undefined });
   };
 
   const saveRecipe = async (next: Recipe) => {
@@ -309,6 +342,17 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
 
               <section class="settings-section">
                 <h3>Brewing</h3>
+                <p class="settings-help">
+                  Which bean this recipe is dialled in for. Manage beans in
+                  Library → Beans.
+                </p>
+                <BeanFieldRow
+                  selectedId={r().beanId}
+                  selectedBean={() => selectedBean() ?? null}
+                  loading={selectedBean.loading}
+                  onOpen={() => setBeanDialogOpen(true)}
+                  onClear={handleBeanClear}
+                />
                 <div class="recipe-editor__field-row">
                   <label class="recipe-editor__field">
                     <span class="recipe-editor__field-label">Dose</span>
@@ -385,12 +429,6 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
               <section class="settings-section">
                 <h3>Coming soon</h3>
                 <ul class="recipe-editor__stubs">
-                  <li>
-                    <span class="recipe-editor__stub-label">Bean</span>
-                    <span class="recipe-editor__stub-note">
-                      Library not built yet
-                    </span>
-                  </li>
                   <li>
                     <span class="recipe-editor__stub-label">Grinder</span>
                     <span class="recipe-editor__stub-note">
@@ -474,6 +512,20 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
                   loadProfiles={p.loadProfiles}
                 />
               </PickerDialog>
+              <PickerDialog
+                open={beanDialogOpen()}
+                onClose={() => setBeanDialogOpen(false)}
+                title="Choose a bean"
+                description="Beans stored on the machine. Pick the one this recipe is for."
+                testId="recipe-bean-dialog"
+              >
+                <BeanPicker
+                  selectedId={r().beanId}
+                  onSelect={handleBeanSelect}
+                  onCancel={() => setBeanDialogOpen(false)}
+                  loadBeans={p.loadBeans}
+                />
+              </PickerDialog>
             </>
           )}
         </Match>
@@ -538,6 +590,76 @@ const ProfileFieldRow: Component<ProfileFieldRowProps> = (p) => {
           class="recipe-editor__profile-clear"
           data-testid="recipe-profile-clear"
           aria-label="Clear selected profile"
+          onClick={p.onClear}
+        >
+          ×
+        </button>
+      </Show>
+    </div>
+  );
+};
+
+interface BeanFieldRowProps {
+  selectedId: string | undefined;
+  selectedBean: () => Bean | null;
+  loading: boolean;
+  onOpen: () => void;
+  onClear: () => void;
+}
+
+/**
+ * Collapsed display for the Recipe's chosen bean — mirrors ProfileFieldRow.
+ * Resolves archived beans (shows an "archived" tag) so a retired pick still
+ * reads as the bean, not "missing"; only a truly unresolvable id falls back
+ * to the bare-id hint.
+ */
+const BeanFieldRow: Component<BeanFieldRowProps> = (p) => {
+  const hasId = (): boolean => !!p.selectedId;
+  const label = (): string => {
+    const b = p.selectedBean();
+    if (b) return `${b.roaster} — ${b.name}`;
+    if (p.loading) return 'Loading…';
+    return `(missing bean — ${p.selectedId})`;
+  };
+  return (
+    <div
+      class="recipe-editor__profile-field"
+      data-testid="recipe-editor-bean-field"
+    >
+      <button
+        type="button"
+        class="recipe-editor__profile-button"
+        data-testid="recipe-bean-open"
+        aria-haspopup="dialog"
+        onClick={p.onOpen}
+      >
+        <Show
+          when={hasId()}
+          fallback={
+            <span class="recipe-editor__profile-empty">
+              No bean selected — tap to choose
+            </span>
+          }
+        >
+          <span class="recipe-editor__profile-title">
+            {label()}
+            <Show when={p.selectedBean()?.archived}>
+              <span class="bean-tree__badge bean-tree__badge--muted">
+                archived
+              </span>
+            </Show>
+          </span>
+        </Show>
+        <span class="recipe-editor__profile-chevron" aria-hidden="true">
+          ›
+        </span>
+      </button>
+      <Show when={hasId()}>
+        <button
+          type="button"
+          class="recipe-editor__profile-clear"
+          data-testid="recipe-bean-clear"
+          aria-label="Clear selected bean"
           onClick={p.onClear}
         >
           ×
