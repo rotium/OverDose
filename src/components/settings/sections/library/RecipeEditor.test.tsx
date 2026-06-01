@@ -9,7 +9,7 @@ import {
 import { MemoryStorage } from '../../../../test/memoryStorage';
 import { routineStep } from '../../../../domain';
 import type { Routine, Recipe } from '../../../../domain';
-import type { ProfileRecord } from '../../../../api';
+import type { Bean, ProfileRecord } from '../../../../api';
 
 interface SeedOpts {
   routines?: Routine[];
@@ -18,7 +18,22 @@ interface SeedOpts {
   loadProfiles?: () => Promise<ProfileRecord[]>;
   /** Single-profile fetcher seam (default: null for any id). */
   loadProfileById?: (id: string) => Promise<ProfileRecord | null>;
+  /** Bean-list fetcher seam for the picker (default: no beans). */
+  loadBeans?: () => Promise<Bean[]>;
+  /** Single-bean fetcher seam (default: null for any id). */
+  loadBeanById?: (id: string) => Promise<Bean | null>;
 }
+
+const mkBean = (over: Partial<Bean> = {}): Bean => ({
+  id: over.id ?? 'bean-1',
+  roaster: over.roaster ?? 'Square Mile',
+  name: over.name ?? 'Red Brick',
+  decaf: false,
+  archived: false,
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-01T00:00:00Z',
+  ...over,
+});
 
 const mkProfileRecord = (
   over: Partial<ProfileRecord> = {},
@@ -80,6 +95,9 @@ const renderEditor = (opts: SeedOpts, recipeId = 'rec-1') => {
     opts.loadProfiles ?? (() => Promise.resolve<ProfileRecord[]>([]));
   const loadProfileById =
     opts.loadProfileById ?? (() => Promise.resolve<ProfileRecord | null>(null));
+  const loadBeans = opts.loadBeans ?? (() => Promise.resolve<Bean[]>([]));
+  const loadBeanById =
+    opts.loadBeanById ?? (() => Promise.resolve<Bean | null>(null));
   render(() => (
     <WithRepositories routines={repos.routines} recipes={repos.recipes}>
         <RecipeEditor
@@ -88,6 +106,8 @@ const renderEditor = (opts: SeedOpts, recipeId = 'rec-1') => {
           debounceMs={0}
           loadProfiles={loadProfiles}
           loadProfileById={loadProfileById}
+          loadBeans={loadBeans}
+          loadBeanById={loadBeanById}
         />
     </WithRepositories>
   ));
@@ -485,20 +505,88 @@ describe('RecipeEditor', () => {
   });
 
   describe('coming-soon stubs', () => {
-    it('renders disabled placeholders for Bean and Grinder', async () => {
-      // Espresso profile graduated out of "Coming soon" in 2026-05-26 — the
-      // picker is wired in its own section above Brewing. Bean and Grinder
-      // are still stubs.
+    it('renders a disabled placeholder for Grinder only', async () => {
+      // Espresso profile (2026-05-26) and Bean (2026-06-02) graduated out of
+      // "Coming soon" into real picker rows. Grinder is the last stub.
       renderEditor({
         routines: [cappuccinoBev()],
         recipes: [sampleRecipe()],
       });
       const heading = await waitFor(() => screen.getByText('Coming soon'));
       const section = heading.parentElement!;
-      expect(section).toHaveTextContent('Bean');
       expect(section).toHaveTextContent('Grinder');
       expect(section).not.toHaveTextContent('Espresso profile');
-      expect(section.textContent?.match(/library not built/gi) ?? []).toHaveLength(2);
+      expect(section.textContent?.match(/library not built/gi) ?? []).toHaveLength(1);
+    });
+  });
+
+  describe('bean picker', () => {
+    it('shows the empty state when no bean is selected', async () => {
+      renderEditor({ routines: [cappuccinoBev()], recipes: [sampleRecipe()] });
+      const row = await waitFor(() =>
+        screen.getByTestId('recipe-editor-bean-field'),
+      );
+      expect(row).toHaveTextContent(/No bean selected/i);
+    });
+
+    it('picks a bean and stores its id on the recipe', async () => {
+      const bean = mkBean({ id: 'bean-1', roaster: 'Onyx', name: 'Geometry' });
+      const { repos } = renderEditor({
+        routines: [cappuccinoBev()],
+        recipes: [sampleRecipe()],
+        loadBeans: () => Promise.resolve([bean]),
+        loadBeanById: () => Promise.resolve(bean),
+      });
+      fireEvent.click(await waitFor(() => screen.getByTestId('recipe-bean-open')));
+      fireEvent.click(await waitFor(() => screen.getByTestId('bean-pick-bean-1')));
+      await waitFor(async () => {
+        expect((await repos.recipes.get('rec-1'))?.beanId).toBe('bean-1');
+      });
+      await waitFor(() =>
+        expect(screen.getByTestId('recipe-editor-bean-field')).toHaveTextContent(
+          'Onyx — Geometry',
+        ),
+      );
+    });
+
+    it('clears the selected bean', async () => {
+      const bean = mkBean({ id: 'bean-1' });
+      const { repos } = renderEditor({
+        routines: [cappuccinoBev()],
+        recipes: [sampleRecipe({ beanId: 'bean-1' })],
+        loadBeanById: () => Promise.resolve(bean),
+      });
+      fireEvent.click(
+        await waitFor(() => screen.getByTestId('recipe-bean-clear')),
+      );
+      await waitFor(async () => {
+        expect((await repos.recipes.get('rec-1'))?.beanId).toBeUndefined();
+      });
+    });
+
+    it('shows an archived tag for a bean that has since been archived', async () => {
+      const bean = mkBean({ id: 'bean-1', archived: true });
+      renderEditor({
+        routines: [cappuccinoBev()],
+        recipes: [sampleRecipe({ beanId: 'bean-1' })],
+        loadBeanById: () => Promise.resolve(bean),
+      });
+      const row = await waitFor(() =>
+        screen.getByTestId('recipe-editor-bean-field'),
+      );
+      await waitFor(() => expect(row).toHaveTextContent(/archived/i));
+    });
+
+    it('falls back to a missing hint when the bean no longer resolves', async () => {
+      renderEditor({
+        routines: [cappuccinoBev()],
+        recipes: [sampleRecipe({ beanId: 'gone' })],
+        loadBeanById: () => Promise.resolve(null),
+      });
+      const row = await waitFor(() =>
+        screen.getByTestId('recipe-editor-bean-field'),
+      );
+      await waitFor(() => expect(row).toHaveTextContent(/missing bean/i));
     });
   });
 
