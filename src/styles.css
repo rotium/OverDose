@@ -3605,3 +3605,216 @@ html {
   text-transform: uppercase;
 }
 
+/* ─── Beans library ──────────────────────────────────────────────── */
+
+.beans-section__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.beans-section__archived-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.beans-section__roaster-field {
+  flex: 1 1 14rem;
+  min-width: 10rem;
+}
+
+/* Custom autocomplete (replaces native <datalist> — see AutocompleteInput). */
+.autocomplete {
+  position: relative;
+  display: block;
+}
+
+.autocomplete > input {
+  width: 100%;
+}
+
+.autocomplete__list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  margin: 0.2rem 0 0;
+  padding: 0.25rem;
+  list-style: none;
+  background: var(--bg-elev);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+.autocomplete__option {
+  padding: 0.4rem 0.6rem;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--fg);
+  font-size: 0.9rem;
+}
+
+.autocomplete__option--active {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.bean-tree {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.bean-tree__group {
+  list-style: none;
+}
+
+.bean-tree__roaster {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--fg);
+  padding: 0.3rem 0;
+}
+
+.bean-tree__beans {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0 0 0 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  border-left: 1px solid var(--border);
+}
+
+.bean-tree__badge {
+  margin-left: 0.5rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: var(--border-strong);
+  color: var(--fg);
+}
+
+.bean-tree__badge--muted {
+  opacity: 0.6;
+}
+
+/* Bean editor — stacked label + full-width input, matching the app's text
+   inputs (.routine-editor__name) rather than the compact numeric
+   .step-field__input (which is 4.5rem and right-aligned). */
+.bean-editor__field {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.3rem;
+  margin-top: 0.7rem;
+}
+
+.bean-editor__field--inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.bean-editor__field-label {
+  color: var(--fg-muted, #888);
+  font-size: 0.85rem;
+}
+
+.bean-editor__input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  font: inherit;
+}
+
+.bean-editor__group > summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.bean-editor__altitude {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.bean-editor__altitude-sep {
+  color: var(--muted);
+}
+
+.bean-editor__chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.25rem;
+}
+
+.bean-editor__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: var(--border-strong);
+  color: var(--fg);
+  font-size: 0.85rem;
+}
+
+.bean-editor__chip-remove {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0;
+}
+
+.bean-editor__variety-add {
+  flex: 1 1 8rem;
+  min-width: 6rem;
+}
+
+.bean-editor__chip-input {
+  width: 100%;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+}
+
+.bean-editor__notes {
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  resize: vertical;
+}
+

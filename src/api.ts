@@ -298,6 +298,46 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }),
+
+  /**
+   * List coffee beans from the gateway's BeanStorageService. Beans are
+   * gateway-owned (like profiles), not part of OverDose's local library —
+   * they're a shared resource the gateway models first-class and other
+   * clients (e.g. the DYE2 plugin) also manage. `includeArchived` defaults
+   * to false; archived beans are soft-deleted and hidden by default.
+   */
+  beans: (params: { includeArchived?: boolean } = {}) =>
+    fetchJson<Bean[]>(
+      `/api/v1/beans?includeArchived=${params.includeArchived ? 'true' : 'false'}`,
+    ),
+
+  /** Get a single bean by id (UUID). Rejects with 404 if it's gone. */
+  beanById: (id: string) =>
+    fetchJson<Bean>(`/api/v1/beans/${encodeURIComponent(id)}`),
+
+  /**
+   * Create a bean. Only `roaster` + `name` are required; the gateway assigns
+   * the id and timestamps and returns the full record (we need the id to open
+   * the editor on it).
+   */
+  createBean: (input: BeanCreate) =>
+    fetchJson<Bean>('/api/v1/beans', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    }),
+
+  /**
+   * Update a bean. The gateway PUT is sparse — send only the changed fields.
+   * Archiving is just `{ archived: true }` (soft-delete; preferred over hard
+   * DELETE so shot history keeps resolving the bean).
+   */
+  updateBean: (id: string, patch: BeanPatch) =>
+    fetchEmpty(`/api/v1/beans/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    }),
 };
 
 /**
@@ -373,6 +413,50 @@ export interface ProfileRecord {
   updatedAt: string;
   metadata?: Record<string, unknown> | null;
 }
+
+/**
+ * Coffee bean, mirrored from reaprime's `/api/v1/beans` schema
+ * (BeanStorageService, SQLite-backed). The gateway is authoritative; OverDose
+ * reads and writes records here rather than keeping a local copy. A `Bean` is
+ * the durable *identity* (roaster + name + origin metadata); quantity and
+ * freshness live on its `BeanBatch`es (deferred — v1 is Bean-level only).
+ *
+ * See reaprime/assets/api/rest_v1.yml#/components/schemas/Bean.
+ */
+export interface Bean {
+  id: string;
+  roaster: string;
+  name: string;
+  species?: string | null;
+  decaf: boolean;
+  decafProcess?: string | null;
+  country?: string | null;
+  region?: string | null;
+  producer?: string | null;
+  variety?: string[] | null;
+  /** Altitude range `[min, max]` in metres. */
+  altitude?: number[] | null;
+  processing?: string | null;
+  notes?: string | null;
+  /** Soft-delete. Archived beans stay on the gateway (and keep resolving for
+   *  historical shots) but are hidden from the default list. */
+  archived: boolean;
+  createdAt: string;
+  updatedAt: string;
+  extras?: Record<string, unknown> | null;
+}
+
+/** POST body — only roaster + name are required; the gateway fills the rest. */
+export interface BeanCreate {
+  roaster: string;
+  name: string;
+}
+
+/**
+ * PUT body — sparse: include only the fields to change (the gateway
+ * deep-merges). `id`/`createdAt`/`updatedAt` are gateway-owned and omitted.
+ */
+export type BeanPatch = Partial<Omit<Bean, 'id' | 'createdAt' | 'updatedAt'>>;
 
 export interface MachineSettingsSnapshot {
   fan: number;
