@@ -52,6 +52,12 @@ For ad-hoc operations that don't deserve a saved recipe — warming a
 cup, a quick steam wand purge, hot water for tea — the **Explore**
 tray on the home screen runs the four machine operations directly.
 
+## Using OverDose
+
+New to the skin? **[docs/usage-story.md](docs/usage-story.md)** walks through a
+day with OverDose in pictures — setting up beans and recipes, then the brew →
+steam → summary flow.
+
 ## Installing OverDose
 
 > **Note:** OverDose is a skin for the new Decent.app gateway
@@ -59,10 +65,15 @@ tray on the home screen runs the four machine operations directly.
 > original DE1 tablet app (`de1app`). It won't load on the old app.
 
 OverDose installs as a "skin." You manage skins from the gateway's
-settings dashboard, not from inside OverDose. There are two ways to
-install it.
+settings dashboard, not from inside OverDose.
 
-### 1. From the settings dashboard (recommended)
+### Bundled in Decent.app 0.7.5+ (easiest)
+
+From **Decent.app version 0.7.5** onward, OverDose ships with the gateway — no
+install needed. Just open the **Web Interface** skin selection and pick
+**OverDose**. On older versions, use one of the two methods below.
+
+### 1. From the settings dashboard
 
 On the Decent tablet, open
 [**localhost:8080/api/v1/plugins/settings.reaplugin/ui**](http://localhost:8080/api/v1/plugins/settings.reaplugin/ui)
