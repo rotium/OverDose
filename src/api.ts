@@ -349,6 +349,15 @@ export interface WorkflowContextUpdate {
   targetDoseWeight?: number | null;
   targetYield?: number | null;
   grinderSetting?: string | null;
+  /** Denormalized coffee display strings stamped onto the shot. Write the
+   *  whole coffee trio (name + roaster + extras.beanId) together from one
+   *  resolved bean — see the bean shot-binding rule. `null` clears. */
+  coffeeName?: string | null;
+  coffeeRoaster?: string | null;
+  /** Free-form context bag. OverDose stashes `beanId` here so its own shot
+   *  history can resolve the live bean (rename-safe), since the gateway has
+   *  no beanId field on WorkflowContext (only beanBatchId). */
+  extras?: Record<string, unknown> | null;
 }
 
 /** Partial workflow body for `PUT /api/v1/workflow`. */

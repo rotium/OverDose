@@ -2894,10 +2894,21 @@ html {
   max-width: 320px;
 }
 
+/* Brew prep: profile | parameters side-by-side on a wide (landscape tablet)
+   screen, stacking to one column when narrow. Keeps the card short enough
+   that the Start button stays on-screen without scrolling. */
+.brew-prep {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.25rem;
+  align-items: start;
+}
+
 .prep__stats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 0.75rem;
+  align-content: start;
 }
 
 .prep__stat {
@@ -3794,6 +3805,53 @@ html {
 .bean-editor__variety-add {
   flex: 1 1 8rem;
   min-width: 6rem;
+}
+
+/* Bean prep card — a prep__stat whose value is a picker button. Sits as a
+   normal grid cell, same width as the dose/grind cards. */
+.prep__bean-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.25rem 0.5rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  line-height: 1.1;
+}
+
+.prep__bean-button:hover,
+.prep__bean-button:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.prep__bean-name {
+  font-size: 1rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.prep__bean-empty {
+  font-size: 1rem;
+  font-style: italic;
+  color: var(--muted);
+}
+
+.prep__bean-chevron {
+  flex: none;
+  font-size: 1.3rem;
+  color: var(--muted);
 }
 
 .bean-editor__chip-input {
