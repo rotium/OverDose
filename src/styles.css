@@ -2365,13 +2365,15 @@ html {
 }
 
 .step-field__input {
-  width: 4.5rem;
-  padding: 0.2rem 0.4rem;
+  width: 5rem;
+  /* Match the text inputs' height + font so number fields line up with the
+     rest of the form — just narrower. */
+  padding: 0.5rem 0.5rem;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--bg);
   color: var(--fg);
-  font-size: 0.85rem;
+  font: inherit;
   text-align: right;
   appearance: textfield;
   -moz-appearance: textfield;
@@ -2428,7 +2430,7 @@ html {
 /* ─── Recipe editor ───────────────────────────────────────────────── */
 
 .recipe-editor__routine-select {
-  padding: 0.4rem 0.6rem;
+  padding: 0.5rem 0.6rem;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--bg);
@@ -2438,10 +2440,14 @@ html {
 }
 
 .recipe-editor__field-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem 1.4rem;
+  /* 2-up grid so the four fields land as a tidy 2x2 on a small screen
+     instead of wrapping unevenly. Extra top margin separates it from the
+     bean selector above. */
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem 1rem;
   align-items: center;
+  margin-top: 0.9rem;
 }
 
 .recipe-editor__field {
@@ -3093,9 +3099,9 @@ html {
 .steam-params {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.6rem;
   margin-top: 0.3rem;
-  max-width: 18rem;
+  max-width: 28rem;
 }
 
 .steam-param {
@@ -3110,32 +3116,9 @@ html {
   color: var(--muted);
 }
 
-/* Shrink the shared slider-field when used inside a steam-param row. */
-.steam-param__field {
-  grid-template-columns: 1fr 3rem;
-  gap: 0.5rem;
-}
-
-.steam-param__field .slider-field__input {
-  height: 3px;
-}
-
-.steam-param__field .slider-field__input::-webkit-slider-thumb {
-  width: 13px;
-  height: 13px;
-  border-width: 1px;
-}
-
-.steam-param__field .slider-field__input::-moz-range-thumb {
-  width: 13px;
-  height: 13px;
-  border-width: 1px;
-}
-
-.steam-param__field .slider-field__value {
-  font-size: 0.78rem;
-  font-weight: 500;
-}
+/* No size overrides — use the default .slider-field track/thumb so the steam
+   sliders match the ones in Settings (the compact variant was too small to
+   grab during a brew). */
 
 .prep__action {
   display: flex;
@@ -3856,7 +3839,7 @@ html {
 
 .bean-editor__chip-input {
   width: 100%;
-  padding: 0.3rem 0.5rem;
+  padding: 0.5rem 0.5rem;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--bg);
