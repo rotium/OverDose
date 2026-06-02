@@ -79,6 +79,8 @@ const renderScreen = (
     recipeId?: string;
     loadProfileById?: (id: string) => Promise<ProfileRecord | null>;
     loadProfiles?: () => Promise<ProfileRecord[]>;
+    loadBeanById?: (id: string) => Promise<import('../api').Bean | null>;
+    loadBeans?: () => Promise<import('../api').Bean[]>;
     optimisticShot?: GatewayShotRecord | null;
     fetchLatestShot?: () => Promise<GatewayShotSummary>;
     fetchShot?: (id: string) => Promise<GatewayShotRecord>;
@@ -156,6 +158,10 @@ const renderScreen = (
         showFlowSlider={opts.showFlowSlider}
         loadProfileById={loadProfileById}
         loadProfiles={loadProfiles}
+        loadBeanById={
+          opts.loadBeanById ?? (() => Promise.resolve(null))
+        }
+        loadBeans={opts.loadBeans ?? (() => Promise.resolve([]))}
         onApplyWorkflow={onApplyWorkflow}
         fetchLatestShot={fetchLatestShot}
         fetchShot={fetchShot}
@@ -672,6 +678,41 @@ describe('RecipeBrewScreen', () => {
         targetDoseWeight: 18,
         targetYield: 36,
         grinderSetting: '4.5', // gateway wants a string
+        // No bean on this recipe → the coffee trio is cleared.
+        coffeeName: null,
+        coffeeRoaster: null,
+        extras: null,
+      });
+    });
+
+    it('stamps the recipe bean onto the shot context (name + roaster + extras.beanId)', async () => {
+      const bean = {
+        id: 'bean-7',
+        roaster: 'Square Mile',
+        name: 'Red Brick',
+        decaf: false,
+        archived: false,
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      };
+      const { onApplyWorkflow } = renderScreen({
+        routines: [cappuccino()],
+        recipes: [
+          sampleRecipe({
+            profileId: 'profile:p1',
+            beanId: 'bean-7',
+            doseGrams: 18,
+            targetYieldGrams: 36,
+          }),
+        ],
+        loadProfileById: () => Promise.resolve(profileWithSteps),
+        loadBeanById: () => Promise.resolve(bean),
+      });
+      await waitFor(() => {
+        const body = onApplyWorkflow.mock.calls.at(-1)?.[0];
+        expect(body?.context?.coffeeName).toBe('Red Brick');
+        expect(body?.context?.coffeeRoaster).toBe('Square Mile');
+        expect(body?.context?.extras).toEqual({ beanId: 'bean-7' });
       });
     });
 

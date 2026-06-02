@@ -33,6 +33,7 @@ import { PowerIcon, ThermometerIcon, WaterDropIcon } from './icons';
 import type { WsStream } from '../streams';
 import {
   api,
+  type Bean,
   type GatewayShotRecord,
   type GatewayShotSummary,
   type ProfileRecord,
@@ -51,6 +52,7 @@ import {
 } from '../prefs';
 import { ProfileCurveChart } from './settings/sections/library/ProfileCurveChart';
 import { ProfilePicker } from './settings/sections/library/ProfilePicker';
+import { BeanPicker } from './settings/sections/library/BeanPicker';
 import { PickerDialog } from './PickerDialog';
 import { DebouncedNumberField } from './settings/sections/library/DebouncedNumberField';
 import { DebouncedSliderField } from './settings/DebouncedSliderField';
@@ -150,6 +152,12 @@ export interface RecipeBrewScreenProps {
   /** Profile-list fetcher for the "Change profile" picker dialog. Defaults
    *  to `api.profiles({})`. */
   loadProfiles?: () => Promise<ProfileRecord[]>;
+  /** Single-bean fetcher for the prep card's bean row. Null-on-error like
+   *  the profile one. Defaults to `api.beanById`. */
+  loadBeanById?: (id: string) => Promise<Bean | null>;
+  /** Bean-list fetcher for the "Change bean" picker. Defaults to
+   *  `api.beans({})` (active beans only). */
+  loadBeans?: () => Promise<Bean[]>;
   /** Pushes the brew workflow (profile + shot context) to the gateway.
    *  Defaults to `api.setWorkflow`. Injected so tests can capture the
    *  payload without hitting the network. */
@@ -181,6 +189,7 @@ export interface RecipeBrewScreenProps {
  */
 interface ShotDraft {
   profileId?: string;
+  beanId?: string;
   doseGrams?: number;
   grinderSetting?: number;
   targetYieldGrams?: number;
@@ -239,6 +248,7 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
     if (r && draft() === null) {
       setDraft({
         profileId: r.profileId,
+        beanId: r.beanId,
         doseGrams: r.doseGrams,
         grinderSetting: r.grinderSetting,
         targetYieldGrams: r.targetYieldGrams,
@@ -259,6 +269,15 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
   const [profile] = createResource<ProfileRecord | null, string>(
     () => draft()?.profileId,
     (id) => profileLoader(id),
+  );
+
+  // Resolve the draft's bean — drives the prep row and the coffee context we
+  // stamp onto the shot. Null-on-error; resolves archived beans too.
+  const beanLoader = (id: string): Promise<Bean | null> =>
+    (p.loadBeanById ?? ((x) => api.beanById(x).catch(() => null)))(id);
+  const [bean] = createResource<Bean | null, string>(
+    () => draft()?.beanId,
+    (id) => beanLoader(id),
   );
 
   // Push the brew workflow to the gateway whenever the draft (or its
@@ -295,6 +314,10 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
       d.targetVolumeMl != null
         ? { ...prof.profile, target_volume: d.targetVolumeMl }
         : prof.profile;
+    // Coffee trio is written together from one resolved bean (the binding
+    // rule): name + roaster for display/durability, extras.beanId as our
+    // rename-safe handle. `?? null` clears all three when no bean is set.
+    const b = bean() ?? null;
     applyWorkflow({
       name: rec.name,
       profile: profileObj,
@@ -305,6 +328,9 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
         targetYield: d.targetYieldGrams ?? null,
         grinderSetting:
           d.grinderSetting != null ? String(d.grinderSetting) : null,
+        coffeeName: b ? b.name : null,
+        coffeeRoaster: b ? b.roaster : null,
+        extras: b ? { beanId: b.id } : null,
       },
     });
   });
@@ -586,6 +612,9 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
                 profile={() => profile() ?? null}
                 profileLoading={() => profile.loading}
                 loadProfiles={p.loadProfiles}
+                bean={() => bean() ?? null}
+                beanLoading={() => bean.loading}
+                loadBeans={p.loadBeans}
                 pitchers={() => pitchers() ?? []}
                 pitchersLoading={() => pitchers.loading}
                 selectedPitcherId={pitcherId}
@@ -728,6 +757,9 @@ const PrepCard: Component<{
   profile: Accessor<ProfileRecord | null>;
   profileLoading: Accessor<boolean>;
   loadProfiles?: () => Promise<ProfileRecord[]>;
+  bean: Accessor<Bean | null>;
+  beanLoading: Accessor<boolean>;
+  loadBeans?: () => Promise<Bean[]>;
   pitchers: Accessor<Pitcher[]>;
   pitchersLoading: Accessor<boolean>;
   selectedPitcherId: Accessor<string | null>;
@@ -754,6 +786,9 @@ const PrepCard: Component<{
             profile={p.profile}
             profileLoading={p.profileLoading}
             loadProfiles={p.loadProfiles}
+            bean={p.bean}
+            beanLoading={p.beanLoading}
+            loadBeans={p.loadBeans}
           />
         </Match>
         <Match when={p.step().type === 'steam'}>
@@ -838,6 +873,9 @@ const BrewPrep: Component<{
   profile: Accessor<ProfileRecord | null>;
   profileLoading: Accessor<boolean>;
   loadProfiles?: () => Promise<ProfileRecord[]>;
+  bean: Accessor<Bean | null>;
+  beanLoading: Accessor<boolean>;
+  loadBeans?: () => Promise<Bean[]>;
 }> = (p) => {
   const profile = (): ProfileRecord | null => p.profile();
   const curve = createMemo(() => buildProfileCurve(profile()?.profile.steps));
@@ -854,8 +892,18 @@ const BrewPrep: Component<{
     p.patchDraft({ profileId: id });
   };
 
+  const hasBeanId = (): boolean => !!p.draft()?.beanId;
+  const [beanDialogOpen, setBeanDialogOpen] = createSignal(false);
+  const handleBeanSelect = (id: string) => {
+    setBeanDialogOpen(false);
+    p.patchDraft({ beanId: id });
+  };
+
   return (
-    <>
+    // Two-column on a wide tablet (profile | parameters), stacking to one
+    // column when narrow. Start lives in the PrepCard footer below. The
+    // picker dialogs render via Portal, so they aren't grid items.
+    <div class="brew-prep">
       {/*
         Profile is the headline of the brew step — it determines the whole
         shot. Title + author header, small target-curve thumbnail, plus a
@@ -965,7 +1013,71 @@ const BrewPrep: Component<{
         />
       </PickerDialog>
 
+      <PickerDialog
+        open={beanDialogOpen()}
+        onClose={() => setBeanDialogOpen(false)}
+        title="Choose a bean"
+        description="Sets the coffee recorded for this shot."
+        testId="prep-card-bean-dialog"
+      >
+        <BeanPicker
+          selectedId={p.draft()?.beanId}
+          onSelect={handleBeanSelect}
+          onCancel={() => setBeanDialogOpen(false)}
+          loadBeans={p.loadBeans}
+        />
+      </PickerDialog>
+
       <div class="prep__stats">
+        {/* Bean reads as a stat card like dose/grind, but its value is a
+            button that opens the picker. Spans the full grid width. */}
+        <div class="prep__stat prep__bean" data-testid="prep-card-bean">
+          <span class="prep__stat-label">Bean</span>
+          <button
+            type="button"
+            class="prep__bean-button"
+            data-testid="prep-card-bean-change"
+            onClick={() => setBeanDialogOpen(true)}
+          >
+            <Show
+              when={hasBeanId()}
+              fallback={
+                <span class="prep__bean-empty" data-testid="prep-card-bean-empty">
+                  Choose a bean
+                </span>
+              }
+            >
+              <Show
+                when={p.bean()}
+                fallback={
+                  <span
+                    class="prep__bean-empty"
+                    data-testid="prep-card-bean-missing"
+                  >
+                    {p.beanLoading()
+                      ? 'Loading…'
+                      : `(missing bean — ${p.draft()?.beanId})`}
+                  </span>
+                }
+              >
+                <span class="prep__bean-name" data-testid="prep-card-bean-name">
+                  {p.bean()!.roaster} — {p.bean()!.name}
+                  <Show when={p.bean()!.decaf}>
+                    <span class="bean-tree__badge">decaf</span>
+                  </Show>
+                  <Show when={p.bean()!.archived}>
+                    <span class="bean-tree__badge bean-tree__badge--muted">
+                      archived
+                    </span>
+                  </Show>
+                </span>
+              </Show>
+            </Show>
+            <span class="prep__bean-chevron" aria-hidden="true">
+              ›
+            </span>
+          </button>
+        </div>
         <label class="prep__stat" data-testid="prep-card-dose">
           <span class="prep__stat-label">Dose</span>
           <span class="prep__stat-edit">
@@ -1031,7 +1143,7 @@ const BrewPrep: Component<{
           </span>
         </label>
       </div>
-    </>
+    </div>
   );
 };
 
