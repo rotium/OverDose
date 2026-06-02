@@ -338,6 +338,15 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
     }),
+
+  /** Permanently delete a bean (and its batches, gateway-side). Irreversible
+   *  — the UI keeps Archive as the reversible default. Past shots keep their
+   *  denormalized coffeeName/coffeeRoaster so they still read; only the
+   *  extras.beanId live-resolve goes stale. */
+  deleteBean: (id: string) =>
+    fetchEmpty(`/api/v1/beans/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
 };
 
 /**

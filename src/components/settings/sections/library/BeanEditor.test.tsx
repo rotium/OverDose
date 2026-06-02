@@ -126,36 +126,54 @@ describe('BeanEditor', () => {
     );
   });
 
-  it('archives the bean and closes', async () => {
+  it('archives via the checkbox without closing the editor', async () => {
     const fake = makeFake(mkBean());
     const { onClose } = renderEditor(fake);
-    fireEvent.click(await waitFor(() => screen.getByTestId('archive-bean-button')));
-    fireEvent.click(
-      await waitFor(() => screen.getByTestId('confirm-archive-bean-button')),
-    );
+    const toggle = (await waitFor(() =>
+      screen.getByTestId('bean-archive-toggle'),
+    )) as HTMLInputElement;
+    expect(toggle.checked).toBe(false);
+    fireEvent.click(toggle);
     await waitFor(() =>
       expect(fake.saveBean).toHaveBeenCalledWith('b1', { archived: true }),
     );
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('permanently deletes the bean after confirming, and closes', async () => {
+    const fake = makeFake(mkBean());
+    const deleteBean = vi.fn(async () => {});
+    const onClose = vi.fn();
+    render(() => (
+      <BeanEditor
+        beanId="b1"
+        onClose={onClose}
+        loadBean={fake.loadBean}
+        saveBean={fake.saveBean}
+        deleteBean={deleteBean}
+        debounceMs={0}
+      />
+    ));
+    fireEvent.click(await waitFor(() => screen.getByTestId('delete-bean-button')));
+    fireEvent.click(
+      await waitFor(() => screen.getByTestId('confirm-delete-bean-button')),
+    );
+    await waitFor(() => expect(deleteBean).toHaveBeenCalledWith('b1'));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
 
-  it('restores an archived bean and closes', async () => {
+  it('unchecking the archive toggle restores, and stays open', async () => {
     const fake = makeFake(mkBean({ archived: true }));
     const { onClose } = renderEditor(fake);
-    fireEvent.click(
-      await waitFor(() => screen.getByTestId('restore-bean-button')),
-    );
+    const toggle = (await waitFor(() =>
+      screen.getByTestId('bean-archive-toggle'),
+    )) as HTMLInputElement;
+    expect(toggle.checked).toBe(true);
+    fireEvent.click(toggle);
     await waitFor(() =>
       expect(fake.saveBean).toHaveBeenCalledWith('b1', { archived: false }),
     );
-    await waitFor(() => expect(onClose).toHaveBeenCalled());
-  });
-
-  it('does not offer the archive action for an already-archived bean', async () => {
-    const fake = makeFake(mkBean({ archived: true }));
-    renderEditor(fake);
-    await waitFor(() => screen.getByTestId('restore-row'));
-    expect(screen.queryByTestId('archive-bean-button')).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('suggests existing roasters and commits the picked one', async () => {

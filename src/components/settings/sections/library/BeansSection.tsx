@@ -28,6 +28,7 @@ export interface BeansSectionProps {
   createBean?: (input: BeanCreate) => Promise<Bean>;
   loadBean?: (id: string) => Promise<Bean | null>;
   saveBean?: (id: string, patch: BeanPatch) => Promise<void>;
+  deleteBean?: (id: string) => Promise<void>;
   debounceMs?: number;
 }
 
@@ -367,6 +368,7 @@ export const BeansSection: Component<BeansSectionProps> = (props) => {
               onClose={closeEditor}
               loadBean={props.loadBean}
               saveBean={props.saveBean}
+              deleteBean={props.deleteBean}
               existing={existing()}
               debounceMs={props.debounceMs}
             />

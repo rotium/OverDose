@@ -3864,6 +3864,10 @@ html {
   font: inherit;
 }
 
+.bean-editor__delete-btn {
+  margin-top: 0.85rem;
+}
+
 .bean-editor__notes {
   width: 100%;
   margin-top: 0.5rem;

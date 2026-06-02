@@ -46,6 +46,8 @@ export interface BeanEditorProps {
   loadBean?: (id: string) => Promise<Bean | null>;
   /** Test seam — persist a sparse patch. Defaults to the gateway. */
   saveBean?: (id: string, patch: BeanPatch) => Promise<void>;
+  /** Test seam — permanently delete. Defaults to the gateway. */
+  deleteBean?: (id: string) => Promise<void>;
   /** Distinct values already entered on other beans, per field — feeds each
    *  text field's autocomplete (merged with any built-in defaults). */
   existing?: Partial<Record<BeanSuggestField, string[]>>;
@@ -69,7 +71,7 @@ export const BeanEditor: Component<BeanEditorProps> = (p) => {
 
   const [bean, { refetch }] = createResource(() => p.beanId, load);
   const [saveFailed, setSaveFailed] = createSignal(false);
-  const [confirmingArchive, setConfirmingArchive] = createSignal(false);
+  const [confirmingDelete, setConfirmingDelete] = createSignal(false);
 
   // Autocomplete suggestions for a field: built-in defaults merged with the
   // distinct values already entered on other beans.
@@ -149,12 +151,14 @@ export const BeanEditor: Component<BeanEditorProps> = (p) => {
     void patch({ altitude: lo == null ? [] : [lo, hi as number] });
   };
 
-  const archive = async () => {
-    if (await patch({ archived: true })) p.onClose();
-  };
-
-  const restore = async () => {
-    if (await patch({ archived: false })) p.onClose();
+  const destroy = async () => {
+    try {
+      await (p.deleteBean ?? ((id) => api.deleteBean(id)))(p.beanId);
+      p.onClose();
+    } catch (e) {
+      console.warn('bean delete failed', e);
+      setSaveFailed(true);
+    }
   };
 
   const [varietyDraft, setVarietyDraft] = createSignal('');
@@ -439,63 +443,57 @@ export const BeanEditor: Component<BeanEditorProps> = (p) => {
               </section>
 
               <section class="settings-section">
-                <Show
-                  when={b().archived}
-                  fallback={
-                    <Show
-                      when={confirmingArchive()}
-                      fallback={
-                        <button
-                          type="button"
-                          class="btn"
-                          data-testid="archive-bean-button"
-                          onClick={() => setConfirmingArchive(true)}
-                        >
-                          Archive bean
-                        </button>
-                      }
-                    >
-                      <div
-                        class="routine-editor__delete-confirm"
-                        data-testid="archive-confirm"
-                      >
-                        <p>
-                          Archive "{b().roaster} — {b().name}"? It's hidden from
-                          the list but kept for past shots.
-                        </p>
-                        <div class="routine-editor__button-row">
-                          <button
-                            type="button"
-                            class="btn btn--danger"
-                            data-testid="confirm-archive-bean-button"
-                            onClick={archive}
-                          >
-                            Yes, archive
-                          </button>
-                          <button
-                            type="button"
-                            class="btn"
-                            onClick={() => setConfirmingArchive(false)}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    </Show>
-                  }
-                >
-                  <div data-testid="restore-row">
-                    <p class="settings-help">
-                      This bean is archived — hidden from the default list.
+                {/* Archive is a reversible toggle (like a recipe's "hide from
+                    home"), so it's a checkbox and leaves the editor open.
+                    Delete is the irreversible escape hatch and closes. */}
+                <label class="settings-checkbox" data-testid="bean-archive-toggle-label">
+                  <input
+                    type="checkbox"
+                    checked={b().archived}
+                    data-testid="bean-archive-toggle"
+                    onChange={(e) =>
+                      void patch({ archived: e.currentTarget.checked })
+                    }
+                  />
+                  <span>Archive — hide from lists</span>
+                </label>
+
+                <Show when={!confirmingDelete()}>
+                  <button
+                    type="button"
+                    class="btn btn--danger bean-editor__delete-btn"
+                    data-testid="delete-bean-button"
+                    onClick={() => setConfirmingDelete(true)}
+                  >
+                    Delete permanently
+                  </button>
+                </Show>
+                <Show when={confirmingDelete()}>
+                  <div
+                    class="routine-editor__delete-confirm"
+                    data-testid="delete-confirm"
+                  >
+                    <p>
+                      Permanently delete "{b().roaster} — {b().name}"? This
+                      can't be undone. Past shots keep the coffee name.
                     </p>
-                    <button
-                      type="button"
-                      class="btn"
-                      data-testid="restore-bean-button"
-                      onClick={restore}
-                    >
-                      Restore bean
-                    </button>
+                    <div class="routine-editor__button-row">
+                      <button
+                        type="button"
+                        class="btn btn--danger"
+                        data-testid="confirm-delete-bean-button"
+                        onClick={destroy}
+                      >
+                        Yes, delete
+                      </button>
+                      <button
+                        type="button"
+                        class="btn"
+                        onClick={() => setConfirmingDelete(false)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                 </Show>
               </section>
