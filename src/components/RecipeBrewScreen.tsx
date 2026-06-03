@@ -318,6 +318,20 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
     // rule): name + roaster for display/durability, extras.beanId as our
     // rename-safe handle. `?? null` clears all three when no bean is set.
     const b = bean() ?? null;
+    // Trace the stop-targets we push. Yield (context.targetYield) only stops
+    // the shot with a scale connected; without one the gateway falls back to
+    // the *profile's* target_volume. `volSet` is the draft override (rare),
+    // `profileVol` the profile's built-in, `sentVol` what actually ships — so
+    // a yield-but-no-volume brew that still stops shows up here as the profile
+    // volume doing the work.
+    dlog(
+      'workflow',
+      `apply "${rec.name}": yield=${d.targetYieldGrams ?? '–'}g ` +
+        `volSet=${d.targetVolumeMl ?? '–'}ml ` +
+        `profileVol=${prof.profile.target_volume ?? '–'}ml ` +
+        `sentVol=${profileObj.target_volume ?? '–'}ml ` +
+        `dose=${d.doseGrams ?? '–'}g profile="${prof.profile.title ?? '?'}"`,
+    );
     applyWorkflow({
       name: rec.name,
       profile: profileObj,
