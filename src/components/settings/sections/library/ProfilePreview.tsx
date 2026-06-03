@@ -112,19 +112,26 @@ export const ProfilePreview: Component<ProfilePreviewProps> = (p) => {
         </Show>
 
         <div class="profile-preview__chips" data-testid="profile-preview-chips">
-          <Show when={targetWeight()}>
-            <span class="profile-row__chip">Target {targetWeight()}</span>
+          {/* Beverage type leads as a category tag, styled distinctly from
+              the measurement chips. Always shown (incl. "espresso") so the
+              profile's kind is never ambiguous. */}
+          <Show when={bevType()}>
+            <span class="profile-row__chip profile-row__chip--beverage">
+              {bevType()}
+            </span>
           </Show>
-          <Show when={!targetWeight() && targetVolume()}>
-            <span class="profile-row__chip">Target {targetVolume()}</span>
+          {/* Show weight and volume independently. Volume is the no-scale
+              stop fallback, so it must stay visible even when a weight
+              target is also set — hiding it masked which target actually
+              governs a scaleless shot. */}
+          <Show when={targetWeight()}>
+            <span class="profile-row__chip">Weight {targetWeight()}</span>
+          </Show>
+          <Show when={targetVolume()}>
+            <span class="profile-row__chip">Volume {targetVolume()}</span>
           </Show>
           <Show when={tankTemp()}>
-            <span class="profile-row__chip">Tank {tankTemp()}</span>
-          </Show>
-          <Show
-            when={bevType() && bevType().toLowerCase() !== 'espresso'}
-          >
-            <span class="profile-row__chip">{bevType()}</span>
+            <span class="profile-row__chip">Tank preheat {tankTemp()}</span>
           </Show>
         </div>
 

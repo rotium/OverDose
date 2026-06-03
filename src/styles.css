@@ -2037,6 +2037,16 @@ html {
   white-space: nowrap;
 }
 
+/* Beverage type reads as a quiet category label, not a measurement: no
+   pill box and muted text, so it sits calmly ahead of the outlined
+   target/tank chips without competing with them. Case is left as-is. */
+.profile-row__chip--beverage {
+  padding-inline: 0;
+  border-color: transparent;
+  background: none;
+  color: var(--muted);
+}
+
 .profile-row__badge {
   display: inline-flex;
   align-items: center;

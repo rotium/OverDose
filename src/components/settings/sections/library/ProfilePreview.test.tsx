@@ -45,8 +45,39 @@ describe('ProfilePreview', () => {
       screen.getByTestId('profile-preview-default-badge'),
     ).toBeInTheDocument();
     // Chips
-    expect(preview).toHaveTextContent('Target 36 g');
-    expect(preview).toHaveTextContent('Tank 90.0 °C');
+    expect(preview).toHaveTextContent('Weight 36 g');
+    expect(preview).toHaveTextContent('Tank preheat 90.0 °C');
+  });
+
+  it('shows both weight and volume chips when both targets are set', () => {
+    render(() => (
+      <ProfilePreview
+        record={mkRecord({
+          profile: {
+            title: 'Both targets',
+            target_weight: 36,
+            target_volume: 40,
+          },
+        })}
+      />
+    ));
+    const preview = screen.getByTestId('profile-preview');
+    // Volume must stay visible alongside weight — it's the no-scale stop.
+    expect(preview).toHaveTextContent('Weight 36 g');
+    expect(preview).toHaveTextContent('Volume 40 mL');
+  });
+
+  it('shows the beverage-type chip even for espresso', () => {
+    render(() => (
+      <ProfilePreview
+        record={mkRecord({
+          profile: { title: 'Plain', beverage_type: 'espresso' },
+        })}
+      />
+    ));
+    expect(screen.getByTestId('profile-preview-chips')).toHaveTextContent(
+      'espresso',
+    );
   });
 
   it("shows the 'no step data' fallback when steps are missing", () => {
