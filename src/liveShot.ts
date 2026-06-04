@@ -5,6 +5,7 @@ import type {
   WorkflowSnapshot,
 } from './api';
 import type { MachineSubstate } from './snapshot';
+import { dlog } from './debugLog';
 
 /** One captured tick of brew telemetry — what the accumulator stores per frame. */
 export interface LiveShotFrame {
@@ -39,6 +40,11 @@ export interface LiveShotReadouts {
    *  stream has no volume field, so we integrate it client-side exactly
    *  like the gateway does for the persisted record (flow × Δt, summed). */
   volumeMl: number;
+  /** Volume integrated only over frames at/after the profile's
+   *  `target_volume_count_start` (pre-infusion excluded). Equals `volumeMl`
+   *  when count-start is 0; the live view shows it separately only when the
+   *  active profile sets a non-zero count-start. */
+  countedVolumeMl: number;
   elapsedSec: number;
   substate: MachineSubstate;
   profileFrame: number;
@@ -165,6 +171,10 @@ export function createLiveShotAccumulator(): LiveShotAccumulator {
   // sum (`flow × timeSinceLastSample`); the live WS stream carries flow but
   // not accumulated volume.
   let volumeMl = 0;
+  // Same integral, but only accumulated once the shot reaches the profile's
+  // volume count-start step — mirrors the gateway's volume-stop window.
+  let countedVolumeMl = 0;
+  let volumeCountStart = 0;
 
   const buffers: LiveShotBuffers = {
     get cursor() {
@@ -210,6 +220,7 @@ export function createLiveShotAccumulator(): LiveShotAccumulator {
           // the WS frame has it but mini-chart doesn't use it. Add a
           // dedicated buffer later if a downstream consumer wants it.
           groupTemperature: 0,
+          profileFrame: profileFrame[i]!,
         },
         scale: Number.isNaN(w)
           ? undefined
@@ -250,6 +261,8 @@ export function createLiveShotAccumulator(): LiveShotAccumulator {
       startedAt = '';
       endedAt = '';
       volumeMl = 0;
+      countedVolumeMl = 0;
+      volumeCountStart = wf?.profile?.target_volume_count_start ?? 0;
       workflow = wf ?? null;
       setTargetYieldG(wf?.context?.targetYield ?? 0);
       setCurrentProfile(wf?.profile ?? null);
@@ -271,7 +284,10 @@ export function createLiveShotAccumulator(): LiveShotAccumulator {
         // Integrate flow since the previous sample. Left-Riemann (current
         // flow × elapsed) — same as the gateway, so the live readout tracks
         // the value that ends up in the persisted shot record.
-        volumeMl += frame.flow * ((frame.tMs - tMs[cursor - 1]!) / 1000);
+        const dVol = frame.flow * ((frame.tMs - tMs[cursor - 1]!) / 1000);
+        volumeMl += dVol;
+        // Counted volume only accrues from the count-start step onward.
+        if (frame.profileFrame >= volumeCountStart) countedVolumeMl += dVol;
       }
       endedAt = frame.machineTimestamp;
 
@@ -301,6 +317,7 @@ export function createLiveShotAccumulator(): LiveShotAccumulator {
           weight: frame.weight,
           mixTemperature: frame.mixTemperature,
           volumeMl,
+          countedVolumeMl,
           elapsedSec: frame.tMs / 1000,
           substate: frame.substate,
           profileFrame: frame.profileFrame,
@@ -311,6 +328,24 @@ export function createLiveShotAccumulator(): LiveShotAccumulator {
 
     freeze() {
       if (status() === 'idle') return; // nothing to freeze
+      // Debug: summarise the volume accounting at shot end. Comparing
+      // `counted` vs `vol` reveals whether the count-start window actually
+      // excluded pre-infusion (counted < vol) or counted everything
+      // (counted ≈ vol — frame numbering didn't line up). `frames` shows the
+      // observed profileFrame range; if its min is already ≥ countStart the
+      // window never excluded anything.
+      let minF = Infinity;
+      let maxF = -Infinity;
+      for (let i = 0; i < cursor; i++) {
+        const f = profileFrame[i]!;
+        if (f < minF) minF = f;
+        if (f > maxF) maxF = f;
+      }
+      dlog(
+        'shot',
+        `end: vol=${volumeMl.toFixed(1)}mL counted=${countedVolumeMl.toFixed(1)}mL ` +
+          `countStart=${volumeCountStart} frames=${minF}..${maxF} samples=${cursor}`,
+      );
       setFrozenShot(buildFrozenShot());
       setStatus('frozen');
     },
@@ -320,6 +355,8 @@ export function createLiveShotAccumulator(): LiveShotAccumulator {
       startedAt = '';
       endedAt = '';
       volumeMl = 0;
+      countedVolumeMl = 0;
+      volumeCountStart = 0;
       workflow = null;
       setFrameCount(0);
       setReadouts(null);

@@ -304,6 +304,14 @@ export const LiveEspressoView: Component<LiveEspressoViewProps> = (p) => {
           <div class="readout__label">VOLUME</div>
           <div class="readout__value">{fmtNumber(r()?.volumeMl, 0, ' mL')}</div>
         </div>
+        <Show when={(profile()?.target_volume_count_start ?? 0) > 0}>
+          <div class="readout" data-testid="readout-counted-volume">
+            <div class="readout__label">COUNTED VOL</div>
+            <div class="readout__value">
+              {fmtNumber(r()?.countedVolumeMl, 0, ' mL')}
+            </div>
+          </div>
+        </Show>
         <div class="readout">
           <div class="readout__label">TIME</div>
           <div class="readout__value">{fmtElapsed(r()?.elapsedSec)}</div>

@@ -62,6 +62,11 @@ export interface GatewayShotMeasurement {
     pressure: number;
     mixTemperature: number;
     groupTemperature: number;
+    /** Active profile-step index at this sample. The gateway persists it
+     *  per sample; we use it to window volume by step (counted volume).
+     *  Optional: absent on older records and on the optimistic in-memory
+     *  record when its frames weren't captured. */
+    profileFrame?: number;
   };
   scale?: { weight: number; weightFlow?: number };
   volume?: number | null;
@@ -106,6 +111,9 @@ export interface ProfileSnapshot {
    *  post-brew summary as the target alongside the actual dispensed
    *  volume. May be absent on older payloads. */
   target_volume?: number;
+  /** Step index from which volume counting starts (excludes pre-infusion
+   *  from the volume figure). Drives the "counted volume" readout. */
+  target_volume_count_start?: number;
 }
 
 /** Gateway's current workflow envelope. */
@@ -403,6 +411,10 @@ export interface Profile {
   target_weight?: number;
   /** Target volume in mL. */
   target_volume?: number;
+  /** Step index (0-based) from which volume counting starts toward
+   *  `target_volume` — lets a profile exclude pre-infusion water from the
+   *  volume stop. Only meaningful on the no-scale volume-stop path. */
+  target_volume_count_start?: number;
   /** Group-head water tank target temp in °C. */
   tank_temperature?: number;
   /** Profile step list. Each step is an opaque object in the spec; we

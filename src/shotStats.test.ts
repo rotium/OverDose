@@ -7,6 +7,7 @@ import type {
 } from './api';
 import {
   deriveShotStats,
+  shotCountedVolumeMl,
   shotDoseG,
   shotDurationSec,
   shotHeadline,
@@ -152,6 +153,24 @@ describe('measurement-derived stats', () => {
     expect(shotVolumeMl(full)).toBeCloseTo(6);
     expect(shotVolumeMl(record([meas(0, { flow: 2 })]))).toBeNull(); // <2 frames
   });
+
+  it('counted volume integrates only frames at/after count-start', () => {
+    // Frames 0,0,1,1; Δt = 1s. Total = 1+2+3 = 6 (first contributes 0).
+    // count-start 1 drops the frame-0 sample (i=1) → 2 + 3 = 5.
+    const f = record([
+      meas(0, { flow: 9, profileFrame: 0 }),
+      meas(1, { flow: 1, profileFrame: 0 }),
+      meas(2, { flow: 2, profileFrame: 1 }),
+      meas(3, { flow: 3, profileFrame: 1 }),
+    ]);
+    expect(shotCountedVolumeMl(f, 1)).toBeCloseTo(5);
+    // count-start 0 equals the full dispensed volume.
+    expect(shotCountedVolumeMl(f, 0)).toBeCloseTo(shotVolumeMl(f)!);
+    // Null when samples carry no frame index (can't be windowed).
+    expect(
+      shotCountedVolumeMl(record([meas(0, { flow: 1 }), meas(1, { flow: 2 })]), 1),
+    ).toBeNull();
+  });
 });
 
 describe('deriveShotStats', () => {
@@ -182,5 +201,29 @@ describe('deriveShotStats', () => {
     expect(s.peakPressureBar).toBe(9.1);
     expect(s.peakFlowMlS).toBe(2.5);
     expect(s.volumeMl).toBeCloseTo(4.5); // 2.5 + 2.0
+    // No count-start on this profile → counted-volume fields stay null.
+    expect(s.volumeCountStart).toBeNull();
+    expect(s.countedVolumeMl).toBeNull();
+  });
+
+  it('exposes counted volume only when the profile sets count-start > 0', () => {
+    const mez = [
+      meas(0, { flow: 9, profileFrame: 0 }),
+      meas(1, { flow: 1, profileFrame: 0 }),
+      meas(2, { flow: 2, profileFrame: 1 }),
+    ];
+    const s0 = deriveShotStats(
+      record([], { profile: { title: 'p', target_volume_count_start: 0 } }),
+      record(mez),
+    );
+    expect(s0.volumeCountStart).toBeNull();
+    expect(s0.countedVolumeMl).toBeNull();
+
+    const s1 = deriveShotStats(
+      record([], { profile: { title: 'p', target_volume_count_start: 1 } }),
+      record(mez),
+    );
+    expect(s1.volumeCountStart).toBe(1);
+    expect(s1.countedVolumeMl).toBeCloseTo(2); // only the frame-1 sample (i=2)
   });
 });

@@ -141,6 +141,38 @@ export const shotTargetVolumeMl = (
   summary: GatewayShotSummary | null,
 ): number | null => num(summary?.workflow?.profile?.target_volume);
 
+/**
+ * Counted volume (mL): like {@link shotVolumeMl}, but only integrates samples
+ * at or past `countStart` — the profile's `target_volume_count_start`. This
+ * mirrors the window the gateway's volume-stop actually measures (pre-infusion
+ * excluded), so it can be compared against the full dispensed volume.
+ *
+ * Returns null when samples lack the per-frame index (older / optimistic
+ * records can't be windowed) so the caller can hide the figure rather than
+ * show a misleadingly-low number.
+ */
+export const shotCountedVolumeMl = (
+  full: GatewayShotRecord | null,
+  countStart: number,
+): number | null => {
+  const ms = full?.measurements;
+  if (!ms || ms.length < 2) return null;
+  let vol = 0;
+  let sawFrame = false;
+  for (let i = 1; i < ms.length; i++) {
+    const frame = ms[i]!.machine.profileFrame;
+    if (frame === undefined) continue;
+    sawFrame = true;
+    if (frame < countStart) continue;
+    const dtSec =
+      (Date.parse(ms[i]!.machine.timestamp) -
+        Date.parse(ms[i - 1]!.machine.timestamp)) /
+      1000;
+    if (dtSec > 0) vol += ms[i]!.machine.flow * dtSec;
+  }
+  return sawFrame ? vol : null;
+};
+
 export interface ShotStats {
   headline: string;
   subtitle: string;
@@ -152,20 +184,34 @@ export interface ShotStats {
   peakFlowMlS: number | null;
   volumeMl: number | null;
   targetVolumeMl: number | null;
+  /** Volume counted from `volumeCountStart` onward, or null when the profile
+   *  counts from the start (count-start 0) or the record can't be windowed. */
+  countedVolumeMl: number | null;
+  /** The profile's volume count-start step, when > 0 (else null). Presence
+   *  gates the counted-volume display. */
+  volumeCountStart: number | null;
 }
 
 export const deriveShotStats = (
   summary: GatewayShotSummary | null,
   full: GatewayShotRecord | null,
-): ShotStats => ({
-  headline: shotHeadline(summary),
-  subtitle: shotSubtitle(summary),
-  doseG: shotDoseG(summary),
-  yieldG: shotYieldG(summary, full),
-  targetYieldG: shotTargetYieldG(summary),
-  durationSec: shotDurationSec(full),
-  peakPressureBar: shotPeakPressureBar(full),
-  peakFlowMlS: shotPeakFlowMlS(full),
-  volumeMl: shotVolumeMl(full),
-  targetVolumeMl: shotTargetVolumeMl(summary),
-});
+): ShotStats => {
+  // Count-start only matters when > 0 — at 0 the counted volume equals the
+  // total, so we leave both stat fields null and show just the one figure.
+  const countStart = num(summary?.workflow?.profile?.target_volume_count_start);
+  const hasCountStart = countStart != null && countStart > 0;
+  return {
+    headline: shotHeadline(summary),
+    subtitle: shotSubtitle(summary),
+    doseG: shotDoseG(summary),
+    yieldG: shotYieldG(summary, full),
+    targetYieldG: shotTargetYieldG(summary),
+    durationSec: shotDurationSec(full),
+    peakPressureBar: shotPeakPressureBar(full),
+    peakFlowMlS: shotPeakFlowMlS(full),
+    volumeMl: shotVolumeMl(full),
+    targetVolumeMl: shotTargetVolumeMl(summary),
+    countedVolumeMl: hasCountStart ? shotCountedVolumeMl(full, countStart) : null,
+    volumeCountStart: hasCountStart ? countStart : null,
+  };
+};

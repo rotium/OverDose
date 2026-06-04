@@ -67,6 +67,31 @@ describe('ProfilePreview', () => {
     expect(preview).toHaveTextContent('Volume 40 mL');
   });
 
+  it('shows the volume-count-start chip only when non-zero', () => {
+    const { unmount } = render(() => (
+      <ProfilePreview
+        record={mkRecord({
+          profile: { title: 'Counted', target_volume_count_start: 2 },
+        })}
+      />
+    ));
+    expect(screen.getByTestId('profile-preview-chips')).toHaveTextContent(
+      'Vol from step 2',
+    );
+    unmount();
+
+    render(() => (
+      <ProfilePreview
+        record={mkRecord({
+          profile: { title: 'Default', target_volume_count_start: 0 },
+        })}
+      />
+    ));
+    expect(
+      screen.getByTestId('profile-preview-chips'),
+    ).not.toHaveTextContent('Vol from step');
+  });
+
   it('shows the beverage-type chip even for espresso', () => {
     render(() => (
       <ProfilePreview

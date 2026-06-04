@@ -52,6 +52,15 @@ export const ProfilePreview: Component<ProfilePreviewProps> = (p) => {
   const targetWeight = () => fmtGrams(profile()?.target_weight);
   const targetVolume = () => fmtMl(profile()?.target_volume);
   const tankTemp = () => fmtTemp(profile()?.tank_temperature);
+  // Step index from which volume counting starts (excludes pre-infusion
+  // from the volume stop). Counting is inclusive of this step (gateway uses
+  // `frame >= count_start`), so the label says "from step N", not "after".
+  // Only interesting when non-zero — 0 = count from the start, the default
+  // on nearly every profile.
+  const volCountStart = (): number | null => {
+    const n = profile()?.target_volume_count_start;
+    return typeof n === 'number' && n > 0 ? n : null;
+  };
 
   return (
     <div class="profile-preview" data-testid="profile-preview">
@@ -132,6 +141,11 @@ export const ProfilePreview: Component<ProfilePreviewProps> = (p) => {
           </Show>
           <Show when={tankTemp()}>
             <span class="profile-row__chip">Tank preheat {tankTemp()}</span>
+          </Show>
+          <Show when={volCountStart() !== null}>
+            <span class="profile-row__chip">
+              Vol from step {volCountStart()}
+            </span>
           </Show>
         </div>
 

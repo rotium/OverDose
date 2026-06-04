@@ -1550,6 +1550,15 @@ const PostBrewView: Component<{
               >
                 {fmtStat(stats().volumeMl, 0, ' mL')}
               </ReviewStat>
+              <Show when={stats().volumeCountStart != null}>
+                <ReviewStat
+                  label="Counted vol"
+                  testId="post-brew-stat-counted-volume"
+                  sub={`from step ${stats().volumeCountStart}`}
+                >
+                  {fmtStat(stats().countedVolumeMl, 0, ' mL')}
+                </ReviewStat>
+              </Show>
             </dl>
 
             {/* Divider: objective shot data (left) vs. user feedback (right). */}
