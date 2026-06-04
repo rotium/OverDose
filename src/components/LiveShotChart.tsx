@@ -120,7 +120,7 @@ export const resolveSeriesVisibility = (
  * sit on top of the *line* but not the *label* (achieved by drawing the
  * label background opaque).
  */
-const drawStepBoundaries = (
+export const drawStepBoundaries = (
   u: uPlot,
   buffers: LiveShotBuffers,
   profile: ProfileSnapshot | null,
