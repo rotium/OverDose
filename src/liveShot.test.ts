@@ -256,6 +256,24 @@ describe('LiveShotAccumulator', () => {
       });
     });
 
+    it('counted volume freezes when pouring ends; total keeps the ramp-down', () => {
+      inRoot(() => {
+        const acc = createLiveShotAccumulator();
+        // No count_start → counts from frame 0; isolate the substate gate.
+        acc.start(wf(undefined, { title: 'p' }));
+        acc.append(frame({ tMs: 0, flow: 0, substate: 'pouring', profileFrame: 2 }));
+        // 2 × 1s pouring → +2 mL each to both total and counted.
+        acc.append(frame({ tMs: 1000, flow: 2, substate: 'pouring', profileFrame: 2 }));
+        acc.append(frame({ tMs: 2000, flow: 2, substate: 'pouring', profileFrame: 2 }));
+        // Pump ramp-down after the stop: still flowing, but substate is
+        // pouringDone → counts to total only, NOT to counted.
+        acc.append(frame({ tMs: 3000, flow: 2, substate: 'pouringDone', profileFrame: 2 }));
+        const r = acc.readouts()!;
+        expect(r.volumeMl).toBeCloseTo(6); // 2 + 2 + 2
+        expect(r.countedVolumeMl).toBeCloseTo(4); // ramp-down (last 2 mL) excluded
+      });
+    });
+
     it('drops frames silently once buffer capacity is exhausted (no allocation, no throw)', () => {
       inRoot(() => {
         const acc = createLiveShotAccumulator();

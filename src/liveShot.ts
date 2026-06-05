@@ -5,7 +5,7 @@ import type {
   WorkflowSnapshot,
 } from './api';
 import type { MachineSubstate } from './snapshot';
-import { dlog } from './debugLog';
+import { dlog, isDebugLogging } from './debugLog';
 
 /** One captured tick of brew telemetry — what the accumulator stores per frame. */
 export interface LiveShotFrame {
@@ -286,8 +286,16 @@ export function createLiveShotAccumulator(): LiveShotAccumulator {
         // the value that ends up in the persisted shot record.
         const dVol = frame.flow * ((frame.tMs - tMs[cursor - 1]!) / 1000);
         volumeMl += dVol;
-        // Counted volume only accrues from the count-start step onward.
-        if (frame.profileFrame >= volumeCountStart) countedVolumeMl += dVol;
+        // Counted volume mirrors the gateway's stop counter: it accrues only
+        // from the count-start step AND only while the shot is actively
+        // pouring. Once the machine stops dispensing (substate → pouringDone),
+        // the pump's ramp-down water is excluded — so counted reflects the
+        // volume the machine actually stopped on, not the post-stop tail.
+        const activePour =
+          frame.substate === 'pouring' || frame.substate === 'preinfusion';
+        if (frame.profileFrame >= volumeCountStart && activePour) {
+          countedVolumeMl += dVol;
+        }
       }
       endedAt = frame.machineTimestamp;
 
@@ -329,23 +337,39 @@ export function createLiveShotAccumulator(): LiveShotAccumulator {
     freeze() {
       if (status() === 'idle') return; // nothing to freeze
       // Debug: summarise the volume accounting at shot end. Comparing
-      // `counted` vs `vol` reveals whether the count-start window actually
-      // excluded pre-infusion (counted < vol) or counted everything
-      // (counted ≈ vol — frame numbering didn't line up). `frames` shows the
-      // observed profileFrame range; if its min is already ≥ countStart the
-      // window never excluded anything.
-      let minF = Infinity;
-      let maxF = -Infinity;
-      for (let i = 0; i < cursor; i++) {
-        const f = profileFrame[i]!;
-        if (f < minF) minF = f;
-        if (f > maxF) maxF = f;
+      // `counted` vs `vol` reveals whether the count-start window excluded
+      // pre-infusion; `steps(mL)` breaks the dispensed water down per frame
+      // (step) so the pre-infusion / pour / tail split is visible. The
+      // per-frame volumes sum to `vol`, and frames >= countStart sum to
+      // `counted`. Guarded so the per-frame pass is skipped when logging off.
+      if (isDebugLogging()) {
+        let minF = Infinity;
+        let maxF = -Infinity;
+        const perFrame: number[] = [];
+        for (let i = 0; i < cursor; i++) {
+          const f = profileFrame[i]!;
+          if (f < minF) minF = f;
+          if (f > maxF) maxF = f;
+          if (i > 0) {
+            perFrame[f] =
+              (perFrame[f] ?? 0) +
+              flow[i]! * ((tMs[i]! - tMs[i - 1]!) / 1000);
+          }
+        }
+        dlog(
+          'shot',
+          `end: vol=${volumeMl.toFixed(1)}mL counted=${countedVolumeMl.toFixed(1)}mL ` +
+            `countStart=${volumeCountStart} frames=${minF}..${maxF} samples=${cursor}`,
+        );
+        const steps = workflow?.profile?.steps;
+        const parts: string[] = [];
+        for (let f = 0; f <= maxF; f++) {
+          const name = steps?.[f]?.name;
+          const v = (perFrame[f] ?? 0).toFixed(1);
+          parts.push(name ? `${f}:${name}=${v}` : `${f}=${v}`);
+        }
+        dlog('shot', `steps(mL): ${parts.join('  ')}`);
       }
-      dlog(
-        'shot',
-        `end: vol=${volumeMl.toFixed(1)}mL counted=${countedVolumeMl.toFixed(1)}mL ` +
-          `countStart=${volumeCountStart} frames=${minF}..${maxF} samples=${cursor}`,
-      );
       setFrozenShot(buildFrozenShot());
       setStatus('frozen');
     },
