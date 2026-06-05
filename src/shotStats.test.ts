@@ -171,6 +171,18 @@ describe('measurement-derived stats', () => {
       shotCountedVolumeMl(record([meas(0, { flow: 1 }), meas(1, { flow: 2 })]), 1),
     ).toBeNull();
   });
+
+  it('counted volume excludes the post-stop ramp-down (substate gate)', () => {
+    // 1s steps. Three pouring samples, then a pouringDone ramp-down sample
+    // that still has flow — it must NOT count toward the stop volume.
+    const f = record([
+      meas(0, { flow: 0, profileFrame: 2, state: { substate: 'pouring' } }),
+      meas(1, { flow: 2, profileFrame: 2, state: { substate: 'pouring' } }),
+      meas(2, { flow: 2, profileFrame: 2, state: { substate: 'pouring' } }),
+      meas(3, { flow: 2, profileFrame: 2, state: { substate: 'pouringDone' } }),
+    ]);
+    expect(shotCountedVolumeMl(f, 0)).toBeCloseTo(4); // 2 + 2; ramp-down excluded
+  });
 });
 
 describe('deriveShotStats', () => {

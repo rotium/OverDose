@@ -1,4 +1,4 @@
-import type { MachineState } from './snapshot';
+import type { MachineState, MachineSubstate } from './snapshot';
 import type { ShotSettingsSnapshot } from './snapshot';
 import { gatewayHttpOrigin } from './gateway';
 import { dlog } from './debugLog';
@@ -67,6 +67,10 @@ export interface GatewayShotMeasurement {
      *  Optional: absent on older records and on the optimistic in-memory
      *  record when its frames weren't captured. */
     profileFrame?: number;
+    /** Machine state/substate at this sample. Used to exclude the post-stop
+     *  pump ramp-down from counted volume (only `pouring`/`preinfusion`
+     *  count). Optional: absent on older records / the optimistic record. */
+    state?: { state?: MachineState; substate?: MachineSubstate };
   };
   scale?: { weight: number; weightFlow?: number };
   volume?: number | null;

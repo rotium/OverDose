@@ -160,15 +160,22 @@ export const shotCountedVolumeMl = (
   let vol = 0;
   let sawFrame = false;
   for (let i = 1; i < ms.length; i++) {
-    const frame = ms[i]!.machine.profileFrame;
+    const m = ms[i]!.machine;
+    const frame = m.profileFrame;
     if (frame === undefined) continue;
     sawFrame = true;
     if (frame < countStart) continue;
+    // Exclude the post-stop pump ramp-down (mirrors the gateway + the live
+    // accumulator): only count while actively pouring. Records without a
+    // per-sample substate fall back to counting (undefined treated as active).
+    const sub = m.state?.substate;
+    if (sub !== undefined && sub !== 'pouring' && sub !== 'preinfusion') {
+      continue;
+    }
     const dtSec =
-      (Date.parse(ms[i]!.machine.timestamp) -
-        Date.parse(ms[i - 1]!.machine.timestamp)) /
+      (Date.parse(m.timestamp) - Date.parse(ms[i - 1]!.machine.timestamp)) /
       1000;
-    if (dtSec > 0) vol += ms[i]!.machine.flow * dtSec;
+    if (dtSec > 0) vol += m.flow * dtSec;
   }
   return sawFrame ? vol : null;
 };
