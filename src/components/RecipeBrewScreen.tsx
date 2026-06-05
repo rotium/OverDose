@@ -1283,6 +1283,17 @@ const fmtStat = (
     ? '—'
     : `${n.toFixed(digits)}${unit}`;
 
+/** Estimate-tagged variant of {@link fmtStat} — prefixes `~` when a value
+ *  is present (e.g. the no-scale "In cup" volume, which is flow-derived). */
+const fmtEst = (
+  n: number | null | undefined,
+  digits: number,
+  unit: string,
+): string => {
+  const v = fmtStat(n, digits, unit);
+  return v === '—' ? v : `~${v}`;
+};
+
 /** Legend trace declarations for the post-brew chart — mirrors the live
  *  view's legend (minus the dashed-targets entry, which the frozen record
  *  can't supply). Colours come from `chartTraces.ts` so they never drift. */
@@ -1540,7 +1551,7 @@ const PostBrewView: Component<{
                 {fmtStat(stats().peakFlowMlS, 1, ' mL/s')}
               </ReviewStat>
               <ReviewStat
-                label="Volume"
+                label="Water"
                 testId="post-brew-stat-volume"
                 sub={
                   stats().targetVolumeMl != null
@@ -1552,11 +1563,11 @@ const PostBrewView: Component<{
               </ReviewStat>
               <Show when={stats().volumeCountStart != null}>
                 <ReviewStat
-                  label="Counted vol"
+                  label="In cup"
                   testId="post-brew-stat-counted-volume"
                   sub={`from step ${stats().volumeCountStart}`}
                 >
-                  {fmtStat(stats().countedVolumeMl, 0, ' mL')}
+                  {fmtEst(stats().countedVolumeMl, 0, ' mL')}
                 </ReviewStat>
               </Show>
             </dl>

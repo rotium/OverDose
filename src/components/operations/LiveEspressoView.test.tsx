@@ -62,7 +62,7 @@ describe('LiveEspressoView', () => {
     });
   });
 
-  it('renders pressure / flow / weight / volume / time / mix temp in real units after a frame', () => {
+  it('renders pressure / flow / weight / volume / counted vol / mix temp in real units after a frame', () => {
     inRoot(() => {
       const acc = createLiveShotAccumulator();
       acc.start(null);
@@ -93,7 +93,11 @@ describe('LiveEspressoView', () => {
       expect(screen.getByTestId('readout-weight')).not.toHaveTextContent(/\//);
       // VOLUME column — flow integrated to 2 mL, rendered as whole mL.
       expect(screen.getByTestId('readout-volume')).toHaveTextContent('2 mL');
-      expect(screen.getAllByText(/12\.5 s/).length).toBeGreaterThan(0);
+      // Counted volume is always shown now (independent of count-start).
+      expect(screen.getByTestId('readout-counted-volume')).toBeInTheDocument();
+      // Elapsed time lives only in the header clock now (num + unit split),
+      // not in a TIME readout.
+      expect(screen.getByTestId('live-view-timer')).toHaveTextContent('12.5');
     });
   });
 

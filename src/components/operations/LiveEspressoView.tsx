@@ -62,6 +62,14 @@ const fmtNumber = (n: number | undefined, digits: number, suffix: string): strin
   return `${n.toFixed(digits)}${suffix}`;
 };
 
+/** Like {@link fmtNumber} but tags the value as an estimate with a leading
+ *  `~`. Used for the no-scale "In cup" volume, which is flow-derived, not
+ *  weighed. Leaves the em-dash placeholder untouched. */
+const fmtEst = (n: number | undefined, digits: number, suffix: string): string => {
+  const v = fmtNumber(n, digits, suffix);
+  return v === '—' ? v : `~${v}`;
+};
+
 const fmtElapsed = (sec: number | undefined): string =>
   sec === undefined ? '—' : `${sec.toFixed(1)} s`;
 
@@ -301,20 +309,14 @@ export const LiveEspressoView: Component<LiveEspressoViewProps> = (p) => {
           <div class="readout__value">{fmtNumber(r()?.weight, 1, ' g')}</div>
         </div>
         <div class="readout" data-testid="readout-volume">
-          <div class="readout__label">VOLUME</div>
+          <div class="readout__label">WATER</div>
           <div class="readout__value">{fmtNumber(r()?.volumeMl, 0, ' mL')}</div>
         </div>
-        <Show when={(profile()?.target_volume_count_start ?? 0) > 0}>
-          <div class="readout" data-testid="readout-counted-volume">
-            <div class="readout__label">COUNTED VOL</div>
-            <div class="readout__value">
-              {fmtNumber(r()?.countedVolumeMl, 0, ' mL')}
-            </div>
+        <div class="readout" data-testid="readout-counted-volume">
+          <div class="readout__label">IN CUP</div>
+          <div class="readout__value">
+            {fmtEst(r()?.countedVolumeMl, 0, ' mL')}
           </div>
-        </Show>
-        <div class="readout">
-          <div class="readout__label">TIME</div>
-          <div class="readout__value">{fmtElapsed(r()?.elapsedSec)}</div>
         </div>
         <div class="readout">
           <div class="readout__label">MIX TEMP</div>
