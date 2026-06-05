@@ -812,23 +812,15 @@ describe('RecipeBrewScreen', () => {
         autoStopMode: () => mode,
       });
 
-    it("'By weight' (scale on) sends yield and forces volume to 0", async () => {
-      const { onApplyWorkflow } = renderAs('weight', true);
+    it('auto-stop on (default) sends both target values', async () => {
+      const { onApplyWorkflow } = renderAs('auto', true);
       await waitFor(() => expect(onApplyWorkflow).toHaveBeenCalled());
       const body = onApplyWorkflow.mock.calls.at(-1)![0];
       expect(body.context?.targetYield).toBe(36);
-      expect(body.profile?.target_volume).toBe(0);
-    });
-
-    it("'By volume' (no scale) clears yield and keeps volume", async () => {
-      const { onApplyWorkflow } = renderAs('volume', false);
-      await waitFor(() => expect(onApplyWorkflow).toHaveBeenCalled());
-      const body = onApplyWorkflow.mock.calls.at(-1)![0];
-      expect(body.context?.targetYield).toBeNull();
       expect(body.profile?.target_volume).toBe(45);
     });
 
-    it("'Manual' clears both targets", async () => {
+    it('global Manual → no auto-stop (both targets cleared)', async () => {
       const { onApplyWorkflow } = renderAs('off', true);
       await waitFor(() => expect(onApplyWorkflow).toHaveBeenCalled());
       const body = onApplyWorkflow.mock.calls.at(-1)![0];
@@ -836,15 +828,46 @@ describe('RecipeBrewScreen', () => {
       expect(body.profile?.target_volume).toBe(0);
     });
 
-    it('disables the incompatible mode and warns when the default cannot apply', async () => {
-      // Default 'volume' but a scale is connected → falls back to auto + warns.
-      renderAs('volume', true);
-      const warn = await waitFor(() =>
-        screen.getByTestId('autostop-warning'),
-      );
-      expect(warn).toBeInTheDocument();
-      expect(screen.getByTestId('autostop-option-volume')).toBeDisabled();
-      // Effective mode is Automatic, which still sends both targets.
+    it('unchecking Auto-stop clears the targets', async () => {
+      const { onApplyWorkflow } = renderAs('auto', true);
+      const check = (await waitFor(() =>
+        screen.getByTestId('autostop-check'),
+      )) as HTMLInputElement;
+      expect(check.checked).toBe(true);
+      fireEvent.click(check);
+      await waitFor(() => {
+        const body = onApplyWorkflow.mock.calls.at(-1)![0];
+        expect(body.context?.targetYield).toBeNull();
+        expect(body.profile?.target_volume).toBe(0);
+      });
+    });
+
+    it('checkbox sits on yield with a scale, volume without', async () => {
+      renderAs('auto', true);
+      await waitFor(() => screen.getByTestId('autostop-check'));
+      expect(
+        screen
+          .getByTestId('prep-card-target-yield')
+          .querySelector('[data-testid="autostop-check"]'),
+      ).not.toBeNull();
+      expect(
+        screen
+          .getByTestId('prep-card-target-volume')
+          .querySelector('[data-testid="autostop-check"]'),
+      ).toBeNull();
+    });
+
+    it('warns when the global default cannot apply to the scale state', async () => {
+      // Global 'By weight' but no scale → auto-stops by volume + warns.
+      renderAs('weight', false);
+      expect(
+        await waitFor(() => screen.getByTestId('autostop-warning')),
+      ).toBeInTheDocument();
+      expect(
+        screen
+          .getByTestId('prep-card-target-volume')
+          .querySelector('[data-testid="autostop-check"]'),
+      ).not.toBeNull();
     });
   });
 

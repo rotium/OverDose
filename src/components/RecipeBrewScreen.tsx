@@ -52,7 +52,6 @@ import {
   type TraceVisibility,
 } from '../prefs';
 import {
-  AUTO_STOP_MODES,
   autoStopLabel,
   autoStopUnavailableReason,
   computeStopTargets,
@@ -287,16 +286,22 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
   // case is the default (or a stale pick after the scale changed) not matching
   // the current scale — we fall back to `auto` and surface a warning.
   const scaleOn = (): boolean => p.scaleConnected?.() ?? false;
-  const selectedStopMode = (): AutoStopMode =>
-    draft()?.stopMode ?? p.autoStopMode?.() ?? 'auto';
-  const effectiveStopMode = (): AutoStopMode =>
-    isStopModeApplicable(selectedStopMode(), scaleOn())
-      ? selectedStopMode()
-      : 'auto';
+  const globalStopMode = (): AutoStopMode => p.autoStopMode?.() ?? 'auto';
+  // Per-shot is just on/off: the draft's mode overrides the global default;
+  // `off` = manual, anything else = auto-stop on. When on we push `auto` and
+  // let the gateway stop at the scale-relevant target (yield with a scale,
+  // volume without) — both target *values* are still sent as shot info.
+  const autoStopOn = (): boolean =>
+    (draft()?.stopMode ?? globalStopMode()) !== 'off';
+  const setAutoStopOn = (on: boolean): void =>
+    patchDraft({ stopMode: on ? 'auto' : 'off' });
+  // Warn when auto-stop is on but the global *forcing* default can't apply to
+  // the current scale (By weight + no scale, or By volume + scale) — so the
+  // user knows their configured default isn't being honoured this shot.
   const stopModeWarning = (): string | null => {
-    const sel = selectedStopMode();
-    if (isStopModeApplicable(sel, scaleOn())) return null;
-    return `${autoStopLabel(sel)} ${autoStopUnavailableReason(sel, scaleOn())} — using ${autoStopLabel('auto')}`;
+    const g = globalStopMode();
+    if (!autoStopOn() || isStopModeApplicable(g, scaleOn())) return null;
+    return `Default '${autoStopLabel(g)}' ${autoStopUnavailableReason(g, scaleOn())} — auto-stopping by ${scaleOn() ? 'weight' : 'volume'}`;
   };
 
   // Resolve the draft's profile at the screen level — used both to render
@@ -347,7 +352,7 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
     // Stop targets follow the *effective* auto-stop mode (resolved against the
     // live scale state). The mode decides which of yield/volume we send — e.g.
     // "By weight" forces volume to 0, "Manual" zeros both. See autoStop.ts.
-    const mode = effectiveStopMode();
+    const mode: AutoStopMode = autoStopOn() ? 'auto' : 'off';
     const { targetYield, targetVolume } = computeStopTargets(mode, {
       draftYieldG: d.targetYieldGrams,
       draftVolumeMl: d.targetVolumeMl,
@@ -661,8 +666,8 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
                 isHeaterOff={heaterOff}
                 isWaterCritical={waterCritical}
                 onStart={startCurrentStep}
-                stopMode={effectiveStopMode}
-                onStopMode={(m) => patchDraft({ stopMode: m })}
+                autoStopOn={autoStopOn}
+                onAutoStop={setAutoStopOn}
                 scaleConnected={scaleOn}
                 stopModeWarning={stopModeWarning}
                 profile={() => profile() ?? null}
@@ -810,13 +815,13 @@ const PrepCard: Component<{
   isHeaterOff: Accessor<boolean>;
   isWaterCritical: Accessor<boolean>;
   onStart: () => void;
-  /** Effective auto-stop mode (resolved vs scale) — highlights the selector. */
-  stopMode: Accessor<AutoStopMode>;
-  /** User picked a mode for this shot. */
-  onStopMode: (m: AutoStopMode) => void;
-  /** Live scale-connection state — gates which modes are selectable. */
+  /** Whether auto-stop is on for this shot (the checkbox state). */
+  autoStopOn: Accessor<boolean>;
+  /** Toggle auto-stop on/off for this shot. */
+  onAutoStop: (on: boolean) => void;
+  /** Live scale-connection state — decides which target the checkbox sits on. */
   scaleConnected: Accessor<boolean>;
-  /** Set when the resolved mode fell back (default not applicable). */
+  /** Warning when the global default can't apply to the current scale. */
   stopModeWarning: Accessor<string | null>;
   profile: Accessor<ProfileRecord | null>;
   profileLoading: Accessor<boolean>;
@@ -847,8 +852,8 @@ const PrepCard: Component<{
           <BrewPrep
             draft={p.draft}
             patchDraft={p.patchDraft}
-            stopMode={p.stopMode}
-            onStopMode={p.onStopMode}
+            autoStopOn={p.autoStopOn}
+            onAutoStop={p.onAutoStop}
             scaleConnected={p.scaleConnected}
             stopModeWarning={p.stopModeWarning}
             profile={p.profile}
@@ -936,8 +941,8 @@ const PrepCard: Component<{
 const BrewPrep: Component<{
   draft: Accessor<ShotDraft | null>;
   patchDraft: (patch: Partial<ShotDraft>) => void;
-  stopMode: Accessor<AutoStopMode>;
-  onStopMode: (m: AutoStopMode) => void;
+  autoStopOn: Accessor<boolean>;
+  onAutoStop: (on: boolean) => void;
   scaleConnected: Accessor<boolean>;
   stopModeWarning: Accessor<string | null>;
   /** Resolved profile for the draft's profileId (fetched by the screen so
@@ -976,129 +981,206 @@ const BrewPrep: Component<{
     // column when narrow. Start lives in the PrepCard footer below. The
     // picker dialogs render via Portal, so they aren't grid items.
     <div class="brew-prep">
-      {/*
-        Profile is the headline of the brew step — it determines the whole
-        shot. Title + author header, small target-curve thumbnail, plus a
-        Change button to swap the profile *for this shot only*. Below: the
-        editable dose / grinder / yield / volume overrides.
-      */}
-      <section class="prep__profile" data-testid="prep-card-profile">
-        <div class="prep__profile-toprow">
-          <span class="prep__profile-label">Profile</span>
-          <button
-            type="button"
-            class="btn prep__profile-change"
-            data-testid="prep-card-profile-change"
-            onClick={() => setProfileDialogOpen(true)}
-          >
-            {hasProfileId() ? 'Change' : 'Choose'}
-          </button>
-        </div>
-        <Show
-          when={hasProfileId()}
-          fallback={
-            <span
-              class="prep__profile-value prep__profile-value--muted"
-              data-testid="prep-card-profile-empty"
+      {/* Left column: the brew definition — profile + stop targets (the
+          targets shape the brew, so they live with the profile rather than
+          among the dose/grind prep values on the right). */}
+      <div class="brew-prep__col">
+        {/*
+          Profile is the headline of the brew step — it determines the whole
+          shot. Title + author header, small target-curve thumbnail, plus a
+          Change button to swap the profile *for this shot only*. Below: the
+          editable dose / grinder / yield / volume overrides.
+        */}
+        <section class="prep__profile" data-testid="prep-card-profile">
+          <div class="prep__profile-toprow">
+            <span class="prep__profile-label">Profile</span>
+            <button
+              type="button"
+              class="btn prep__profile-change"
+              data-testid="prep-card-profile-change"
+              onClick={() => setProfileDialogOpen(true)}
             >
-              No profile selected — tap Choose to pick one for this shot.
-            </span>
-          }
-        >
+              {hasProfileId() ? 'Change' : 'Choose'}
+            </button>
+          </div>
           <Show
-            when={profile()}
+            when={hasProfileId()}
             fallback={
               <span
                 class="prep__profile-value prep__profile-value--muted"
-                data-testid="prep-card-profile-missing"
+                data-testid="prep-card-profile-empty"
               >
-                {p.profileLoading()
-                  ? 'Loading…'
-                  : `(missing profile — ${p.draft()?.profileId})`}
+                No profile selected — tap Choose to pick one for this shot.
               </span>
             }
           >
-            <div class="prep__profile-header">
-              <span
-                class="prep__profile-value"
-                data-testid="prep-card-profile-title"
-              >
-                {profileTitle()}
-              </span>
-              <Show when={profile()!.isDefault}>
+            <Show
+              when={profile()}
+              fallback={
                 <span
-                  class="profile-row__badge profile-row__badge--default"
-                  data-testid="prep-card-profile-default-badge"
+                  class="prep__profile-value prep__profile-value--muted"
+                  data-testid="prep-card-profile-missing"
                 >
-                  default
+                  {p.profileLoading()
+                    ? 'Loading…'
+                    : `(missing profile — ${p.draft()?.profileId})`}
                 </span>
-              </Show>
-            </div>
-            <div
-              class="prep__profile-meta"
-              data-testid="prep-card-profile-meta"
+              }
             >
-              <Show when={profileAuthor()}>
-                <span class="prep__profile-author">by {profileAuthor()}</span>
-              </Show>
-              <Show
-                when={
-                  typeof tankTemp() === 'number' && (tankTemp() as number) > 0
-                }
-              >
-                <span class="profile-row__chip">
-                  Tank {(tankTemp() as number).toFixed(1)} °C
+              <div class="prep__profile-header">
+                <span
+                  class="prep__profile-value"
+                  data-testid="prep-card-profile-title"
+                >
+                  {profileTitle()}
                 </span>
-              </Show>
-            </div>
-            <Show when={!curve().empty}>
-              <div
-                class="prep__profile-chart"
-                data-testid="prep-card-profile-chart-wrap"
-              >
-                <ProfileCurveChart
-                  curve={curve()}
-                  width={320}
-                  height={96}
-                  compact={true}
-                  testId="prep-card-profile-chart"
-                />
+                <Show when={profile()!.isDefault}>
+                  <span
+                    class="profile-row__badge profile-row__badge--default"
+                    data-testid="prep-card-profile-default-badge"
+                  >
+                    default
+                  </span>
+                </Show>
               </div>
+              <div
+                class="prep__profile-meta"
+                data-testid="prep-card-profile-meta"
+              >
+                <Show when={profileAuthor()}>
+                  <span class="prep__profile-author">by {profileAuthor()}</span>
+                </Show>
+                <Show
+                  when={
+                    typeof tankTemp() === 'number' && (tankTemp() as number) > 0
+                  }
+                >
+                  <span class="profile-row__chip">
+                    Tank {(tankTemp() as number).toFixed(1)} °C
+                  </span>
+                </Show>
+              </div>
+              <Show when={!curve().empty}>
+                <div
+                  class="prep__profile-chart"
+                  data-testid="prep-card-profile-chart-wrap"
+                >
+                  <ProfileCurveChart
+                    curve={curve()}
+                    width={320}
+                    height={96}
+                    compact={true}
+                    testId="prep-card-profile-chart"
+                  />
+                </div>
+              </Show>
             </Show>
           </Show>
+        </section>
+
+        <PickerDialog
+          open={profileDialogOpen()}
+          onClose={() => setProfileDialogOpen(false)}
+          title="Choose a profile"
+          description="Overrides the profile for this shot only."
+          testId="prep-card-profile-dialog"
+          maxWidthPx={1100}
+        >
+          <ProfilePicker
+            selectedId={p.draft()?.profileId}
+            onSelect={handleProfileSelect}
+            onCancel={() => setProfileDialogOpen(false)}
+            loadProfiles={p.loadProfiles}
+          />
+        </PickerDialog>
+
+        <PickerDialog
+          open={beanDialogOpen()}
+          onClose={() => setBeanDialogOpen(false)}
+          title="Choose a bean"
+          description="Sets the coffee recorded for this shot."
+          testId="prep-card-bean-dialog"
+        >
+          <BeanPicker
+            selectedId={p.draft()?.beanId}
+            onSelect={handleBeanSelect}
+            onCancel={() => setBeanDialogOpen(false)}
+            loadBeans={p.loadBeans}
+          />
+        </PickerDialog>
+
+        {/* Stop targets — below the profile because they shape the brew. Both
+            are shown and always editable: each is an auto-stop target AND a
+            manual-stop reference (e.g. set 36 g with no scale and stop by hand
+            at it). The Auto-stop checkbox sits on whichever target the machine
+            can actually enforce — yield with a scale, volume without; the other
+            is a plain reference. */}
+        <div class="prep__targets" data-testid="prep-card-targets">
+          <label class="prep__stat" data-testid="prep-card-target-yield">
+            <span class="prep__stat-label">Target yield</span>
+            <span class="prep__stat-edit">
+              <DebouncedNumberField
+                value={p.draft()?.targetYieldGrams}
+                onCommit={(v) => p.patchDraft({ targetYieldGrams: v })}
+                placeholder="—"
+                min={0}
+                step={0.1}
+                ariaLabel="Target yield (grams)"
+                testId="prep-card-target-yield-input"
+                class="prep__stat-input"
+              />
+              <span class="prep__stat-unit">g</span>
+              <Show when={p.scaleConnected()}>
+                <label class="prep__autostop-check">
+                  <input
+                    type="checkbox"
+                    checked={p.autoStopOn()}
+                    onChange={(e) => p.onAutoStop(e.currentTarget.checked)}
+                    data-testid="autostop-check"
+                  />
+                  <span>Auto-stop</span>
+                </label>
+              </Show>
+            </span>
+          </label>
+          <label class="prep__stat" data-testid="prep-card-target-volume">
+            <span class="prep__stat-label">Target volume</span>
+            <span class="prep__stat-edit">
+              <DebouncedNumberField
+                value={p.draft()?.targetVolumeMl}
+                onCommit={(v) => p.patchDraft({ targetVolumeMl: v })}
+                placeholder="—"
+                min={0}
+                step={1}
+                ariaLabel="Target volume (millilitres)"
+                testId="prep-card-target-volume-input"
+                class="prep__stat-input"
+              />
+              <span class="prep__stat-unit">mL</span>
+              <Show when={!p.scaleConnected()}>
+                <label class="prep__autostop-check">
+                  <input
+                    type="checkbox"
+                    checked={p.autoStopOn()}
+                    onChange={(e) => p.onAutoStop(e.currentTarget.checked)}
+                    data-testid="autostop-check"
+                  />
+                  <span>Auto-stop</span>
+                </label>
+              </Show>
+            </span>
+          </label>
+        </div>
+        <Show when={p.stopModeWarning()}>
+          <p
+            class="prep__autostop-warning"
+            role="status"
+            data-testid="autostop-warning"
+          >
+            {p.stopModeWarning()}
+          </p>
         </Show>
-      </section>
-
-      <PickerDialog
-        open={profileDialogOpen()}
-        onClose={() => setProfileDialogOpen(false)}
-        title="Choose a profile"
-        description="Overrides the profile for this shot only."
-        testId="prep-card-profile-dialog"
-        maxWidthPx={1100}
-      >
-        <ProfilePicker
-          selectedId={p.draft()?.profileId}
-          onSelect={handleProfileSelect}
-          onCancel={() => setProfileDialogOpen(false)}
-          loadProfiles={p.loadProfiles}
-        />
-      </PickerDialog>
-
-      <PickerDialog
-        open={beanDialogOpen()}
-        onClose={() => setBeanDialogOpen(false)}
-        title="Choose a bean"
-        description="Sets the coffee recorded for this shot."
-        testId="prep-card-bean-dialog"
-      >
-        <BeanPicker
-          selectedId={p.draft()?.beanId}
-          onSelect={handleBeanSelect}
-          onCancel={() => setBeanDialogOpen(false)}
-          loadBeans={p.loadBeans}
-        />
-      </PickerDialog>
+      </div>
 
       <div class="prep__stats">
         {/* Bean reads as a stat card like dose/grind, but its value is a
@@ -1180,86 +1262,7 @@ const BrewPrep: Component<{
             />
           </span>
         </label>
-        {/* Yield / volume stop targets — always shown + editable. Empty =
-            no per-shot stop (the profile's own target drives the shot). */}
-        <label class="prep__stat" data-testid="prep-card-target-yield">
-          <span class="prep__stat-label">Target yield</span>
-          <span class="prep__stat-edit">
-            <DebouncedNumberField
-              value={p.draft()?.targetYieldGrams}
-              onCommit={(v) => p.patchDraft({ targetYieldGrams: v })}
-              placeholder="—"
-              min={0}
-              step={0.1}
-              ariaLabel="Target yield (grams)"
-              testId="prep-card-target-yield-input"
-              class="prep__stat-input"
-            />
-            <span class="prep__stat-unit">g</span>
-          </span>
-        </label>
-        <label class="prep__stat" data-testid="prep-card-target-volume">
-          <span class="prep__stat-label">Target volume</span>
-          <span class="prep__stat-edit">
-            <DebouncedNumberField
-              value={p.draft()?.targetVolumeMl}
-              onCommit={(v) => p.patchDraft({ targetVolumeMl: v })}
-              placeholder="—"
-              min={0}
-              step={1}
-              ariaLabel="Target volume (millilitres)"
-              testId="prep-card-target-volume-input"
-              class="prep__stat-input"
-            />
-            <span class="prep__stat-unit">mL</span>
-          </span>
-        </label>
       </div>
-      {/* Auto-stop — a brew *behavior* control, kept out of the shot-details
-          grid above and set apart by a divider + inline layout. The scale-
-          incompatible mode is a disabled option carrying its reason; the value
-          reflects the *effective* mode (so a fallback shows here). */}
-      <div class="prep__autostop" data-testid="prep-card-autostop">
-        <span class="prep__autostop-icon" aria-hidden="true">■</span>
-        <span class="prep__autostop-label">Stops:</span>
-        <select
-          class="prep__autostop-select"
-          aria-label="Auto-stop mode"
-          data-testid="autostop-select"
-          onChange={(e) =>
-            p.onStopMode(e.currentTarget.value as AutoStopMode)
-          }
-        >
-          <For each={AUTO_STOP_MODES}>
-            {(mode) => {
-              const reason = (): string | null =>
-                autoStopUnavailableReason(mode, p.scaleConnected());
-              return (
-                <option
-                  value={mode}
-                  disabled={reason() !== null}
-                  selected={p.stopMode() === mode}
-                  data-testid={`autostop-option-${mode}`}
-                >
-                  {autoStopLabel(mode)}
-                  {reason() ? ` — ${reason()}` : ''}
-                </option>
-              );
-            }}
-          </For>
-        </select>
-      </div>
-      {/* Fallback warning — the chosen/default mode can't apply to the current
-          scale state, so it fell back to Automatic. */}
-      <Show when={p.stopModeWarning()}>
-        <p
-          class="prep__autostop-warning"
-          role="status"
-          data-testid="autostop-warning"
-        >
-          {p.stopModeWarning()}
-        </p>
-      </Show>
     </div>
   );
 };

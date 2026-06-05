@@ -2920,6 +2920,15 @@ html {
   align-items: start;
 }
 
+/* Left column of the brew prep: profile + stop targets stacked, so the grid
+   sees one cell here (not one per child) and keeps the two-column layout. */
+.brew-prep__col {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
 .prep__stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -2927,42 +2936,37 @@ html {
   align-content: start;
 }
 
-/* Auto-stop — a brew *behavior* control, deliberately distinct from the
-   shot-details grid above: a divider, then an inline icon + "Stops:" label +
-   compact dropdown. The scale-incompatible mode is a disabled option. */
-.prep__autostop {
+/* Stop targets — sit below the profile (they shape the brew). Both yield and
+   volume are shown; the Auto-stop checkbox rides inline on whichever target
+   the machine can enforce (yield with a scale, volume without). */
+.prep__targets {
   display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.prep__targets .prep__stat {
+  flex: 1 1 200px;
+}
+
+.prep__autostop-check {
+  display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.85rem;
-  padding-top: 0.85rem;
-  border-top: 1px solid var(--border);
-}
-
-.prep__autostop-icon {
+  gap: 0.3rem;
+  margin-left: 0.5rem;
+  font-size: 0.8rem;
   color: var(--muted);
-  font-size: 0.7rem;
-  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
-.prep__autostop-label {
-  font-size: 0.85rem;
-  color: var(--muted);
-}
-
-.prep__autostop-select {
-  flex: 0 1 auto;
-  padding: 0.3rem 0.45rem;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg);
-  color: var(--fg);
-  font: inherit;
-  font-size: 0.9rem;
+.prep__autostop-check input {
+  cursor: pointer;
 }
 
 .prep__autostop-warning {
-  margin: 0.5rem 0 0;
+  margin: 0 0 0.75rem;
   font-size: 0.8rem;
   color: var(--warn-fg);
 }
