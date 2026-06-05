@@ -1,6 +1,5 @@
 import { defineConfig } from 'vite';
 import solid from 'vite-plugin-solid';
-import pkg from './package.json';
 
 // Build-time env, read defensively (this project has no @types/node).
 const env =
@@ -15,9 +14,13 @@ const GATEWAY_HOST = env.GATEWAY_HOST ?? 'localhost:8080';
 // (GIT_COMMIT=...). Falls back to "dev" for `npm run dev` and tarball builds.
 const GIT_COMMIT = env.GIT_COMMIT ?? 'dev';
 
+// Released version, injected from the git tag by the release workflow
+// (OVERDOSE_VERSION=...). Falls back to "0.0.dev" for local/dev builds.
+const APP_VERSION = env.OVERDOSE_VERSION ?? '0.0.dev';
+
 export default defineConfig({
   define: {
-    __APP_VERSION__: JSON.stringify(pkg.version),
+    __APP_VERSION__: JSON.stringify(APP_VERSION),
     __GIT_COMMIT__: JSON.stringify(GIT_COMMIT),
     __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
   },
