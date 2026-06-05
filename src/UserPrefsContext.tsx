@@ -10,6 +10,7 @@ import {
   type JSX,
 } from 'solid-js';
 import {
+  DEFAULT_AUTO_STOP_MODE,
   DEFAULT_CHART_SMOOTHING,
   DEFAULT_DEBUG_LOGGING,
   DEFAULT_HAS_SCALE,
@@ -17,6 +18,7 @@ import {
   DEFAULT_STEAM_PURGE_STRATEGY,
   DEFAULT_TRACE_VISIBILITY,
   DEFAULT_WATER_UNIT,
+  type AutoStopMode,
   type ChartSmoothing,
   type SteamPurgeStrategy,
   type TraceVisibility,
@@ -74,6 +76,7 @@ interface PersistedPrefs {
   debugLogging?: boolean;
   steamPurgeStrategy?: SteamPurgeStrategy;
   steamAutoFlushSec?: number;
+  autoStopMode?: AutoStopMode;
 }
 
 export interface UserPrefsContextValue {
@@ -117,6 +120,9 @@ export interface UserPrefsContextValue {
   /** Dwell seconds before `autoFlush` fires the purge. */
   steamAutoFlushSec: Accessor<number>;
   setSteamAutoFlushSec: (v: number) => void;
+  /** Global default auto-stop mode; overridable per shot in the prep card. */
+  autoStopMode: Accessor<AutoStopMode>;
+  setAutoStopMode: (v: AutoStopMode) => void;
 }
 
 const Ctx = createContext<UserPrefsContextValue>();
@@ -181,6 +187,9 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
   const [steamAutoFlushSec, setSteamAutoFlushSec] = createSignal<number>(
     initial.steamAutoFlushSec ?? DEFAULT_STEAM_AUTO_FLUSH_SEC,
   );
+  const [autoStopMode, setAutoStopMode] = createSignal<AutoStopMode>(
+    initial.autoStopMode ?? DEFAULT_AUTO_STOP_MODE,
+  );
 
   const setTraceVisible = (k: keyof TraceVisibility, v: boolean) =>
     setTraceVisibility({ ...traceVisibility(), [k]: v });
@@ -200,6 +209,7 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
       debugLogging: debugLogging(),
       steamPurgeStrategy: steamPurgeStrategy(),
       steamAutoFlushSec: steamAutoFlushSec(),
+      autoStopMode: autoStopMode(),
     };
     storage.setItem(STORAGE_KEY, JSON.stringify(shape));
   });
@@ -287,6 +297,8 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
     setSteamPurgeStrategy,
     steamAutoFlushSec,
     setSteamAutoFlushSec,
+    autoStopMode,
+    setAutoStopMode,
   };
 
   return <Ctx.Provider value={value}>{p.children}</Ctx.Provider>;

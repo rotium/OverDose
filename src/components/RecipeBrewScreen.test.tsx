@@ -99,6 +99,10 @@ const renderScreen = (
     loadPitchers?: () => Promise<Pitcher[]>;
     /** Whether the steam-flow slider shows in steam prep. Default false. */
     showFlowSlider?: () => boolean;
+    /** Live scale-connection state for auto-stop mode resolution. */
+    scaleConnected?: () => boolean;
+    /** Global default auto-stop mode. */
+    autoStopMode?: () => import('../autoStop').AutoStopMode;
   },
 ): ReturnType<typeof mkSetup> & {
   onApplyWorkflow: ReturnType<typeof vi.fn>;
@@ -156,6 +160,8 @@ const renderScreen = (
         }
         loadPitchers={opts.loadPitchers}
         showFlowSlider={opts.showFlowSlider}
+        scaleConnected={opts.scaleConnected}
+        autoStopMode={opts.autoStopMode}
         loadProfileById={loadProfileById}
         loadProfiles={loadProfiles}
         loadBeanById={
@@ -775,6 +781,70 @@ describe('RecipeBrewScreen', () => {
       // Saved Recipe still has the original dose.
       const r = await repos.recipes.get('rec-1');
       expect(r?.doseGrams).toBe(18);
+    });
+  });
+
+  describe('auto-stop mode', () => {
+    const asProfile = mkProfileRecord({
+      id: 'profile:as',
+      profile: {
+        title: 'AS',
+        target_volume: 50,
+        steps: [{ name: 'pour', pump: 'pressure', seconds: 20, pressure: 9 }],
+      },
+    });
+    const asRecipe = () =>
+      sampleRecipe({
+        profileId: asProfile.id,
+        doseGrams: 18,
+        targetYieldGrams: 36,
+        targetVolumeMl: 45,
+      });
+    const renderAs = (
+      mode: import('../autoStop').AutoStopMode,
+      scale: boolean,
+    ) =>
+      renderScreen({
+        routines: [cappuccino()],
+        recipes: [asRecipe()],
+        loadProfileById: () => Promise.resolve(asProfile),
+        scaleConnected: () => scale,
+        autoStopMode: () => mode,
+      });
+
+    it("'By weight' (scale on) sends yield and forces volume to 0", async () => {
+      const { onApplyWorkflow } = renderAs('weight', true);
+      await waitFor(() => expect(onApplyWorkflow).toHaveBeenCalled());
+      const body = onApplyWorkflow.mock.calls.at(-1)![0];
+      expect(body.context?.targetYield).toBe(36);
+      expect(body.profile?.target_volume).toBe(0);
+    });
+
+    it("'By volume' (no scale) clears yield and keeps volume", async () => {
+      const { onApplyWorkflow } = renderAs('volume', false);
+      await waitFor(() => expect(onApplyWorkflow).toHaveBeenCalled());
+      const body = onApplyWorkflow.mock.calls.at(-1)![0];
+      expect(body.context?.targetYield).toBeNull();
+      expect(body.profile?.target_volume).toBe(45);
+    });
+
+    it("'Manual' clears both targets", async () => {
+      const { onApplyWorkflow } = renderAs('off', true);
+      await waitFor(() => expect(onApplyWorkflow).toHaveBeenCalled());
+      const body = onApplyWorkflow.mock.calls.at(-1)![0];
+      expect(body.context?.targetYield).toBeNull();
+      expect(body.profile?.target_volume).toBe(0);
+    });
+
+    it('disables the incompatible mode and warns when the default cannot apply', async () => {
+      // Default 'volume' but a scale is connected → falls back to auto + warns.
+      renderAs('volume', true);
+      const warn = await waitFor(() =>
+        screen.getByTestId('autostop-warning'),
+      );
+      expect(warn).toBeInTheDocument();
+      expect(screen.getByTestId('autostop-option-volume')).toBeDisabled();
+      // Effective mode is Automatic, which still sends both targets.
     });
   });
 

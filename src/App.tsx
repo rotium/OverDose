@@ -33,12 +33,13 @@ import { setDebugLogging as setDebugLoggingEnabled, dlog } from './debugLog';
 import { deriveActivity } from './machineActivity';
 import { isWaterBlocked } from './water';
 import type { Recipe } from './domain';
-import type {
-  MachineSnapshot,
-  MachineState,
-  ScaleMessage,
-  ShotSettingsSnapshot,
-  WaterLevelsSnapshot,
+import {
+  isScaleStatusFrame,
+  type MachineSnapshot,
+  type MachineState,
+  type ScaleMessage,
+  type ShotSettingsSnapshot,
+  type WaterLevelsSnapshot,
 } from './snapshot';
 import type { WsStream } from './streams';
 
@@ -206,6 +207,18 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
   // changes — `connected` is a memo so this doesn't run on every (~10 Hz)
   // frame, only on connect/disconnect edges.
   const machineConnected = createMemo(() => p.streams.machine.latest() !== null);
+
+  // Live scale-connection state — drives which auto-stop modes the brew prep
+  // offers. The scale WS stays open even with no scale paired, so combine the
+  // socket status with the latest frame (status frame says connected, or a
+  // data frame implies it). Same derivation the header pill uses (Home.tsx).
+  const scaleConnected = createMemo<boolean>(() => {
+    const s = p.streams.scale;
+    if (s.status() !== 'open') return false;
+    const frame = s.latest();
+    if (!frame) return false;
+    return isScaleStatusFrame(frame) ? frame.status === 'connected' : true;
+  });
   let lastWrittenPurgeMode: number | null = null;
   createEffect(() => {
     const strat = prefs.steamPurgeStrategy();
@@ -354,6 +367,8 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
               recipeId={activeBrewRecipeId()!}
               onExit={onExitBrew}
               machineStream={() => p.streams.machine}
+              scaleConnected={scaleConnected}
+              autoStopMode={() => prefs.autoStopMode()}
               isWaterCritical={isWaterCritical}
               requestState={api.requestState}
               shotSettingsStream={() => p.streams.shotSettings}
@@ -375,6 +390,8 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
                 bundleOverride={exploreBundle()!}
                 onExit={() => setExploreBrewing(false)}
                 machineStream={() => p.streams.machine}
+                scaleConnected={scaleConnected}
+                autoStopMode={() => prefs.autoStopMode()}
                 isWaterCritical={isWaterCritical}
                 requestState={api.requestState}
                 shotSettingsStream={() => p.streams.shotSettings}
@@ -391,6 +408,8 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
               bundleOverride={buildExploreSteamBundle()}
               onExit={() => setExploreSteaming(false)}
               machineStream={() => p.streams.machine}
+              scaleConnected={scaleConnected}
+              autoStopMode={() => prefs.autoStopMode()}
               isWaterCritical={isWaterCritical}
               requestState={api.requestState}
               shotSettingsStream={() => p.streams.shotSettings}

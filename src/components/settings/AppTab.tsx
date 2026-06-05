@@ -2,6 +2,7 @@ import { Match, Switch, createSignal, type Component } from 'solid-js';
 import type { WaterLevelsSnapshot } from '../../snapshot';
 import type { WsStream } from '../../streams';
 import { DisplaySection } from './sections/DisplaySection';
+import { BrewingSection } from './sections/BrewingSection';
 import { AlertsSection } from './sections/AlertsSection';
 import { AboutSection } from './sections/AboutSection';
 import { DeveloperSection } from './sections/DeveloperSection';
@@ -12,10 +13,11 @@ import { DeveloperSection } from './sections/DeveloperSection';
  * their own panes rather than competing on one scrolling page. New
  * subsections can plug in by extending SECTIONS and adding a Match arm.
  */
-type SectionId = 'display' | 'alerts' | 'about' | 'developer';
+type SectionId = 'display' | 'brewing' | 'alerts' | 'about' | 'developer';
 
 const SECTIONS: { id: SectionId; label: string }[] = [
   { id: 'display', label: 'Display' },
+  { id: 'brewing', label: 'Brewing' },
   { id: 'alerts', label: 'Alerts' },
   { id: 'about', label: 'About' },
   { id: 'developer', label: 'Developer' },
@@ -47,6 +49,9 @@ export const AppTab: Component<{
         <Switch>
           <Match when={section() === 'display'}>
             <DisplaySection />
+          </Match>
+          <Match when={section() === 'brewing'}>
+            <BrewingSection />
           </Match>
           <Match when={section() === 'alerts'}>
             <AlertsSection waterLevels={p.waterLevelsStream?.latest} />

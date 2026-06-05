@@ -2927,6 +2927,46 @@ html {
   align-content: start;
 }
 
+/* Auto-stop — a brew *behavior* control, deliberately distinct from the
+   shot-details grid above: a divider, then an inline icon + "Stops:" label +
+   compact dropdown. The scale-incompatible mode is a disabled option. */
+.prep__autostop {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border);
+}
+
+.prep__autostop-icon {
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
+.prep__autostop-label {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.prep__autostop-select {
+  flex: 0 1 auto;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.prep__autostop-warning {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  color: var(--warn-fg);
+}
+
 .prep__stat {
   display: flex;
   flex-direction: column;

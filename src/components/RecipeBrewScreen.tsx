@@ -47,9 +47,17 @@ import { deriveShotStats } from '../shotStats';
 import { TRACE_COLOR } from './chartTraces';
 import {
   DEFAULT_TRACE_VISIBILITY,
+  type AutoStopMode,
   type TraceKey,
   type TraceVisibility,
 } from '../prefs';
+import {
+  AUTO_STOP_MODES,
+  autoStopLabel,
+  autoStopUnavailableReason,
+  computeStopTargets,
+  isStopModeApplicable,
+} from '../autoStop';
 import { ProfileCurveChart } from './settings/sections/library/ProfileCurveChart';
 import { ProfilePicker } from './settings/sections/library/ProfilePicker';
 import { BeanPicker } from './settings/sections/library/BeanPicker';
@@ -122,6 +130,13 @@ export interface RecipeBrewScreenProps {
   isWaterCritical?: Accessor<boolean>;
   /** Fires a gateway state request (typically `api.requestState`). */
   requestState: (state: MachineState) => Promise<void>;
+  /** Live scale-connection state — gates which auto-stop modes the prep card
+   *  offers (weight needs a scale, volume needs none). Optional; defaults to
+   *  "no scale" when omitted (tests). */
+  scaleConnected?: Accessor<boolean>;
+  /** Global default auto-stop mode (from prefs). Seeds the per-shot choice;
+   *  the prep card can override it. Optional; defaults to `auto`. */
+  autoStopMode?: Accessor<AutoStopMode>;
   /** Live shotSettings stream — needed to build the full-body shotSettings
    *  POST that applies the chosen pitcher's steam temp + duration when a
    *  steam step starts. Optional: when absent (tests) the write is skipped
@@ -194,6 +209,9 @@ interface ShotDraft {
   grinderSetting?: number;
   targetYieldGrams?: number;
   targetVolumeMl?: number;
+  /** Per-shot auto-stop override. `undefined` = use the global default
+   *  (`p.autoStopMode`). Set when the user picks a mode in the prep card. */
+  stopMode?: AutoStopMode;
 }
 
 export interface BrewBundle {
@@ -262,6 +280,25 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
     setDraft({ ...d, ...patch });
   };
 
+  // ── Auto-stop mode resolution ──
+  // The per-shot choice (draft.stopMode) overrides the global default
+  // (p.autoStopMode). The prep card only offers modes that can fire given the
+  // live scale state, so a *picked* mode is always applicable; the inapplicable
+  // case is the default (or a stale pick after the scale changed) not matching
+  // the current scale — we fall back to `auto` and surface a warning.
+  const scaleOn = (): boolean => p.scaleConnected?.() ?? false;
+  const selectedStopMode = (): AutoStopMode =>
+    draft()?.stopMode ?? p.autoStopMode?.() ?? 'auto';
+  const effectiveStopMode = (): AutoStopMode =>
+    isStopModeApplicable(selectedStopMode(), scaleOn())
+      ? selectedStopMode()
+      : 'auto';
+  const stopModeWarning = (): string | null => {
+    const sel = selectedStopMode();
+    if (isStopModeApplicable(sel, scaleOn())) return null;
+    return `${autoStopLabel(sel)} ${autoStopUnavailableReason(sel, scaleOn())} — using ${autoStopLabel('auto')}`;
+  };
+
   // Resolve the draft's profile at the screen level — used both to render
   // the prep card and to build the gateway push. Null-on-error contract.
   const profileLoader = (id: string): Promise<ProfileRecord | null> =>
@@ -307,29 +344,30 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
     // a profile that failed to resolve) → don't half-configure the machine;
     // the brew step, if reached, runs whatever profile is already loaded.
     if (!prof) return;
-    // Override the profile's target_volume only when the draft sets one.
-    // The spread carries every runtime field of the received profile (our
-    // TS type is a subset), so the full profile round-trips intact.
-    const profileObj =
-      d.targetVolumeMl != null
-        ? { ...prof.profile, target_volume: d.targetVolumeMl }
-        : prof.profile;
+    // Stop targets follow the *effective* auto-stop mode (resolved against the
+    // live scale state). The mode decides which of yield/volume we send — e.g.
+    // "By weight" forces volume to 0, "Manual" zeros both. See autoStop.ts.
+    const mode = effectiveStopMode();
+    const { targetYield, targetVolume } = computeStopTargets(mode, {
+      draftYieldG: d.targetYieldGrams,
+      draftVolumeMl: d.targetVolumeMl,
+      profileVolumeMl: prof.profile.target_volume,
+    });
+    // The spread carries every runtime field of the received profile (our TS
+    // type is a subset), so the full profile round-trips intact.
+    const profileObj = { ...prof.profile, target_volume: targetVolume };
     // Coffee trio is written together from one resolved bean (the binding
     // rule): name + roaster for display/durability, extras.beanId as our
     // rename-safe handle. `?? null` clears all three when no bean is set.
     const b = bean() ?? null;
-    // Trace the stop-targets we push. Yield (context.targetYield) only stops
-    // the shot with a scale connected; without one the gateway falls back to
-    // the *profile's* target_volume. `volSet` is the draft override (rare),
-    // `profileVol` the profile's built-in, `sentVol` what actually ships — so
-    // a yield-but-no-volume brew that still stops shows up here as the profile
-    // volume doing the work.
+    // Trace what we push: the resolved mode + the targets it produced, plus
+    // the raw draft/profile inputs they were derived from.
     dlog(
       'workflow',
-      `apply "${rec.name}": yield=${d.targetYieldGrams ?? '–'}g ` +
-        `volSet=${d.targetVolumeMl ?? '–'}ml ` +
-        `profileVol=${prof.profile.target_volume ?? '–'}ml ` +
-        `sentVol=${profileObj.target_volume ?? '–'}ml ` +
+      `apply "${rec.name}": mode=${mode} → yield=${targetYield ?? '–'}g ` +
+        `sentVol=${targetVolume}ml ` +
+        `(draft y=${d.targetYieldGrams ?? '–'} v=${d.targetVolumeMl ?? '–'}, ` +
+        `profileVol=${prof.profile.target_volume ?? '–'}) ` +
         `dose=${d.doseGrams ?? '–'}g profile="${prof.profile.title ?? '?'}"`,
     );
     applyWorkflow({
@@ -339,7 +377,7 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
         // `?? null` syncs the gateway to the draft: a cleared field clears
         // it on the machine rather than leaving a stale value.
         targetDoseWeight: d.doseGrams ?? null,
-        targetYield: d.targetYieldGrams ?? null,
+        targetYield: targetYield,
         grinderSetting:
           d.grinderSetting != null ? String(d.grinderSetting) : null,
         coffeeName: b ? b.name : null,
@@ -623,6 +661,10 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
                 isHeaterOff={heaterOff}
                 isWaterCritical={waterCritical}
                 onStart={startCurrentStep}
+                stopMode={effectiveStopMode}
+                onStopMode={(m) => patchDraft({ stopMode: m })}
+                scaleConnected={scaleOn}
+                stopModeWarning={stopModeWarning}
                 profile={() => profile() ?? null}
                 profileLoading={() => profile.loading}
                 loadProfiles={p.loadProfiles}
@@ -768,6 +810,14 @@ const PrepCard: Component<{
   isHeaterOff: Accessor<boolean>;
   isWaterCritical: Accessor<boolean>;
   onStart: () => void;
+  /** Effective auto-stop mode (resolved vs scale) — highlights the selector. */
+  stopMode: Accessor<AutoStopMode>;
+  /** User picked a mode for this shot. */
+  onStopMode: (m: AutoStopMode) => void;
+  /** Live scale-connection state — gates which modes are selectable. */
+  scaleConnected: Accessor<boolean>;
+  /** Set when the resolved mode fell back (default not applicable). */
+  stopModeWarning: Accessor<string | null>;
   profile: Accessor<ProfileRecord | null>;
   profileLoading: Accessor<boolean>;
   loadProfiles?: () => Promise<ProfileRecord[]>;
@@ -797,6 +847,10 @@ const PrepCard: Component<{
           <BrewPrep
             draft={p.draft}
             patchDraft={p.patchDraft}
+            stopMode={p.stopMode}
+            onStopMode={p.onStopMode}
+            scaleConnected={p.scaleConnected}
+            stopModeWarning={p.stopModeWarning}
             profile={p.profile}
             profileLoading={p.profileLoading}
             loadProfiles={p.loadProfiles}
@@ -882,6 +936,10 @@ const PrepCard: Component<{
 const BrewPrep: Component<{
   draft: Accessor<ShotDraft | null>;
   patchDraft: (patch: Partial<ShotDraft>) => void;
+  stopMode: Accessor<AutoStopMode>;
+  onStopMode: (m: AutoStopMode) => void;
+  scaleConnected: Accessor<boolean>;
+  stopModeWarning: Accessor<string | null>;
   /** Resolved profile for the draft's profileId (fetched by the screen so
    *  it can also build the gateway push). Null = unresolved / missing. */
   profile: Accessor<ProfileRecord | null>;
@@ -1157,6 +1215,51 @@ const BrewPrep: Component<{
           </span>
         </label>
       </div>
+      {/* Auto-stop — a brew *behavior* control, kept out of the shot-details
+          grid above and set apart by a divider + inline layout. The scale-
+          incompatible mode is a disabled option carrying its reason; the value
+          reflects the *effective* mode (so a fallback shows here). */}
+      <div class="prep__autostop" data-testid="prep-card-autostop">
+        <span class="prep__autostop-icon" aria-hidden="true">■</span>
+        <span class="prep__autostop-label">Stops:</span>
+        <select
+          class="prep__autostop-select"
+          aria-label="Auto-stop mode"
+          data-testid="autostop-select"
+          onChange={(e) =>
+            p.onStopMode(e.currentTarget.value as AutoStopMode)
+          }
+        >
+          <For each={AUTO_STOP_MODES}>
+            {(mode) => {
+              const reason = (): string | null =>
+                autoStopUnavailableReason(mode, p.scaleConnected());
+              return (
+                <option
+                  value={mode}
+                  disabled={reason() !== null}
+                  selected={p.stopMode() === mode}
+                  data-testid={`autostop-option-${mode}`}
+                >
+                  {autoStopLabel(mode)}
+                  {reason() ? ` — ${reason()}` : ''}
+                </option>
+              );
+            }}
+          </For>
+        </select>
+      </div>
+      {/* Fallback warning — the chosen/default mode can't apply to the current
+          scale state, so it fell back to Automatic. */}
+      <Show when={p.stopModeWarning()}>
+        <p
+          class="prep__autostop-warning"
+          role="status"
+          data-testid="autostop-warning"
+        >
+          {p.stopModeWarning()}
+        </p>
+      </Show>
     </div>
   );
 };

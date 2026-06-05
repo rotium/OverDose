@@ -102,3 +102,23 @@ export const DEFAULT_STEAM_PURGE_STRATEGY: SteamPurgeStrategy = 'firmware';
 
 /** Dwell (seconds) the wand stays parked before `autoFlush` fires the purge. */
 export const DEFAULT_STEAM_AUTO_FLUSH_SEC = 3;
+
+/**
+ * How a shot decides to auto-stop. The gateway only ever stops on weight
+ * (with a scale) or volume (without one); this preference picks which target
+ * OverDose sends, so the *intent* is explicit instead of implied:
+ *
+ *  - `auto`   — today's behavior: send both, let the gateway pick (scale →
+ *               weight, no scale → volume). The safe default.
+ *  - `weight` — stop at the target yield (needs a scale; otherwise won't stop).
+ *  - `volume` — stop at the target volume (only takes effect with no scale —
+ *               the gateway ignores volume while a scale is connected).
+ *  - `off`    — never auto-stop; the shot ends on the profile's own steps or
+ *               a manual stop.
+ *
+ * This is the global default; it can be overridden per shot in the prep card,
+ * where only the modes that can actually fire (given the live scale state) are
+ * offered. See `src/autoStop.ts` for the logic.
+ */
+export type AutoStopMode = 'auto' | 'weight' | 'volume' | 'off';
+export const DEFAULT_AUTO_STOP_MODE: AutoStopMode = 'auto';
