@@ -221,6 +221,7 @@ export function createLiveShotAccumulator(): LiveShotAccumulator {
           // dedicated buffer later if a downstream consumer wants it.
           groupTemperature: 0,
           profileFrame: profileFrame[i]!,
+          state: { substate: substates[i]! },
         },
         scale: Number.isNaN(w)
           ? undefined
@@ -246,6 +247,10 @@ export function createLiveShotAccumulator(): LiveShotAccumulator {
   // numeric buffers so the hot path stays in typed arrays. One string per
   // frame is cheap; only inflates when a shot is frozen.
   const machineTimestamps: string[] = new Array(cap);
+  // Parallel substate array (same rationale). Stamped into the frozen record
+  // so the optimistic post-brew summary can window counted volume by substate
+  // exactly like the gateway-persisted record does (exclude the ramp-down).
+  const substates: MachineSubstate[] = new Array(cap);
 
   const accumulator: LiveShotAccumulator = {
     status,
@@ -310,6 +315,7 @@ export function createLiveShotAccumulator(): LiveShotAccumulator {
       targetMixTemperature[cursor] = frame.targetMixTemperature;
       profileFrame[cursor] = frame.profileFrame;
       machineTimestamps[cursor] = frame.machineTimestamp;
+      substates[cursor] = frame.substate;
       cursor += 1;
 
       // Batch so consumers (chart bindings, readouts, etc.) only re-run

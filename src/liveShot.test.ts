@@ -108,6 +108,23 @@ describe('LiveShotAccumulator', () => {
       });
     });
 
+    it('freeze() stamps per-sample substate (so the summary can window counted volume)', () => {
+      inRoot(() => {
+        const acc = createLiveShotAccumulator();
+        acc.start(null);
+        acc.append(frame({ tMs: 0, substate: 'pouring' }));
+        acc.append(frame({ tMs: 100, substate: 'pouring' }));
+        acc.append(frame({ tMs: 200, substate: 'pouringDone' }));
+        acc.freeze();
+        const ms = acc.frozenShot()!.measurements;
+        expect(ms.map((m) => m.machine.state?.substate)).toEqual([
+          'pouring',
+          'pouring',
+          'pouringDone',
+        ]);
+      });
+    });
+
     it('freeze() omits scale block when weight was NaN (no scale connected)', () => {
       inRoot(() => {
         const acc = createLiveShotAccumulator();
