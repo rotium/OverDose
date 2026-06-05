@@ -22,6 +22,16 @@ recipe-driven brewing UI, designed for the tablet on your espresso bar.
 - Light and responsive
 - Smooth daily flow
 
+## Features
+
+- Recipes store shot setup for repeatable shots
+- Per-shot setting overrides
+- Auto-stop by weight (with a connected scale) or volume (estimated)
+- Auto-stop steam by time (configurable per pitcher)
+- Two-level water warnings (soft warning + machine refill level)
+- Smooth live shot view
+- Highly configurable
+
 ## Recipes
 
 OverDose is built around one idea: **a great espresso is a recipe,
@@ -64,58 +74,9 @@ steam → summary flow.
 > ([tadelv/reaprime](https://github.com/tadelv/reaprime)), not the
 > original DE1 tablet app (`de1app`). It won't load on the old app.
 
-OverDose installs as a "skin." You manage skins from the gateway's
-settings dashboard, not from inside OverDose.
-
-### Bundled in Decent.app 0.7.5+ (easiest)
-
 From **Decent.app version 0.7.5** onward, OverDose ships with the gateway — no
 install needed. Just open the **Web Interface** skin selection and pick
-**OverDose**. On older versions, use one of the two methods below.
-
-### 1. From the settings dashboard
-
-On the Decent tablet, open
-[**localhost:8080/api/v1/plugins/settings.reaplugin/ui**](http://localhost:8080/api/v1/plugins/settings.reaplugin/ui)
-— tappable straight from this README in the tablet's browser (from
-another device, use the gateway's IP instead of `localhost`). Scroll to
-the **Web Interface** section.
-
-<img src="docs/screenshots/setting-ui.png" alt="Web Interface section with the Install Skin field" width="500">
-
-Type `rotium/OverDose` into the **Install Skin** field and click
-**Install**. The gateway downloads the latest release itself.
-
-### 2. From a downloaded zip
-
-For a gateway that can't reach GitHub. First open the skin settings:
-
-1. Tap your browser's **back** button until you reach the Decent.app
-   dashboard.
-2. Open **Settings**, then go to the **Web Interface** section.
-3. Open the **Skin** dropdown — the install actions live there.
-
-<img src="docs/screenshots/gateway-settings.png" alt="Gateway dashboard → Settings → Web Interface → Skin dropdown" width="500">
-
-Download the latest `overdose-vX.Y.Z.zip` from the
-[Releases page](https://github.com/rotium/OverDose/releases), then in
-the **Skin** dropdown choose **Install from .zip** and pick the file.
-
-### Other ways
-
-- **Live-edit (development):** `npm run build`, then the **Skin**
-  dropdown → **Live-edit from folder** pointed at this repo's `dist/` —
-  rebuilds show up without re-installing.
-- **Command line:** scriptable equivalent of method 1 —
-  `POST http://<gateway-ip>:8080/api/v1/webui/skins/install/url` with
-  body `{"url": "https://github.com/rotium/OverDose/releases/download/vX.Y.Z/overdose-vX.Y.Z.zip"}`.
-
-### Upgrading
-
-Re-run the install. Typing `rotium/OverDose` in the **Install Skin**
-field again pulls the newest release, or you can install a newer zip
-over the old one. Either way the gateway replaces the previous install
-in place.
+**OverDose**. Upgrades arrive with gateway skins updates.
 
 ### Accessing OverDose from another device
 
@@ -144,22 +105,6 @@ the dev server at a real gateway on your LAN with
 Other commands:
 - `npm run build` — type-check + production bundle to `dist/`
 - `npm test` — vitest unit + component tests
-
-### Releasing
-
-Releases are cut by pushing a version tag — no local tooling beyond `git`
-needed. A GitHub Actions workflow (`.github/workflows/release.yml`) builds the
-skin, stamps the tag into `dist/manifest.json`, zips the **contents** of
-`dist/` (so `index.html` is at the zip root) as `overdose-vX.Y.Z.zip`, and
-publishes a GitHub Release with that asset:
-
-    git tag v0.0.2
-    git push origin v0.0.2
-
-Users then install the published zip via the gateway's Skin dropdown (see
-[Installing OverDose](#installing-overdose)). To build the zip by hand instead:
-
-    npm run build && (cd dist && zip -r ../overdose-v0.0.2.zip .)
 
 ## License
 
