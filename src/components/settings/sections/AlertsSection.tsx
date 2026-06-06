@@ -113,6 +113,24 @@ export const AlertsSection: Component<AlertsSectionProps> = (p) => {
           the tank drops to it.
         </p>
       </section>
+
+      <section class="settings-section" aria-labelledby="alerts-sounds-heading">
+        <h2 id="alerts-sounds-heading">Sounds</h2>
+        <label class="settings-checkbox">
+          <input
+            type="checkbox"
+            data-testid="pref-sound-cues"
+            checked={prefs.soundCues()}
+            onChange={(e) => prefs.setSoundCues(e.currentTarget.checked)}
+          />
+          <span>Play sound cues</span>
+        </label>
+        <p class="settings-help">
+          A short cue when the machine goes to sleep, wakes up, finishes warming
+          up and is ready to brew, or the water runs low. Uses the tablet's
+          volume.
+        </p>
+      </section>
     </div>
   );
 };

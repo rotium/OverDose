@@ -15,6 +15,7 @@ import { Home, defaultStreams } from './Home';
 import { LiveBrewDrawer } from './components/LiveBrewDrawer';
 import { RecipeBrewScreen } from './components/RecipeBrewScreen';
 import { SleepOverlay, SLEEP_DARKEN_MS } from './components/SleepOverlay';
+import { playCue } from './sound';
 import { Settings } from './components/settings/Settings';
 import type { ExploreOp } from './components/ExploreTray';
 import {
@@ -31,7 +32,7 @@ import { RepositoriesProvider } from './RepositoriesContext';
 import { UserPrefsProvider, useUserPrefs } from './UserPrefsContext';
 import { setDebugLogging as setDebugLoggingEnabled, dlog } from './debugLog';
 import { deriveActivity } from './machineActivity';
-import { isWaterBlocked } from './water';
+import { isWaterBlocked, waterSeverity, type WaterSeverity } from './water';
 import type { Recipe } from './domain';
 import {
   isScaleStatusFrame,
@@ -316,6 +317,56 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
     }
   });
   onCleanup(clearDarken);
+
+  // ── Audible sleep/wake cue ──
+  // Fires on the sleeping⇄awake edge, regardless of what caused it (header
+  // button, machine timeout, physical GHC). `prev` starts undefined so the
+  // first snapshot (mount / reload) plays nothing — only genuine transitions
+  // cue. Gated on the soundCues pref.
+  let prevSleeping: boolean | undefined;
+  createEffect(() => {
+    const now = isSleeping();
+    const transitioned = prevSleeping !== undefined && now !== prevSleeping;
+    prevSleeping = now;
+    if (transitioned && prefs.soundCues()) playCue(now ? 'sleep' : 'wake');
+  });
+
+  // ── "Machine ready" cue ──
+  // The boiler climbing to target reports as activity `warmingUp` (idle +
+  // preparingForShot) or `booting`; it drops to plain `idle` ("ready") once
+  // hot. Cue only on warmingUp→ready, so putting it back to sleep or starting
+  // a shot mid-warmup doesn't ding. `prev` undefined on mount → no first-run
+  // cue, but a reload landing mid-warmup still cues when it finishes.
+  let prevWarming: boolean | undefined;
+  createEffect(() => {
+    const kind = deriveActivity(p.streams.machine.latest()).kind;
+    const warming = kind === 'warmingUp' || kind === 'booting';
+    const wasWarming = prevWarming;
+    prevWarming = warming;
+    if (wasWarming === true && kind === 'idle' && prefs.soundCues()) {
+      playCue('ready');
+    }
+  });
+
+  // ── Water-level cues ──
+  // Two-level warnings (warn = skin pref threshold, critical = the machine's
+  // refill level). Cue only when severity *escalates* (normal→warn→critical),
+  // so refilling is silent. `prev` undefined on mount → no first-run cue.
+  const waterRank = (s: WaterSeverity): number =>
+    s === 'critical' ? 2 : s === 'warn' ? 1 : 0;
+  let prevWaterSev: WaterSeverity | undefined;
+  createEffect(() => {
+    const w = p.streams.waterLevels.latest();
+    const sev: WaterSeverity = w
+      ? waterSeverity(w.currentLevel, prefs.waterWarnMm(), w.refillLevel ?? 0)
+      : 'normal';
+    const prev = prevWaterSev;
+    prevWaterSev = sev;
+    if (prev === undefined || waterRank(sev) <= waterRank(prev)) return;
+    if (prefs.soundCues()) {
+      playCue(sev === 'critical' ? 'waterCritical' : 'waterLow');
+    }
+  });
 
   // Wake from the veil: re-light instantly (don't wait for the machine to
   // report idle), cancel any pending backlight cut, then request wake.

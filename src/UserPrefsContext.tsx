@@ -14,6 +14,7 @@ import {
   DEFAULT_CHART_SMOOTHING,
   DEFAULT_DEBUG_LOGGING,
   DEFAULT_HAS_SCALE,
+  DEFAULT_SOUND_CUES,
   DEFAULT_STEAM_AUTO_FLUSH_SEC,
   DEFAULT_STEAM_PURGE_STRATEGY,
   DEFAULT_TRACE_VISIBILITY,
@@ -74,6 +75,7 @@ interface PersistedPrefs {
   showFlushFlowSlider?: boolean;
   hasScale?: boolean;
   debugLogging?: boolean;
+  soundCues?: boolean;
   steamPurgeStrategy?: SteamPurgeStrategy;
   steamAutoFlushSec?: number;
   autoStopMode?: AutoStopMode;
@@ -113,6 +115,9 @@ export interface UserPrefsContextValue {
   /** Developer console/debug logging. Default off. */
   debugLogging: Accessor<boolean>;
   setDebugLogging: (v: boolean) => void;
+  /** Play a short audio cue on the sleep/wake transition. Default on. */
+  soundCues: Accessor<boolean>;
+  setSoundCues: (v: boolean) => void;
   /** How the post-steam wand purge is triggered (and the firmware
    *  `steamPurgeMode` it writes through). Default `firmware`. */
   steamPurgeStrategy: Accessor<SteamPurgeStrategy>;
@@ -180,6 +185,9 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
   const [debugLogging, setDebugLogging] = createSignal<boolean>(
     initial.debugLogging ?? DEFAULT_DEBUG_LOGGING,
   );
+  const [soundCues, setSoundCues] = createSignal<boolean>(
+    initial.soundCues ?? DEFAULT_SOUND_CUES,
+  );
   const [steamPurgeStrategy, setSteamPurgeStrategy] =
     createSignal<SteamPurgeStrategy>(
       initial.steamPurgeStrategy ?? DEFAULT_STEAM_PURGE_STRATEGY,
@@ -207,6 +215,7 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
       showFlushFlowSlider: showFlushFlowSlider(),
       hasScale: hasScale(),
       debugLogging: debugLogging(),
+      soundCues: soundCues(),
       steamPurgeStrategy: steamPurgeStrategy(),
       steamAutoFlushSec: steamAutoFlushSec(),
       autoStopMode: autoStopMode(),
@@ -293,6 +302,8 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
     setHasScale,
     debugLogging,
     setDebugLogging,
+    soundCues,
+    setSoundCues,
     steamPurgeStrategy,
     setSteamPurgeStrategy,
     steamAutoFlushSec,

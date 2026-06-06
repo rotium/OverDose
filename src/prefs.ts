@@ -78,6 +78,9 @@ export const DEFAULT_HAS_SCALE = true;
  */
 export const DEFAULT_DEBUG_LOGGING = false;
 
+/** Play a short audio cue when the machine goes to sleep / wakes. Default on. */
+export const DEFAULT_SOUND_CUES = true;
+
 /**
  * How the wand purge after a steam stop is triggered. The DE1 needs a stop
  * command to *also* drive the purge; on a two-tap machine (`steamPurgeMode=1`)
