@@ -1,6 +1,6 @@
 # Cleaning: a first-class configurable maintenance feature
 
-Status: **Settings component implemented** (branch `feat/cleaning-settings`) · 2026-06-10 · other surfaces pending
+Status: **Settings + Maintenance-nav implemented** (branch `feat/cleaning-settings`) · 2026-06-10 · Run wiring (wizard) + other surfaces pending
 
 Implemented: `domain/cleaning.ts`, `repositories/{cleaning_repository,local_cleaning_repository,seed_cleanings,link_seed_cleaning_profiles}.ts`, `components/settings/sections/library/{CleaningsSection,CleaningEditor}.tsx`, wired into `domain/index`, `repositories/index`, `RepositoriesContext`, `librarySync`, `App.tsx`, `LibraryTab`. Tests: `cleaning.test.ts`, `local_cleaning_repository.test.ts`, `CleaningsSection.test.tsx`, `CleaningEditor.test.tsx` (27 new; full suite 730 pass; `npm run build` clean). Deviation from the spec below: live `byShots` next-due needs the gateway shot total (no `api.shots()` yet) — Settings shows time-based next-due + a static "every N shots"; the live shots countdown lands with Alerts.
 
@@ -12,7 +12,7 @@ sketched at the end and will be spec'd one at a time.
 
 The four surfaces of the feature:
 1. **Settings/Library** — define cleanings (this doc, locked).
-2. **Home quick-buttons** — pinned cleanings surface on home (pending).
+2. **Maintenance overlay** — the *run* surface (built): a Settings-peer screen (header Maintenance button) with a Cleaning section listing **all** cleanings (incl. hidden) to Run. Home quick-buttons = a later fast-path for non-hidden ones.
 3. **Alerts/reminders** — in-app "due" nudges (pending).
 4. **Live view** — an app-owned step-wizard per operation (pending; descale spec'd in design notes).
 

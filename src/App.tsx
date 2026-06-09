@@ -17,6 +17,7 @@ import { RecipeBrewScreen } from './components/RecipeBrewScreen';
 import { SleepOverlay, SLEEP_DARKEN_MS } from './components/SleepOverlay';
 import { playCue } from './sound';
 import { Settings } from './components/settings/Settings';
+import { Maintenance } from './components/maintenance/Maintenance';
 import type { ExploreOp } from './components/ExploreTray';
 import {
   buildExploreBrewBundle,
@@ -115,6 +116,13 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
   const [settingsOpen, setSettingsOpen] = createSignal(false);
   const onMenu = () => setSettingsOpen(true);
   const onCloseSettings = () => setSettingsOpen(false);
+
+  // Maintenance overlay — a Settings-peer for running machine operations
+  // (cleaning now; transport/calibrate later). Opened from the header's
+  // Maintenance button.
+  const [maintenanceOpen, setMaintenanceOpen] = createSignal(false);
+  const onMaintenance = () => setMaintenanceOpen(true);
+  const onCloseMaintenance = () => setMaintenanceOpen(false);
 
   // Recipe-brew runtime: another single-screen swap. Tile-tap on Home sets
   // the id; back-arrow or Done clears it. Coexists with settings via the
@@ -393,6 +401,15 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
           />
         }
       >
+       <Show
+         when={!maintenanceOpen()}
+         fallback={
+           <Maintenance
+             onBack={onCloseMaintenance}
+             onClose={onCloseMaintenance}
+           />
+         }
+       >
         <Switch
           fallback={
             <div class="home-host" inert={homeInert()} data-testid="home-host">
@@ -409,6 +426,7 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
                 onWake={onWake}
                 onUpdateShotSettings={onUpdateShotSettings}
                 onMenu={onMenu}
+                onMaintenance={onMaintenance}
                 onSelectRecipe={onSelectRecipe}
                 onExplore={onExplore}
                 onSeeAllShots={onSeeAllShots}
@@ -475,6 +493,7 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
             />
           </Match>
         </Switch>
+       </Show>
       </Show>
       <LiveBrewDrawer />
       {/* Always mounted; it owns its own enter/leave fade off `active`. */}

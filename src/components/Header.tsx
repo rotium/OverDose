@@ -5,9 +5,11 @@ import { Logo } from './Logo';
 import {
   MoonIcon,
   PowerIcon,
+  SettingsIcon,
   SunIcon,
   ThermometerIcon,
   WaterDropIcon,
+  WrenchIcon,
 } from './icons';
 
 /**
@@ -37,7 +39,10 @@ export interface HeaderProps {
    *  physical switch is off. Surfaces a red pill since the user has to
    *  physically flip the switch. Takes visual priority over warming. */
   isHeaterOff: Accessor<boolean>;
+  /** Opens the Settings overlay. */
   onMenu: () => void;
+  /** Opens the Maintenance overlay. Optional — button only renders when set. */
+  onMaintenance?: () => void;
   /** Toggle handler — parent decides whether to sleep or wake based on isSleeping. */
   onToggleSleep: () => void;
 }
@@ -103,8 +108,23 @@ export const Header: Component<HeaderProps> = (p) => (
       </Show>
     </div>
     <div class="app-header__actions">
-      <button type="button" class="icon-btn" aria-label="Menu" onClick={p.onMenu}>
-        ☰
+      <Show when={p.onMaintenance}>
+        <button
+          type="button"
+          class="icon-btn"
+          aria-label="Maintenance"
+          onClick={() => p.onMaintenance?.()}
+        >
+          <WrenchIcon size={18} />
+        </button>
+      </Show>
+      <button
+        type="button"
+        class="icon-btn"
+        aria-label="Settings"
+        onClick={p.onMenu}
+      >
+        <SettingsIcon size={18} />
       </button>
       <button
         type="button"

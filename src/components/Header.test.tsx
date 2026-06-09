@@ -82,10 +82,10 @@ describe('Header', () => {
     expect(screen.getByText(/machine · online/)).toBeInTheDocument();
   });
 
-  it('invokes onMenu when the menu button is pressed', () => {
+  it('invokes onMenu when the Settings button is pressed', () => {
     const onMenu = vi.fn();
     setup({}, { onMenu });
-    fireEvent.click(screen.getByRole('button', { name: 'Menu' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
     expect(onMenu).toHaveBeenCalledTimes(1);
   });
 

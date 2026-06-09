@@ -53,6 +53,7 @@ export interface HomeProps {
   onWake: () => void;
   onUpdateShotSettings: (settings: ShotSettingsSnapshot) => void;
   onMenu: () => void;
+  onMaintenance?: () => void;
   onSelectRecipe: (r: Recipe) => void;
   /** Run a machine op directly from the Explore tray. `brew` opens the
    *  ad-hoc prep flow; steam/water/flush start immediately. */
@@ -175,6 +176,7 @@ export const Home: Component<HomeProps> = (p) => {
         isWarming={isWarming}
         isHeaterOff={heaterOff}
         onMenu={p.onMenu}
+        onMaintenance={p.onMaintenance}
         onToggleSleep={handleToggleSleep}
       />
       <main class="home__main">
