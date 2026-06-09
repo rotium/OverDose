@@ -187,161 +187,172 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
               </p>
 
               <section class="settings-section">
-                <h3>Name</h3>
-                <input
-                  type="text"
-                  class="routine-editor__name"
-                  value={c().name}
-                  aria-label="Cleaning name"
-                  data-testid="cleaning-name-input"
-                  onChange={(e) => handleRename(e.currentTarget.value)}
-                />
-              </section>
-
-              <Show when={c().operation.kind === 'profile'}>
-                <section class="settings-section">
-                  <h3>Cleaning profile</h3>
-                  <p class="settings-help">
-                    Which cleaning profile to run. Profiles live on the gateway.
-                  </p>
-                  <ProfileFieldRow
-                    selectedId={profileIdOf(c().operation)}
-                    selectedProfile={() => selectedProfile() ?? null}
-                    loading={selectedProfile.loading}
-                    onOpen={() => setProfileDialogOpen(true)}
-                    onClear={handleProfileClear}
-                  />
-                </section>
-              </Show>
-
-              <Show when={kindUsesChemical(c().operation.kind)}>
-                <label
-                  class="settings-checkbox"
-                  data-testid="cleaning-chemical-toggle"
-                >
-                  <input
-                    type="checkbox"
-                    data-testid="cleaning-with-chemical"
-                    checked={opWithChemical(c().operation)}
-                    onChange={(e) =>
-                      handleChemicalToggle(e.currentTarget.checked)
-                    }
-                  />
-                  <span>{chemicalToggleLabel(c().operation.kind)}</span>
-                </label>
-              </Show>
-
-              <section class="settings-section">
-                <h3>Reminders</h3>
-                <label
-                  class="settings-checkbox"
-                  data-testid="cleaning-reminders-toggle"
-                >
-                  <input
-                    type="checkbox"
-                    data-testid="cleaning-remind-me"
-                    checked={c().cadence !== undefined}
-                    onChange={(e) =>
-                      handleRemindersToggle(e.currentTarget.checked)
-                    }
-                  />
-                  <span>Remind me</span>
-                </label>
-                <Show when={c().cadence !== undefined}>
-                  <div class="recipe-editor__field-row">
-                    <label class="recipe-editor__field">
-                      <span class="recipe-editor__field-label">Every</span>
-                      <DebouncedNumberField
-                        value={c().cadence?.byDays}
-                        onCommit={handleByDaysCommit}
-                        placeholder="days"
-                        min={0}
-                        step={1}
-                        ariaLabel="Remind every N days"
-                        testId="cleaning-by-days"
-                        debounceMs={p.debounceMs}
-                        class="step-field__input"
-                      />
-                      <span class="step-field__unit">days</span>
-                    </label>
-                    <label class="recipe-editor__field">
-                      <span class="recipe-editor__field-label">and/or</span>
-                      <DebouncedNumberField
-                        value={c().cadence?.byShots}
-                        onCommit={handleByShotsCommit}
-                        placeholder="shots"
-                        min={0}
-                        step={1}
-                        ariaLabel="Remind every N shots"
-                        testId="cleaning-by-shots"
-                        debounceMs={p.debounceMs}
-                        class="step-field__input"
-                      />
-                      <span class="step-field__unit">shots</span>
-                    </label>
+                <h3>Setup</h3>
+                <div class="cleaning-editor__fields">
+                  <div class="cleaning-editor__row">
+                    <span class="cleaning-editor__row-label">Name</span>
+                    <input
+                      type="text"
+                      class="routine-editor__name cleaning-editor__row-input"
+                      value={c().name}
+                      aria-label="Cleaning name"
+                      data-testid="cleaning-name-input"
+                      onChange={(e) => handleRename(e.currentTarget.value)}
+                    />
                   </div>
-                </Show>
-              </section>
 
-              <section class="settings-section">
-                <h3>Prep</h3>
-                <ul class="cleaning-editor__prep" data-testid="cleaning-prep">
-                  <For each={derivePrep(c().operation).lines}>
-                    {(line) => <li>{line}</li>}
-                  </For>
-                </ul>
-                <Show when={derivePrep(c().operation).durationHint}>
-                  <p class="settings-help" data-testid="cleaning-prep-duration">
-                    Takes {derivePrep(c().operation).durationHint}.
-                  </p>
-                </Show>
-              </section>
+                  <Show when={c().operation.kind === 'profile'}>
+                    <div class="cleaning-editor__row">
+                      <span class="cleaning-editor__row-label">Profile</span>
+                      <ProfileFieldRow
+                        selectedId={profileIdOf(c().operation)}
+                        selectedProfile={() => selectedProfile() ?? null}
+                        loading={selectedProfile.loading}
+                        onOpen={() => setProfileDialogOpen(true)}
+                        onClear={handleProfileClear}
+                      />
+                    </div>
+                  </Show>
 
-              <section class="settings-section">
-                <h3>Notes</h3>
-                <input
-                  type="text"
-                  class="routine-editor__name"
-                  value={c().notes ?? ''}
-                  aria-label="Notes"
-                  data-testid="cleaning-notes-input"
-                  placeholder="e.g. green-lid Cafiza tub, ½ tsp"
-                  onChange={(e) => handleNotesChange(e.currentTarget.value)}
-                />
-              </section>
+                  <Show when={kindUsesChemical(c().operation.kind)}>
+                    <label
+                      class="settings-checkbox"
+                      data-testid="cleaning-chemical-toggle"
+                    >
+                      <input
+                        type="checkbox"
+                        data-testid="cleaning-with-chemical"
+                        checked={opWithChemical(c().operation)}
+                        onChange={(e) =>
+                          handleChemicalToggle(e.currentTarget.checked)
+                        }
+                      />
+                      <span>{chemicalToggleLabel(c().operation.kind)}</span>
+                    </label>
+                  </Show>
 
-              <section class="settings-section">
-                <h3>Last done</h3>
-                <div class="routine-editor__button-row">
-                  <span class="settings-help" data-testid="cleaning-last-done">
-                    {formatLastDone(c().lastDoneAt)}
-                  </span>
-                  <button
-                    type="button"
-                    class="btn"
-                    data-testid="cleaning-reset-reminder"
-                    onClick={handleReset}
+                  <label
+                    class="settings-checkbox"
+                    data-testid="cleaning-pinned-toggle"
                   >
-                    Reset reminder
-                  </button>
+                    <input
+                      type="checkbox"
+                      data-testid="cleaning-pinned-to-home"
+                      checked={!!c().pinnedToHome}
+                      onChange={(e) => handlePinnedToggle(e.currentTarget.checked)}
+                    />
+                    <span>Show on the home screen</span>
+                  </label>
                 </div>
               </section>
 
-              <label
-                class="settings-checkbox"
-                data-testid="cleaning-pinned-toggle"
-              >
-                <input
-                  type="checkbox"
-                  data-testid="cleaning-pinned-to-home"
-                  checked={!!c().pinnedToHome}
-                  onChange={(e) => handlePinnedToggle(e.currentTarget.checked)}
-                />
-                <span>Show on the home screen</span>
-              </label>
+              <section class="settings-section">
+                <h3>Reminders</h3>
+                <div class="cleaning-editor__fields">
+                  <label
+                    class="settings-checkbox"
+                    data-testid="cleaning-reminders-toggle"
+                  >
+                    <input
+                      type="checkbox"
+                      data-testid="cleaning-remind-me"
+                      checked={c().cadence !== undefined}
+                      onChange={(e) =>
+                        handleRemindersToggle(e.currentTarget.checked)
+                      }
+                    />
+                    <span>Remind me</span>
+                  </label>
+                  <Show when={c().cadence !== undefined}>
+                    <div class="recipe-editor__field-row">
+                      <label class="recipe-editor__field">
+                        <span class="recipe-editor__field-label">Every</span>
+                        <DebouncedNumberField
+                          value={c().cadence?.byDays}
+                          onCommit={handleByDaysCommit}
+                          placeholder="days"
+                          min={0}
+                          step={1}
+                          ariaLabel="Remind every N days"
+                          testId="cleaning-by-days"
+                          debounceMs={p.debounceMs}
+                          class="step-field__input"
+                        />
+                        <span class="step-field__unit">days</span>
+                      </label>
+                      <label class="recipe-editor__field">
+                        <span class="recipe-editor__field-label">and/or</span>
+                        <DebouncedNumberField
+                          value={c().cadence?.byShots}
+                          onCommit={handleByShotsCommit}
+                          placeholder="shots"
+                          min={0}
+                          step={1}
+                          ariaLabel="Remind every N shots"
+                          testId="cleaning-by-shots"
+                          debounceMs={p.debounceMs}
+                          class="step-field__input"
+                        />
+                        <span class="step-field__unit">shots</span>
+                      </label>
+                    </div>
+                  </Show>
+
+                  <div class="cleaning-editor__row">
+                    <span class="cleaning-editor__row-label">Last done</span>
+                    <span
+                      class="cleaning-editor__row-value"
+                      data-testid="cleaning-last-done"
+                    >
+                      {formatLastDone(c().lastDoneAt)}
+                    </span>
+                    <button
+                      type="button"
+                      class="btn"
+                      data-testid="cleaning-reset-reminder"
+                      onClick={handleReset}
+                    >
+                      Reset reminder
+                    </button>
+                  </div>
+                </div>
+              </section>
 
               <section class="settings-section">
-                <h3>Delete</h3>
+                <h3>Prep &amp; notes</h3>
+                <div class="cleaning-editor__fields">
+                  <ul
+                    class="cleaning-editor__prep"
+                    data-testid="cleaning-prep"
+                  >
+                    <For each={derivePrep(c().operation).lines}>
+                      {(line) => <li>{line}</li>}
+                    </For>
+                  </ul>
+                  <Show when={derivePrep(c().operation).durationHint}>
+                    <p
+                      class="settings-help"
+                      data-testid="cleaning-prep-duration"
+                    >
+                      Takes {derivePrep(c().operation).durationHint}.
+                    </p>
+                  </Show>
+                  <div class="cleaning-editor__row">
+                    <span class="cleaning-editor__row-label">Notes</span>
+                    <input
+                      type="text"
+                      class="routine-editor__name cleaning-editor__row-input"
+                      value={c().notes ?? ''}
+                      aria-label="Notes"
+                      data-testid="cleaning-notes-input"
+                      placeholder="e.g. green-lid Cafiza tub, ½ tsp"
+                      onChange={(e) => handleNotesChange(e.currentTarget.value)}
+                    />
+                  </div>
+                </div>
+              </section>
+
+              <section class="settings-section">
                 <Show
                   when={confirmingDelete()}
                   fallback={

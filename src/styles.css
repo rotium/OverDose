@@ -2616,6 +2616,51 @@ html {
   color: var(--muted);
 }
 
+.cleaning-editor__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.cleaning-editor__row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.cleaning-editor__row-label {
+  flex: 0 0 5rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.cleaning-editor__row-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cleaning-editor__row-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.9rem;
+  color: var(--fg);
+}
+
+.cleaning-editor__row > .recipe-editor__profile-field {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cleaning-editor__prep-block {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.cleaning-editor__prep-block > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .cleaning-editor__prep {
   margin: 0.3rem 0 0;
   padding-left: 1.2rem;
