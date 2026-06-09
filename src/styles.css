@@ -2651,6 +2651,20 @@ html {
   min-width: 0;
 }
 
+/* Lighter checkbox in the cleaning editor — the shared chip's accent border
+   on :checked reads as too heavy for these simple toggles. */
+.cleaning-editor__check.settings-checkbox {
+  border-color: transparent;
+  background: transparent;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.cleaning-editor__check.settings-checkbox:has(input:checked) {
+  border-color: transparent;
+  background: transparent;
+}
+
 .cleaning-editor__prep-block {
   display: flex;
   gap: 0.75rem;

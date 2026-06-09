@@ -100,12 +100,6 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
     void save({ ...c, operation: { ...c.operation, profileId } });
   };
 
-  const handleProfileClear = () => {
-    const c = cleaning();
-    if (!c || c.operation.kind !== 'profile' || c.operation.profileId === undefined) return;
-    void save({ ...c, operation: { ...c.operation, profileId: undefined } });
-  };
-
   const handleRemindersToggle = (checked: boolean) => {
     const c = cleaning();
     if (!c) return;
@@ -209,14 +203,13 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                         selectedProfile={() => selectedProfile() ?? null}
                         loading={selectedProfile.loading}
                         onOpen={() => setProfileDialogOpen(true)}
-                        onClear={handleProfileClear}
                       />
                     </div>
                   </Show>
 
                   <Show when={kindUsesChemical(c().operation.kind)}>
                     <label
-                      class="settings-checkbox"
+                      class="settings-checkbox cleaning-editor__check"
                       data-testid="cleaning-chemical-toggle"
                     >
                       <input
@@ -232,7 +225,7 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                   </Show>
 
                   <label
-                    class="settings-checkbox"
+                    class="settings-checkbox cleaning-editor__check"
                     data-testid="cleaning-pinned-toggle"
                   >
                     <input
@@ -250,7 +243,7 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                 <h3>Reminders</h3>
                 <div class="cleaning-editor__fields">
                   <label
-                    class="settings-checkbox"
+                    class="settings-checkbox cleaning-editor__check"
                     data-testid="cleaning-reminders-toggle"
                   >
                     <input
@@ -420,7 +413,6 @@ interface ProfileFieldRowProps {
   selectedProfile: () => ProfileRecord | null;
   loading: boolean;
   onOpen: () => void;
-  onClear: () => void;
 }
 
 /** Collapsed display of the chosen cleaning profile (prefix stripped). */
@@ -458,17 +450,6 @@ const ProfileFieldRow: Component<ProfileFieldRowProps> = (p) => {
           ›
         </span>
       </button>
-      <Show when={hasId()}>
-        <button
-          type="button"
-          class="recipe-editor__profile-clear"
-          data-testid="cleaning-profile-clear"
-          aria-label="Clear selected profile"
-          onClick={p.onClear}
-        >
-          ×
-        </button>
-      </Show>
     </div>
   );
 };
