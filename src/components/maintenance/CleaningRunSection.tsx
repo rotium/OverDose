@@ -69,21 +69,23 @@ export const CleaningRunSection: Component<CleaningRunSectionProps> = (p) => {
                         class="library-list__row"
                         data-testid={`run-cleaning-row-${c.id}`}
                       >
-                        <span class="library-list__name">
-                          <KindIcon kind={c.operation.kind} /> {c.name}
-                        </span>
-                        <span class="library-list__meta recipes-section__meta">
-                          <span class="recipes-section__routine">
-                            {due().label}
-                            <Show when={due().due}>
-                              {' '}
-                              <span class="cleanings-section__due">● due</span>
-                            </Show>
+                        <div class="library-list__main">
+                          <span class="library-list__name">
+                            <KindIcon kind={c.operation.kind} /> {c.name}
                           </span>
-                          <span class="recipes-section__sequence">
-                            {operationSummary(c.operation)}
+                          <span class="library-list__meta recipes-section__meta">
+                            <span class="recipes-section__routine">
+                              {due().label}
+                              <Show when={due().due}>
+                                {' '}
+                                <span class="cleanings-section__due">● due</span>
+                              </Show>
+                            </span>
+                            <span class="recipes-section__sequence">
+                              {operationSummary(c.operation)}
+                            </span>
                           </span>
-                        </span>
+                        </div>
                         <button
                           type="button"
                           class="btn"

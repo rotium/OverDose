@@ -2597,10 +2597,23 @@ html {
 }
 
 /* Cleanings list + editor */
-[data-testid='cleanings-list'] .library-list__name {
+[data-testid='cleanings-list'] .library-list__name,
+[data-testid='run-cleanings-list'] .library-list__name {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
+}
+
+/* Non-clickable name+meta wrapper for the Maintenance run-list — mirrors
+   library-list__button's flex layout so the meta column aligns, but the row
+   isn't a button (the Run button is the action). */
+.library-list__main {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex: 1;
+  min-width: 0;
 }
 
 .cleanings-section__due {
