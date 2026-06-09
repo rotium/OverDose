@@ -7,6 +7,7 @@ import { SteamSection } from './sections/library/SteamSection';
 import { BeansSection } from './sections/library/BeansSection';
 import { ProfilesSection } from './sections/library/ProfilesSection';
 import { EquipmentSection } from './sections/library/EquipmentSection';
+import { CleaningsSection } from './sections/library/CleaningsSection';
 
 /**
  * Library tab — user-data CRUD (Routines, Recipes, Steam pitchers, Beans,
@@ -21,13 +22,15 @@ type SectionId =
   | 'steam'
   | 'beans'
   | 'profiles'
-  | 'equipment';
+  | 'equipment'
+  | 'cleanings';
 
 const SECTIONS: { id: SectionId; label: string }[] = [
   { id: 'recipes', label: 'Recipes' },
   { id: 'beans', label: 'Beans' },
   { id: 'profiles', label: 'Profiles' },
   { id: 'steam', label: 'Steam' },
+  { id: 'cleanings', label: 'Cleanings' },
   { id: 'equipment', label: 'Equipment' },
   { id: 'routines', label: 'Routines' },
 ];
@@ -78,6 +81,9 @@ export const LibraryTab: Component<LibraryTabProps> = (p) => {
           </Match>
           <Match when={section() === 'profiles'}>
             <ProfilesSection />
+          </Match>
+          <Match when={section() === 'cleanings'}>
+            <CleaningsSection />
           </Match>
           <Match when={section() === 'equipment'}>
             <EquipmentSection />

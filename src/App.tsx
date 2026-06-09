@@ -26,7 +26,7 @@ import {
 } from './exploreBrew';
 import { LiveShotProvider, useLiveShot } from './LiveShotContext';
 import { frozenToGatewayShotRecord } from './liveShotAdapter';
-import { linkSeedRecipeProfiles } from './repositories';
+import { linkSeedRecipeProfiles, linkSeedCleaningProfiles } from './repositories';
 import { createLibrarySync } from './librarySync';
 import { RepositoriesProvider } from './RepositoriesContext';
 import { UserPrefsProvider, useUserPrefs } from './UserPrefsContext';
@@ -47,8 +47,12 @@ import type { WsStream } from './streams';
 // One library sync for the app: owns the local repos (the mirror) and the
 // gateway push/pull. `syncNow` runs on load + focus; see docs/storage-sync.md.
 const librarySync = createLibrarySync();
-const { recipes: recipeRepository, routines: routineRepository, pitchers: pitcherRepository } =
-  librarySync.repos;
+const {
+  recipes: recipeRepository,
+  routines: routineRepository,
+  pitchers: pitcherRepository,
+  cleanings: cleaningRepository,
+} = librarySync.repos;
 
 const onSleep = () =>
   api.sleep().catch((e) => console.warn('sleep failed', e));
@@ -500,6 +504,7 @@ export const App: Component = () => {
       try {
         const profiles = await api.profiles({});
         await linkSeedRecipeProfiles(recipeRepository, profiles);
+        await linkSeedCleaningProfiles(cleaningRepository, profiles);
       } catch (e) {
         console.warn('link seed profiles failed', e);
       }
@@ -525,6 +530,7 @@ export const App: Component = () => {
         routines={routineRepository}
         recipes={recipeRepository}
         pitchers={pitcherRepository}
+        cleanings={cleaningRepository}
         revision={librarySync.revision}
       >
         <LiveShotProvider

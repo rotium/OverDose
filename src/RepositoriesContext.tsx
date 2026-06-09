@@ -9,6 +9,7 @@ import type {
   RoutineRepository,
   RecipeRepository,
   PitcherRepository,
+  CleaningRepository,
 } from './repositories';
 
 /**
@@ -24,6 +25,7 @@ export interface RepositoriesContextValue {
   routines: RoutineRepository;
   recipes: RecipeRepository;
   pitchers: PitcherRepository;
+  cleanings: CleaningRepository;
   /** Library revision — bumps on any local mutation or a gateway sync pull.
    *  List resources take this as a `createResource` source so a pull (or a
    *  cross-screen edit) re-renders them. See docs/storage-sync.md. */
@@ -36,6 +38,7 @@ export interface RepositoriesProviderProps {
   routines: RoutineRepository;
   recipes: RecipeRepository;
   pitchers: PitcherRepository;
+  cleanings: CleaningRepository;
   /** Optional so test harnesses can mount without the sync coordinator; falls
    *  back to a constant (no live pulls in tests). */
   revision?: Accessor<number>;
@@ -48,6 +51,7 @@ export const RepositoriesProvider: Component<RepositoriesProviderProps> = (p) =>
     routines: p.routines,
     recipes: p.recipes,
     pitchers: p.pitchers,
+    cleanings: p.cleanings,
     revision: p.revision ?? (() => 0),
   };
   return <Ctx.Provider value={value}>{p.children}</Ctx.Provider>;

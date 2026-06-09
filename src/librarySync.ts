@@ -5,9 +5,11 @@ import {
   LocalRecipeRepository,
   LocalRoutineRepository,
   LocalPitcherRepository,
+  LocalCleaningRepository,
   type RecipeRepository,
   type RoutineRepository,
   type PitcherRepository,
+  type CleaningRepository,
 } from './repositories';
 
 /**
@@ -38,6 +40,7 @@ export interface LibrarySync {
     recipes: RecipeRepository;
     routines: RoutineRepository;
     pitchers: PitcherRepository;
+    cleanings: CleaningRepository;
   };
   /** Bumps on every local mutation and every pull. List resources take this as
    *  a source so a pull (or cross-screen edit) re-renders them. */
@@ -75,6 +78,7 @@ export function createLibrarySync(opts: LibrarySyncOptions = {}): LibrarySync {
   const recipes = new LocalRecipeRepository(storage, () => notifyLocalChange());
   const routines = new LocalRoutineRepository(storage, () => notifyLocalChange());
   const pitchers = new LocalPitcherRepository(storage, () => notifyLocalChange());
+  const cleanings = new LocalCleaningRepository(storage, () => notifyLocalChange());
 
   // Uniform read/replace per collection. `read` (for push) returns the whole
   // array; `write` (for pull) replaces it. Casts at the boundary keep the
@@ -98,6 +102,11 @@ export function createLibrarySync(opts: LibrarySyncOptions = {}): LibrarySync {
       key: 'pitchers',
       read: () => pitchers.list() as Promise<unknown[]>,
       write: (a) => pitchers.replaceAll(a as never[]),
+    },
+    {
+      key: 'cleanings',
+      read: () => cleanings.list() as Promise<unknown[]>,
+      write: (a) => cleanings.replaceAll(a as never[]),
     },
   ];
 
@@ -186,7 +195,7 @@ export function createLibrarySync(opts: LibrarySyncOptions = {}): LibrarySync {
   }
 
   return {
-    repos: { recipes, routines, pitchers },
+    repos: { recipes, routines, pitchers, cleanings },
     revision,
     syncNow,
     dispose: () => {
