@@ -50,23 +50,23 @@ describe('CleaningsSection', () => {
     expect(screen.getByTestId('cleaning-row-c1-due')).toBeInTheDocument();
   });
 
-  it('toggles pin-to-home', async () => {
+  it('toggles hide-from-home', async () => {
     const repo = seedRepo([
-      { id: 'c1', name: 'Daily', operation: { kind: 'flush' }, pinnedToHome: false },
+      { id: 'c1', name: 'Daily', operation: { kind: 'flush' } },
     ]);
     renderSection(repo);
     const toggle = await waitFor(() =>
-      screen.getByTestId('cleaning-row-c1-toggle-pinned'),
+      screen.getByTestId('cleaning-row-c1-toggle-hidden'),
     );
     expect(toggle).toHaveAttribute('aria-pressed', 'false');
     fireEvent.click(toggle);
     await waitFor(() =>
-      expect(screen.getByTestId('cleaning-row-c1-toggle-pinned')).toHaveAttribute(
+      expect(screen.getByTestId('cleaning-row-c1-toggle-hidden')).toHaveAttribute(
         'aria-pressed',
         'true',
       ),
     );
-    expect((await repo.get('c1'))?.pinnedToHome).toBe(true);
+    expect((await repo.get('c1'))?.hidden).toBe(true);
   });
 
   it('creates a cleaning and opens its editor', async () => {

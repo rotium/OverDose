@@ -63,8 +63,8 @@ export const CleaningsSection: Component = () => {
   let nameInputRef: HTMLInputElement | undefined;
   let exitTimer: number | undefined;
 
-  const togglePinned = async (c: Cleaning) => {
-    await repos.cleanings.update({ ...c, pinnedToHome: !c.pinnedToHome });
+  const toggleHidden = async (c: Cleaning) => {
+    await repos.cleanings.update({ ...c, hidden: !c.hidden });
     void refetch();
   };
 
@@ -229,6 +229,7 @@ export const CleaningsSection: Component = () => {
                       return (
                         <li
                           class="library-list__row library-list__row--clickable"
+                          data-hidden={c.hidden ? 'true' : undefined}
                           data-testid={`cleaning-row-${c.id}-item`}
                         >
                           <button
@@ -261,22 +262,20 @@ export const CleaningsSection: Component = () => {
                           <button
                             type="button"
                             class="library-list__action"
-                            data-testid={`cleaning-row-${c.id}-toggle-pinned`}
-                            aria-pressed={c.pinnedToHome ? 'true' : 'false'}
+                            data-testid={`cleaning-row-${c.id}-toggle-hidden`}
+                            aria-pressed={c.hidden ? 'true' : 'false'}
                             aria-label={
-                              c.pinnedToHome
-                                ? `Remove "${c.name}" from the home screen`
-                                : `Show "${c.name}" on the home screen`
+                              c.hidden
+                                ? `Show "${c.name}" on the home screen`
+                                : `Hide "${c.name}" from the home screen`
                             }
-                            title={
-                              c.pinnedToHome ? 'On home — tap to remove' : 'Show on home'
-                            }
-                            onClick={() => void togglePinned(c)}
+                            title={c.hidden ? 'Hidden — tap to show' : 'Hide from home'}
+                            onClick={() => void toggleHidden(c)}
                           >
-                            {c.pinnedToHome ? (
-                              <EyeIcon size={18} />
-                            ) : (
+                            {c.hidden ? (
                               <EyeOffIcon size={18} />
+                            ) : (
+                              <EyeIcon size={18} />
                             )}
                           </button>
                         </li>

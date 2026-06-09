@@ -52,7 +52,7 @@ export interface Cleaning {
   operation: CleaningOperation;
   cadence?: { byDays?: number; byShots?: number };  // "due" if EITHER threshold crosses
   notes?: string;                                   // personal addendum to the derived prep
-  pinnedToHome?: boolean;                           // default off
+  hidden?: boolean;                                 // shown on Home by default; hide to drop off
   order?: number;
   lastDoneAt?: string;                              // ISO; denormalized for fast due-calc
   lastDoneShotCount?: number;                       // espresso-shot total snapshot at completion
@@ -81,7 +81,7 @@ Local-first, swappable for a gateway impl later:
 **Seeds:**
 - *Daily Rinse* — profile · `Cleaning/Forward Flush x5` · no chemical · every 1 day.
 - *Weekly Group Clean* — profile · `Cleaning/Forward Flush x5` · Cafiza · ~7 days / 50 shots.
-- *Descale* — descale · citric · reminders off (water-dependent).
+- *Descale* — descale · citric · reminders off (water-dependent) · hidden from Home by default.
 
 Seed profiles are referenced **by title** (`Cleaning/Forward Flush x5`) and resolved to
 the gateway profile id at first run — gateway profile ids are content hashes and
@@ -92,23 +92,23 @@ vary per machine.
 ## CleaningsSection (the list)
 
 - Header **"Cleanings"** + **[ + New Cleaning ]** + one-line help.
-- Row layout: **auto icon · name · next-due summary · `● due` · 📌 pin-to-home toggle**.
+- Row layout: **auto icon · name · next-due summary · `● due` · eye hide/show toggle** (Recipe-style; hidden rows dimmed).
   - Next-due is **forward-looking**: `Next in 3 days` / `in 22 shots` / `Due now` / `Overdue 2d` (whichever threshold is closer).
 - Tap a row → opens the editor (side-sheet). `+ New` → inline name + operation select → editor.
-- Sort **pinned-first**, then insertion order. Empty state when none.
+- Insertion order. Empty state when none.
 
 ```
 ┌────────────────────────────────────────────────────────┐
 │  Cleanings                          [ + New Cleaning ]   │
-│  Maintain your machine. Pinned ones show on home.        │
+│  Maintain your machine. Shown on home unless hidden.     │
 │ ┌──────────────────────────────────────────────────────┐│
-│ │ 🚿  Daily Rinse           Next in 14 h            📌 ││
+│ │ 🚿  Daily Rinse           Next in 14 h            👁 ││
 │ │     Forward Flush · no detergent                     ││
 │ ├──────────────────────────────────────────────────────┤│
-│ │ 🧼  Weekly Group Clean    Due now        ● due   📌 ││
+│ │ 🧼  Weekly Group Clean    Due now        ● due   👁 ││
 │ │     Forward Flush · Cafiza                           ││
 │ ├──────────────────────────────────────────────────────┤│
-│ │ 💧  Descale               reminder off           ○  ││
+│ │ 💧  Descale (hidden)       reminder off          🚫 ││
 │ │     Citric acid · internal + steam                   ││
 │ └──────────────────────────────────────────────────────┘│
 └────────────────────────────────────────────────────────┘
@@ -128,7 +128,7 @@ vary per machine.
 | 6 | **Prep (auto)** | read-only box | always — derived from kind + chemical; safety ⚠ + est. duration |
 | 7 | **Notes** | text | always — addendum on top of prep |
 | 8 | **Last done · [ Reset reminder ]** | text + button | always |
-| 9 | **Show on home** | toggle → `pinnedToHome` | always |
+| 9 | **Hide from home** | toggle → `hidden`, on its own just above Delete (Recipe-style) | always |
 | 10 | **Delete** | button (confirm) | always |
 
 **Profile picker filter (kind = profile):** show profiles where
@@ -151,7 +151,8 @@ vary per machine.
 │ └────────────────────────────────────────────────┘ │
 │ Notes       [ green-lid Cafiza tub, ½ tsp     ]     │
 │ Last done   3 days ago            [ Reset reminder ]│
-│ [✓] Show on home                       [ Delete ]   │
+│ [ ] Hide from the home screen                       │
+│                                        [ Delete ]   │
 └──────────────────────────────────────────────────────┘
 ```
 
@@ -163,7 +164,7 @@ vary per machine.
 - **Prep is a derived, read-only preview** of the wizard's instruction/safety copy — it rewrites as Operation/chemical change. Only **Notes** is editable.
 - **"Reset reminder"** is a *neutral, per-cleaning* action: it restarts that cleaning's countdown and does **not** claim a run happened. Real completions are auto-recorded by the **wizard** (see History). No bulk "mark all done."
 - **Icon is auto** (per kind + chemical), not user-editable in v1.
-- **No `hidden`** concept — only `pinnedToHome` (default off). **Delete** is the sole removal.
+- **Recipe-style `hidden`** — cleanings show on Home by default; a low-emphasis **Hide** toggle (on its own, just above Delete) drops one off. **Delete** is the sole removal.
 
 ## Gateway constraints that shape settings
 

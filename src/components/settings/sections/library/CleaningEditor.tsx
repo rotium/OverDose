@@ -135,10 +135,10 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
     void save({ ...c, lastDoneAt: new Date().toISOString() });
   };
 
-  const handlePinnedToggle = (checked: boolean) => {
+  const handleHiddenToggle = (checked: boolean) => {
     const c = cleaning();
     if (!c) return;
-    void save({ ...c, pinnedToHome: checked });
+    void save({ ...c, hidden: checked });
   };
 
   const handleDelete = async () => {
@@ -224,18 +224,6 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                     </label>
                   </Show>
 
-                  <label
-                    class="settings-checkbox cleaning-editor__check"
-                    data-testid="cleaning-pinned-toggle"
-                  >
-                    <input
-                      type="checkbox"
-                      data-testid="cleaning-pinned-to-home"
-                      checked={!!c().pinnedToHome}
-                      onChange={(e) => handlePinnedToggle(e.currentTarget.checked)}
-                    />
-                    <span>Show on the home screen</span>
-                  </label>
                 </div>
               </section>
 
@@ -344,6 +332,19 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                   </div>
                 </div>
               </section>
+
+              <label
+                class="settings-checkbox cleaning-editor__check cleaning-editor__hide-toggle"
+                data-testid="cleaning-hidden-toggle"
+              >
+                <input
+                  type="checkbox"
+                  data-testid="cleaning-hide-from-home"
+                  checked={!!c().hidden}
+                  onChange={(e) => handleHiddenToggle(e.currentTarget.checked)}
+                />
+                <span>Hide from the home screen</span>
+              </label>
 
               <section class="settings-section">
                 <Show

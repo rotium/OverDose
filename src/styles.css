@@ -2665,6 +2665,13 @@ html {
   background: transparent;
 }
 
+/* Low-emphasis hide toggle, mirrors recipe-editor__hide-toggle — sits quietly
+   just above Delete. */
+.cleaning-editor__hide-toggle {
+  margin: 0.25rem 0 0.75rem;
+  color: var(--muted);
+}
+
 .cleaning-editor__prep-block {
   display: flex;
   gap: 0.75rem;

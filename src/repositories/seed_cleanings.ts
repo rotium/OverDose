@@ -18,20 +18,19 @@ export const SEED_CLEANINGS: Cleaning[] = [
     name: 'Daily Rinse',
     operation: { kind: 'profile', withChemical: false },
     cadence: { byDays: 1 },
-    pinnedToHome: true,
   },
   {
     id: 'seed-clean-weekly-group',
     name: 'Weekly Group Clean',
     operation: { kind: 'profile', withChemical: true },
     cadence: { byDays: 7, byShots: 50 },
-    pinnedToHome: true,
   },
   {
     id: 'seed-clean-descale',
     name: 'Descale',
     operation: { kind: 'descale', withChemical: true },
-    pinnedToHome: false,
+    // Off Home by default — descaling is occasional and water-dependent.
+    hidden: true,
   },
 ];
 

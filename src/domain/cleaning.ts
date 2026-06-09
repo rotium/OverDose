@@ -41,8 +41,12 @@ export interface Cleaning {
   cadence?: { byDays?: number; byShots?: number };
   /** Personal note appended below the (derived, read-only) prep guidance. */
   notes?: string;
-  /** Surfaced as a quick-button on Home when true. Default off. */
-  pinnedToHome?: boolean;
+  /**
+   * Hidden from the Home quick-buttons when true (mirrors `Recipe.hidden`).
+   * Cleanings show on Home by default; this drops one off without deleting it.
+   * Still fully editable + runnable; the Library shows hidden cleanings.
+   */
+  hidden?: boolean;
   order?: number;
   /** ISO timestamp of the last completion (wizard finish or manual reset). */
   lastDoneAt?: string;
