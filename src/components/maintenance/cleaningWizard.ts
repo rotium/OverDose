@@ -1,5 +1,12 @@
 import type { Cleaning } from '../../domain';
-import { DEFAULT_FLUSH_SECONDS, cleanStepLabel, deriveStepPrep } from '../../domain';
+import {
+  DEFAULT_FLUSH_SECONDS,
+  DEFAULT_STEAM_SECONDS,
+  DEFAULT_THIMBLE_MIN,
+  DEFAULT_TIP_SOAK_MIN,
+  cleanStepLabel,
+  deriveStepPrep,
+} from '../../domain';
 import type { MachineState } from '../../snapshot';
 
 /**
@@ -19,10 +26,6 @@ export type RunOp =
   | { type: 'flush' }
   | { type: 'steam' }
   | { type: 'profile'; profileId?: string };
-
-/** Suggested soak-timer durations (s) — the wizard offers a countdown + chime. */
-export const TIP_SOAK_TIMER_SEC = 60 * 60; // ~1 hour
-export const THIMBLE_TIMER_SEC = 30 * 60; // ~30 min
 
 export type WizardPhase =
   | {
@@ -93,6 +96,7 @@ export const buildWizard = (cleaning: Cleaning): WizardPhase[] => {
           target: 'steam',
           lines: deriveStepPrep(s),
           op: { type: 'steam' },
+          durationSec: s.seconds ?? DEFAULT_STEAM_SECONDS,
         });
         break;
       case 'steamWandSoak':
@@ -101,7 +105,7 @@ export const buildWizard = (cleaning: Cleaning): WizardPhase[] => {
           kind: 'instruction',
           title: label,
           lines: deriveStepPrep(s),
-          timerSec: TIP_SOAK_TIMER_SEC,
+          timerSec: (s.minutes ?? DEFAULT_TIP_SOAK_MIN) * 60,
         });
         break;
       case 'waterTank':
@@ -118,7 +122,7 @@ export const buildWizard = (cleaning: Cleaning): WizardPhase[] => {
           kind: 'instruction',
           title: label,
           lines: deriveStepPrep(s),
-          timerSec: THIMBLE_TIMER_SEC,
+          timerSec: (s.minutes ?? DEFAULT_THIMBLE_MIN) * 60,
         });
         break;
     }

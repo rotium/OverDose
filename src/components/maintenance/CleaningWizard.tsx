@@ -180,12 +180,14 @@ export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
         await p.requestState('espresso');
       } else {
         await p.requestState(phase.target);
-        if (phase.op.type === 'flush' && phase.durationSec) {
+        // flush + steam carry a duration — bound them ourselves (the machine
+        // doesn't reliably auto-stop a flush, and we want a deterministic time).
+        if (phase.durationSec) {
           setRunTotalSec(phase.durationSec);
           runStopTimer = setTimeout(() => {
             runStopTimer = undefined;
             p.requestState('idle').catch((e) =>
-              console.warn('flush stop failed', e),
+              console.warn('run stop failed', e),
             );
           }, phase.durationSec * 1000);
         }

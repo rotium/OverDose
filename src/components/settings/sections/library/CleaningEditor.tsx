@@ -16,6 +16,9 @@ import type {
 import {
   CLEAN_STEP_TYPES,
   DEFAULT_FLUSH_SECONDS,
+  DEFAULT_STEAM_SECONDS,
+  DEFAULT_THIMBLE_MIN,
+  DEFAULT_TIP_SOAK_MIN,
   DESCALE_CHEMICAL_LABEL,
   cleanStepLabel,
   cleaningKindLabel,
@@ -117,7 +120,12 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
 
   const updateStep = (
     id: string,
-    patch: { withChemical?: boolean; profileId?: string; seconds?: number },
+    patch: {
+      withChemical?: boolean;
+      profileId?: string;
+      seconds?: number;
+      minutes?: number;
+    },
   ) =>
     saveSteps(
       cleanSteps().map((s) => (s.id === id ? ({ ...s, ...patch } as CleanStep) : s)),
@@ -335,6 +343,70 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                                     class="step-field__input"
                                   />
                                   <span class="step-field__unit">s</span>
+                                </label>
+                              </Show>
+                              <Show when={s.type === 'steamWand'}>
+                                <label class="recipe-editor__field">
+                                  <span class="recipe-editor__field-label">
+                                    Steam for
+                                  </span>
+                                  <DebouncedNumberField
+                                    value={
+                                      s.type === 'steamWand'
+                                        ? s.seconds ?? DEFAULT_STEAM_SECONDS
+                                        : undefined
+                                    }
+                                    onCommit={(n) =>
+                                      updateStep(s.id, {
+                                        seconds: n ?? DEFAULT_STEAM_SECONDS,
+                                      })
+                                    }
+                                    min={1}
+                                    step={1}
+                                    placeholder="s"
+                                    ariaLabel="Steam seconds"
+                                    testId={`step-seconds-${s.id}`}
+                                    debounceMs={p.debounceMs}
+                                    class="step-field__input"
+                                  />
+                                  <span class="step-field__unit">s</span>
+                                </label>
+                              </Show>
+                              <Show
+                                when={
+                                  s.type === 'steamWandSoak' || s.type === 'thimble'
+                                }
+                              >
+                                <label class="recipe-editor__field">
+                                  <span class="recipe-editor__field-label">
+                                    Timer
+                                  </span>
+                                  <DebouncedNumberField
+                                    value={
+                                      s.type === 'steamWandSoak'
+                                        ? s.minutes ?? DEFAULT_TIP_SOAK_MIN
+                                        : s.type === 'thimble'
+                                          ? s.minutes ?? DEFAULT_THIMBLE_MIN
+                                          : undefined
+                                    }
+                                    onCommit={(n) =>
+                                      updateStep(s.id, {
+                                        minutes:
+                                          n ??
+                                          (s.type === 'thimble'
+                                            ? DEFAULT_THIMBLE_MIN
+                                            : DEFAULT_TIP_SOAK_MIN),
+                                      })
+                                    }
+                                    min={1}
+                                    step={1}
+                                    placeholder="min"
+                                    ariaLabel="Soak timer minutes"
+                                    testId={`step-minutes-${s.id}`}
+                                    debounceMs={p.debounceMs}
+                                    class="step-field__input"
+                                  />
+                                  <span class="step-field__unit">min</span>
                                 </label>
                               </Show>
                             </div>

@@ -25,13 +25,18 @@ export type CleanStepType =
 export type CleanStep =
   | { id: string; type: 'coffeeSide'; profileId?: string; withChemical?: boolean }
   | { id: string; type: 'flush'; seconds?: number }
-  | { id: string; type: 'steamWand'; withChemical?: boolean }
-  | { id: string; type: 'steamWandSoak' } // soak tip in hot water + needle
+  | { id: string; type: 'steamWand'; withChemical?: boolean; seconds?: number }
+  | { id: string; type: 'steamWandSoak'; minutes?: number } // soak tip + needle
   | { id: string; type: 'waterTank' } // wash the water tank
-  | { id: string; type: 'thimble' }; // soak the uptake thimble in citric
+  | { id: string; type: 'thimble'; minutes?: number }; // soak uptake in citric
 
 /** Default flush duration (s) — the wizard stops the flush after this. */
 export const DEFAULT_FLUSH_SECONDS = 5;
+/** Default steam duration (s) for a steam-wand run — wizard stops it after this. */
+export const DEFAULT_STEAM_SECONDS = 30;
+/** Default soak-timer durations (min). */
+export const DEFAULT_TIP_SOAK_MIN = 60;
+export const DEFAULT_THIMBLE_MIN = 30;
 
 export type CleaningKind = 'clean' | 'descale';
 
@@ -114,12 +119,14 @@ export const newCleanStep = (type: CleanStepType): CleanStep => {
     case 'coffeeSide':
       return { id, type, withChemical: false };
     case 'steamWand':
-      return { id, type, withChemical: false };
+      return { id, type, withChemical: false, seconds: DEFAULT_STEAM_SECONDS };
     case 'flush':
       return { id, type, seconds: DEFAULT_FLUSH_SECONDS };
     case 'steamWandSoak':
-    case 'waterTank':
+      return { id, type, minutes: DEFAULT_TIP_SOAK_MIN };
     case 'thimble':
+      return { id, type, minutes: DEFAULT_THIMBLE_MIN };
+    case 'waterTank':
       return { id, type };
   }
 };
