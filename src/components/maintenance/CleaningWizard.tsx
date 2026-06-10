@@ -11,6 +11,7 @@ import {
   type Component,
 } from 'solid-js';
 import type { Cleaning } from '../../domain';
+import { deriveStepFinish } from '../../domain';
 import type { MachineSnapshot, MachineState } from '../../snapshot';
 import type { WsStream } from '../../streams';
 import { buildWizard, type WizardPhase } from './cleaningWizard';
@@ -50,6 +51,11 @@ export interface CleaningWizardProps {
  */
 export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
   const phases = buildWizard(p.cleaning);
+  // Deferred "finish" actions from soak/manual steps — shown on the closing step.
+  const finishLines =
+    p.cleaning.operation.kind === 'clean'
+      ? p.cleaning.operation.steps.flatMap(deriveStepFinish)
+      : [];
   const [statuses, setStatuses] = createSignal<PhaseStatus[]>(
     phases.map(() => 'pending'),
   );
@@ -62,6 +68,8 @@ export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
   });
   const finished = (): boolean => currentIdx() === phases.length;
   const current = (): WizardPhase | undefined => phases[currentIdx()];
+  const startsTimerOf = (phase: WizardPhase | undefined): number | undefined =>
+    phase?.kind === 'instruction' ? phase.startsTimerSec : undefined;
 
   const setStatus = (idx: number, next: PhaseStatus) =>
     setStatuses((prev) => {
@@ -86,9 +94,10 @@ export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
   const elapsedSec = (): number =>
     runStartMs() === 0 ? 0 : Math.max(0, Math.floor((nowMs() - runStartMs()) / 1000));
 
-  // Soak timer for long instruction steps (steam-tip, thimble). A suggested
-  // countdown that chimes on elapse — does not auto-advance (the user has to
-  // come back and finish the physical task).
+  // A single global soak timer, started when the first soak step is confirmed
+  // and extended (never shortened) by later soaks: end = max(end, now + sec).
+  // It runs in the background across all later steps; chimes once on elapse.
+  // The deferred finish actions are done on the closing step after it chimes.
   const [timerEndMs, setTimerEndMs] = createSignal(0);
   let timerHandle: ReturnType<typeof setTimeout> | undefined;
   const clearSoakTimer = () => {
@@ -99,14 +108,16 @@ export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
     setTimerEndMs(0);
   };
   onCleanup(clearSoakTimer);
-  const startSoakTimer = (sec: number) => {
+  const extendSoakTimer = (sec: number) => {
+    const end = Math.max(timerEndMs(), Date.now() + sec * 1000);
+    setTimerEndMs(end);
     if (timerHandle !== undefined) clearTimeout(timerHandle);
-    setTimerEndMs(Date.now() + sec * 1000);
     timerHandle = setTimeout(() => {
       timerHandle = undefined;
       p.onTimerElapsed?.();
-    }, sec * 1000);
+    }, Math.max(0, end - Date.now()));
   };
+  const timerActive = (): boolean => timerEndMs() > 0;
   const timerRemainingSec = (): number => {
     const end = timerEndMs();
     return end === 0 ? 0 : Math.max(0, Math.ceil((end - nowMs()) / 1000));
@@ -204,7 +215,10 @@ export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
   };
 
   const next = () => {
-    clearSoakTimer();
+    const phase = current();
+    if (phase?.kind === 'instruction' && phase.startsTimerSec) {
+      extendSoakTimer(phase.startsTimerSec);
+    }
     setStatus(currentIdx(), 'done');
   };
 
@@ -248,11 +262,40 @@ export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
       </header>
 
       <div class="settings__content cleaning-wizard__body">
+        <Show when={timerActive()}>
+          <div class="cleaning-wizard__soak" data-testid="wizard-soak">
+            <Show when={timerRemainingSec() > 0} fallback={<>Soak ready — finish up below</>}>
+              Soaking… {formatMMSS(timerRemainingSec())} left — we’ll chime when it’s ready
+            </Show>
+          </div>
+        </Show>
         <Switch>
           <Match when={finished()}>
             <div class="cleaning-wizard__phase" data-testid="wizard-done">
-              <h2>All done</h2>
-              <p class="settings-help">"{p.cleaning.name}" complete.</p>
+              <Show
+                when={finishLines.length > 0}
+                fallback={
+                  <>
+                    <h2>All done</h2>
+                    <p class="settings-help">"{p.cleaning.name}" complete.</p>
+                  </>
+                }
+              >
+                <h2>Finish up</h2>
+                <Show
+                  when={timerRemainingSec() > 0}
+                  fallback={
+                    <p class="settings-help">The soaks are ready — finish these:</p>
+                  }
+                >
+                  <p class="cleaning-wizard__status" data-testid="wizard-finish-timer">
+                    Soaking… {formatMMSS(timerRemainingSec())} left. When it chimes:
+                  </p>
+                </Show>
+                <ul class="cleaning-wizard__lines" data-testid="wizard-finish-lines">
+                  <For each={finishLines}>{(l) => <li>{l}</li>}</For>
+                </ul>
+              </Show>
               <button
                 type="button"
                 class="btn btn--primary"
@@ -269,30 +312,12 @@ export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
               <ul class="cleaning-wizard__lines">
                 <For each={current()!.lines}>{(l) => <li>{l}</li>}</For>
               </ul>
-              <Show when={(current() as { timerSec?: number }).timerSec}>
+              <Show when={startsTimerOf(current())}>
                 {(secs) => (
-                  <Switch>
-                    <Match when={timerEndMs() === 0}>
-                      <button
-                        type="button"
-                        class="btn"
-                        data-testid="wizard-timer-start"
-                        onClick={() => startSoakTimer(secs())}
-                      >
-                        Start {Math.round(secs() / 60)}-min timer
-                      </button>
-                    </Match>
-                    <Match when={timerRemainingSec() > 0}>
-                      <p class="cleaning-wizard__status" data-testid="wizard-timer">
-                        Soaking… {formatMMSS(timerRemainingSec())}
-                      </p>
-                    </Match>
-                    <Match when={timerRemainingSec() === 0}>
-                      <p class="cleaning-wizard__status" data-testid="wizard-timer-done">
-                        Time’s up — finish and tap {currentIdx() === phases.length - 1 ? 'Finish' : 'Next'}.
-                      </p>
-                    </Match>
-                  </Switch>
+                  <p class="settings-help" data-testid="wizard-timer-hint">
+                    Leave it to soak — Next starts a ~{Math.round(secs() / 60)}-min
+                    timer and you can carry on; we’ll chime when it’s ready.
+                  </p>
                 )}
               </Show>
               <button
@@ -301,7 +326,11 @@ export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
                 data-testid="wizard-next"
                 onClick={next}
               >
-                {currentIdx() === phases.length - 1 ? 'Finish' : 'Next'}
+                {startsTimerOf(current())
+                  ? 'Start soak'
+                  : currentIdx() === phases.length - 1
+                    ? 'Finish'
+                    : 'Next'}
               </button>
             </div>
           </Match>

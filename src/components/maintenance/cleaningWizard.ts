@@ -2,10 +2,9 @@ import type { Cleaning } from '../../domain';
 import {
   DEFAULT_FLUSH_SECONDS,
   DEFAULT_STEAM_SECONDS,
-  DEFAULT_THIMBLE_MIN,
-  DEFAULT_TIP_SOAK_MIN,
   cleanStepLabel,
   deriveStepPrep,
+  stepTimerSec,
 } from '../../domain';
 import type { MachineState } from '../../snapshot';
 
@@ -33,8 +32,9 @@ export type WizardPhase =
       kind: 'instruction';
       title: string;
       lines: string[];
-      /** Optional suggested timer (s) for long soaks — chimes on elapse. */
-      timerSec?: number;
+      /** When this step is confirmed (Next), start/extend the global soak
+       *  timer by this many seconds (long soaks: tip, thimble). */
+      startsTimerSec?: number;
     }
   | {
       id: string;
@@ -100,12 +100,13 @@ export const buildWizard = (cleaning: Cleaning): WizardPhase[] => {
         });
         break;
       case 'steamWandSoak':
+      case 'thimble':
         phases.push({
           id: `${s.id}-soak`,
           kind: 'instruction',
           title: label,
           lines: deriveStepPrep(s),
-          timerSec: (s.minutes ?? DEFAULT_TIP_SOAK_MIN) * 60,
+          startsTimerSec: stepTimerSec(s),
         });
         break;
       case 'waterTank':
@@ -114,15 +115,6 @@ export const buildWizard = (cleaning: Cleaning): WizardPhase[] => {
           kind: 'instruction',
           title: label,
           lines: deriveStepPrep(s),
-        });
-        break;
-      case 'thimble':
-        phases.push({
-          id: `${s.id}-thimble`,
-          kind: 'instruction',
-          title: label,
-          lines: deriveStepPrep(s),
-          timerSec: (s.minutes ?? DEFAULT_THIMBLE_MIN) * 60,
         });
         break;
     }

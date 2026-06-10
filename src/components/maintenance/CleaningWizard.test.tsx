@@ -142,7 +142,7 @@ describe('CleaningWizard', () => {
     await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
   });
 
-  it('offers a soak timer on a thimble step', async () => {
+  it('a soak step starts the background timer and defers its finish action', async () => {
     const { stream } = fakeStream();
     render(() => (
       <CleaningWizard
@@ -158,8 +158,12 @@ describe('CleaningWizard', () => {
         onExit={vi.fn()}
       />
     ));
-    fireEvent.click(await waitFor(() => screen.getByTestId('wizard-timer-start')));
-    await waitFor(() => screen.getByTestId('wizard-timer'));
+    // The soak step's confirm button "starts the soak" (and the timer).
+    fireEvent.click(await waitFor(() => screen.getByTestId('wizard-next')));
+    // Background soak chip appears, and the finish action is deferred to the
+    // closing step.
+    await waitFor(() => screen.getByTestId('wizard-soak'));
+    expect(screen.getByTestId('wizard-finish-lines')).toHaveTextContent(/thimble/i);
   });
 
   it('Close exits without completing', async () => {

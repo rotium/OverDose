@@ -2667,8 +2667,20 @@ html {
 /* Cleaning wizard (runtime) */
 .cleaning-wizard__body {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 1rem;
+}
+
+.cleaning-wizard__soak {
+  padding: 0.5rem 0.9rem;
+  border-radius: 999px;
+  background: var(--bg-elev);
+  border: 1px solid var(--accent);
+  color: var(--fg);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .cleaning-wizard__phase {

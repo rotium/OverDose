@@ -174,23 +174,47 @@ export const deriveStepPrep = (step: CleanStep): string[] => {
             'Steam to clear milk residue, then rinse with clean water.',
           ]
         : ['Fill a jug with clean water; submerge the tip.', 'Steam to flush the wand.'];
+    // Soak/manual steps: prep shows only the "start" action (the deferred
+    // finish is collected into the wizard's closing step — see deriveStepFinish).
     case 'steamWandSoak':
       return [
-        'Remove the steam tip and soak it in hot water (NOT citric) — do not steam.',
-        'When the timer is up: poke a needle through the hole, hold it to the light to check it’s clear, wash, and refit.',
+        'Remove the steam tip and drop it in hot water (NOT citric) — do not steam.',
       ];
     case 'waterTank':
-      return [
-        'Remove the water tank, empty it, and wash with soap & water (dishwasher-safe).',
-        'Rinse and refit.',
-      ];
+      return ['Remove the water tank and wash it with soap & water (dishwasher-safe).'];
     case 'thimble':
-      return [
-        'Pull out the water-uptake thimble.',
-        'Soak it in 5% citric acid (~30 min) to dissolve scale.',
-        'When the timer is up: rinse and refit.',
-      ];
+      return ['Pull out the water-uptake thimble and drop it in 5% citric acid.'];
   }
+};
+
+/**
+ * Deferred "finish" actions for soak/manual steps — collected into the wizard's
+ * closing step (done after the soak timer chimes). Empty for machine steps.
+ */
+export const deriveStepFinish = (step: CleanStep): string[] => {
+  switch (step.type) {
+    case 'steamWandSoak':
+      return [
+        'Steam tip — poke a needle through the hole, check it’s clear against the light, wash, and refit.',
+      ];
+    case 'waterTank':
+      return ['Refill the water tank and return it.'];
+    case 'thimble':
+      return ['Thimble — rinse it and refit it.'];
+    default:
+      return [];
+  }
+};
+
+/** Soak-timer contribution (s) a step starts when reached, or undefined. */
+export const stepTimerSec = (step: CleanStep): number | undefined => {
+  if (step.type === 'steamWandSoak') {
+    return (step.minutes ?? DEFAULT_TIP_SOAK_MIN) * 60;
+  }
+  if (step.type === 'thimble') {
+    return (step.minutes ?? DEFAULT_THIMBLE_MIN) * 60;
+  }
+  return undefined;
 };
 
 /** Descale prep guidance (fixed, app-owned). */

@@ -15,12 +15,13 @@ export const SEED_CLEANINGS: Cleaning[] = [
     name: 'Daily Rinse',
     operation: {
       kind: 'clean',
+      // Tip soak first so its ~1 h timer runs while you do the group cleaning.
       steps: [
+        { id: 'seed-daily-soak', type: 'steamWandSoak' },
         { id: 'seed-daily-cs1', type: 'coffeeSide', withChemical: false },
         { id: 'seed-daily-flush1', type: 'flush', seconds: 5 },
         { id: 'seed-daily-cs2', type: 'coffeeSide', withChemical: false },
         { id: 'seed-daily-flush2', type: 'flush', seconds: 5 },
-        { id: 'seed-daily-soak', type: 'steamWandSoak' },
       ],
     },
     cadence: { byDays: 1 },

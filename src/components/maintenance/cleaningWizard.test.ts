@@ -57,9 +57,13 @@ describe('buildWizard', () => {
       ]),
     );
     expect(phases[0]).toMatchObject({ kind: 'instruction', title: 'Thimble' });
-    expect(phases[0].kind === 'instruction' && phases[0].timerSec).toBeGreaterThan(0);
+    expect(
+      phases[0].kind === 'instruction' && phases[0].startsTimerSec,
+    ).toBeGreaterThan(0);
     expect(phases[1]).toMatchObject({ kind: 'instruction', title: 'Water tank' });
-    expect(phases[1].kind === 'instruction' && phases[1].timerSec).toBeUndefined();
+    expect(
+      phases[1].kind === 'instruction' && phases[1].startsTimerSec,
+    ).toBeUndefined();
   });
 
   it('descale is a single placeholder instruction', () => {
