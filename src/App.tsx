@@ -18,6 +18,7 @@ import { SleepOverlay, SLEEP_DARKEN_MS } from './components/SleepOverlay';
 import { playCue } from './sound';
 import { Settings } from './components/settings/Settings';
 import { Maintenance } from './components/maintenance/Maintenance';
+import { CleaningWizard } from './components/maintenance/CleaningWizard';
 import type { ExploreOp } from './components/ExploreTray';
 import {
   buildExploreBrewBundle,
@@ -34,7 +35,7 @@ import { UserPrefsProvider, useUserPrefs } from './UserPrefsContext';
 import { setDebugLogging as setDebugLoggingEnabled, dlog } from './debugLog';
 import { deriveActivity } from './machineActivity';
 import { isWaterBlocked, waterSeverity, type WaterSeverity } from './water';
-import type { Recipe } from './domain';
+import type { Recipe, Cleaning } from './domain';
 import {
   isScaleStatusFrame,
   type MachineSnapshot,
@@ -123,6 +124,18 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
   const [maintenanceOpen, setMaintenanceOpen] = createSignal(false);
   const onMaintenance = () => setMaintenanceOpen(true);
   const onCloseMaintenance = () => setMaintenanceOpen(false);
+
+  // Cleaning runtime (the wizard) — launched from Maintenance → Run. Covers
+  // the screen while active; exit/complete returns to Maintenance.
+  const [activeCleaning, setActiveCleaning] = createSignal<Cleaning | null>(null);
+  const onRunCleaning = (c: Cleaning) => setActiveCleaning(c);
+  const onCleaningExit = () => setActiveCleaning(null);
+  const onCleaningComplete = (c: Cleaning) => {
+    void cleaningRepository
+      .update({ ...c, lastDoneAt: new Date().toISOString() })
+      .catch((e) => console.warn('stamp lastDone failed', e));
+    setActiveCleaning(null);
+  };
 
   // Recipe-brew runtime: another single-screen swap. Tile-tap on Home sets
   // the id; back-arrow or Done clears it. Coexists with settings via the
@@ -391,6 +404,18 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
   return (
     <>
       <Show
+        when={!activeCleaning()}
+        fallback={
+          <CleaningWizard
+            cleaning={activeCleaning()!}
+            machineStream={() => p.streams.machine}
+            requestState={api.requestState}
+            onComplete={onCleaningComplete}
+            onExit={onCleaningExit}
+          />
+        }
+      >
+      <Show
         when={!settingsOpen()}
         fallback={
           <Settings
@@ -407,6 +432,7 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
            <Maintenance
              onBack={onCloseMaintenance}
              onClose={onCloseMaintenance}
+             onRunCleaning={onRunCleaning}
            />
          }
        >
@@ -494,6 +520,7 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
           </Match>
         </Switch>
        </Show>
+      </Show>
       </Show>
       <LiveBrewDrawer />
       {/* Always mounted; it owns its own enter/leave fade off `active`. */}

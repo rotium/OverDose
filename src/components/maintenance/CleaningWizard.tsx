@@ -1,0 +1,202 @@
+import {
+  For,
+  Match,
+  Show,
+  Switch,
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  onMount,
+  type Component,
+} from 'solid-js';
+import type { Cleaning } from '../../domain';
+import type { MachineSnapshot, MachineState } from '../../snapshot';
+import type { WsStream } from '../../streams';
+import { buildWizard, type WizardPhase } from './cleaningWizard';
+
+type PhaseStatus = 'pending' | 'requested' | 'running' | 'done';
+
+export interface CleaningWizardProps {
+  cleaning: Cleaning;
+  machineStream: () => WsStream<MachineSnapshot>;
+  requestState: (state: MachineState) => Promise<void>;
+  /** Called when the wizard finishes — stamps lastDoneAt + closes. */
+  onComplete: (cleaning: Cleaning) => void;
+  /** Called on close/abort without completing. */
+  onExit: () => void;
+}
+
+/**
+ * Cleaning runtime — walks a cleaning's wizard phases one at a time. Instruction
+ * phases advance on Next; run phases request a machine state and watch the
+ * snapshot to detect enter → finish (the RecipeBrewScreen monitor pattern,
+ * GHC-safe). Full-screen, launched from Maintenance → Run.
+ *
+ * Coffee-side profile runs (with workflow save/restore) and steam-wand steam
+ * runs are placeholders for now; see docs/plans/cleaning-feature.md.
+ */
+export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
+  const phases = buildWizard(p.cleaning);
+  const [statuses, setStatuses] = createSignal<PhaseStatus[]>(
+    phases.map(() => 'pending'),
+  );
+  const machine = p.machineStream();
+
+  const currentIdx = createMemo<number>(() => {
+    const ss = statuses();
+    const idx = ss.findIndex((s) => s !== 'done');
+    return idx === -1 ? ss.length : idx;
+  });
+  const finished = (): boolean => currentIdx() === phases.length;
+  const current = (): WizardPhase | undefined => phases[currentIdx()];
+
+  const setStatus = (idx: number, next: PhaseStatus) =>
+    setStatuses((prev) => {
+      if (prev[idx] === next) return prev;
+      const copy = [...prev];
+      copy[idx] = next;
+      return copy;
+    });
+
+  // Elapsed clock for the active run phase.
+  const [nowMs, setNowMs] = createSignal(0);
+  const [runStartMs, setRunStartMs] = createSignal(0);
+  onMount(() => {
+    const t = setInterval(() => setNowMs(Date.now()), 500);
+    onCleanup(() => clearInterval(t));
+  });
+  const elapsedSec = (): number =>
+    runStartMs() === 0 ? 0 : Math.max(0, Math.floor((nowMs() - runStartMs()) / 1000));
+
+  // Run monitor — mirrors RecipeBrewScreen: enter target ⇒ running; leave ⇒ done.
+  createEffect(() => {
+    const snap = machine.latest();
+    if (!snap) return;
+    const idx = currentIdx();
+    const phase = phases[idx];
+    if (!phase || phase.kind !== 'run') return;
+    const ss = statuses();
+    const cur = snap.state.state;
+    if ((ss[idx] === 'requested' || ss[idx] === 'pending') && cur === phase.target) {
+      setRunStartMs(Date.now());
+      setStatus(idx, 'running');
+    } else if (ss[idx] === 'running' && cur !== phase.target) {
+      setRunStartMs(0);
+      setStatus(idx, 'done');
+    }
+  });
+
+  const startRun = async () => {
+    const idx = currentIdx();
+    const phase = phases[idx];
+    if (!phase || phase.kind !== 'run') return;
+    setStatus(idx, 'requested');
+    try {
+      await p.requestState(phase.target);
+    } catch (e) {
+      console.warn('cleaning run start failed', e);
+      setStatus(idx, 'pending');
+    }
+  };
+
+  const stopRun = () => {
+    p.requestState('idle').catch((e) => console.warn('stop failed', e));
+  };
+
+  const next = () => setStatus(currentIdx(), 'done');
+
+  const status = (): PhaseStatus => statuses()[currentIdx()] ?? 'pending';
+
+  return (
+    <div class="settings" data-testid="cleaning-wizard">
+      <header class="settings__header">
+        <button
+          type="button"
+          class="icon-btn"
+          aria-label="Close"
+          data-testid="wizard-close"
+          onClick={p.onExit}
+        >
+          ×
+        </button>
+        <h1 class="settings__title">{p.cleaning.name}</h1>
+        <span class="cleaning-wizard__counter" data-testid="wizard-counter">
+          <Show when={!finished()}>
+            {currentIdx() + 1} / {phases.length}
+          </Show>
+        </span>
+      </header>
+
+      <div class="settings__content cleaning-wizard__body">
+        <Switch>
+          <Match when={finished()}>
+            <div class="cleaning-wizard__phase" data-testid="wizard-done">
+              <h2>All done</h2>
+              <p class="settings-help">"{p.cleaning.name}" complete.</p>
+              <button
+                type="button"
+                class="btn btn--primary"
+                data-testid="wizard-finish"
+                onClick={() => p.onComplete(p.cleaning)}
+              >
+                Done
+              </button>
+            </div>
+          </Match>
+          <Match when={current()?.kind === 'instruction'}>
+            <div class="cleaning-wizard__phase" data-testid="wizard-instruction">
+              <h2>{current()!.title}</h2>
+              <ul class="cleaning-wizard__lines">
+                <For each={current()!.lines}>{(l) => <li>{l}</li>}</For>
+              </ul>
+              <button
+                type="button"
+                class="btn btn--primary"
+                data-testid="wizard-next"
+                onClick={next}
+              >
+                {currentIdx() === phases.length - 1 ? 'Finish' : 'Next'}
+              </button>
+            </div>
+          </Match>
+          <Match when={current()?.kind === 'run'}>
+            <div class="cleaning-wizard__phase" data-testid="wizard-run">
+              <h2>{current()!.title}</h2>
+              <ul class="cleaning-wizard__lines">
+                <For each={current()!.lines}>{(l) => <li>{l}</li>}</For>
+              </ul>
+              <Switch>
+                <Match when={status() === 'pending'}>
+                  <button
+                    type="button"
+                    class="btn btn--primary"
+                    data-testid="wizard-start"
+                    onClick={startRun}
+                  >
+                    Start
+                  </button>
+                </Match>
+                <Match when={status() === 'requested' || status() === 'running'}>
+                  <p class="cleaning-wizard__status" data-testid="wizard-running">
+                    <Show when={status() === 'running'} fallback={<>Starting…</>}>
+                      Running… {elapsedSec()}s
+                    </Show>
+                  </p>
+                  <button
+                    type="button"
+                    class="btn"
+                    data-testid="wizard-stop"
+                    onClick={stopRun}
+                  >
+                    Stop
+                  </button>
+                </Match>
+              </Switch>
+            </div>
+          </Match>
+        </Switch>
+      </div>
+    </div>
+  );
+};
