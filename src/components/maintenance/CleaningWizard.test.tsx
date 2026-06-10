@@ -142,6 +142,26 @@ describe('CleaningWizard', () => {
     await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
   });
 
+  it('offers a soak timer on a thimble step', async () => {
+    const { stream } = fakeStream();
+    render(() => (
+      <CleaningWizard
+        cleaning={{
+          id: 'c1',
+          name: 'Thimble',
+          operation: { kind: 'clean', steps: [{ id: 's1', type: 'thimble' }] },
+        }}
+        machineStream={() => stream}
+        {...wfProps()}
+        requestState={vi.fn().mockResolvedValue(undefined)}
+        onComplete={vi.fn()}
+        onExit={vi.fn()}
+      />
+    ));
+    fireEvent.click(await waitFor(() => screen.getByTestId('wizard-timer-start')));
+    await waitFor(() => screen.getByTestId('wizard-timer'));
+  });
+
   it('Close exits without completing', async () => {
     const { stream } = fakeStream();
     const onExit = vi.fn();

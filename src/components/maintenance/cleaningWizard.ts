@@ -20,8 +20,19 @@ export type RunOp =
   | { type: 'steam' }
   | { type: 'profile'; profileId?: string };
 
+/** Suggested soak-timer durations (s) — the wizard offers a countdown + chime. */
+export const TIP_SOAK_TIMER_SEC = 60 * 60; // ~1 hour
+export const THIMBLE_TIMER_SEC = 30 * 60; // ~30 min
+
 export type WizardPhase =
-  | { id: string; kind: 'instruction'; title: string; lines: string[] }
+  | {
+      id: string;
+      kind: 'instruction';
+      title: string;
+      lines: string[];
+      /** Optional suggested timer (s) for long soaks — chimes on elapse. */
+      timerSec?: number;
+    }
   | {
       id: string;
       kind: 'run';
@@ -90,6 +101,24 @@ export const buildWizard = (cleaning: Cleaning): WizardPhase[] => {
           kind: 'instruction',
           title: label,
           lines: deriveStepPrep(s),
+          timerSec: TIP_SOAK_TIMER_SEC,
+        });
+        break;
+      case 'waterTank':
+        phases.push({
+          id: `${s.id}-tank`,
+          kind: 'instruction',
+          title: label,
+          lines: deriveStepPrep(s),
+        });
+        break;
+      case 'thimble':
+        phases.push({
+          id: `${s.id}-thimble`,
+          kind: 'instruction',
+          title: label,
+          lines: deriveStepPrep(s),
+          timerSec: THIMBLE_TIMER_SEC,
         });
         break;
     }

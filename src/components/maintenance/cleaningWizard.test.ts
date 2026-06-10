@@ -49,6 +49,19 @@ describe('buildWizard', () => {
     );
   });
 
+  it('lowers waterTank + thimble to instruction phases (thimble suggests a timer)', () => {
+    const phases = buildWizard(
+      clean([
+        { id: 't', type: 'thimble' },
+        { id: 'w', type: 'waterTank' },
+      ]),
+    );
+    expect(phases[0]).toMatchObject({ kind: 'instruction', title: 'Thimble' });
+    expect(phases[0].kind === 'instruction' && phases[0].timerSec).toBeGreaterThan(0);
+    expect(phases[1]).toMatchObject({ kind: 'instruction', title: 'Water tank' });
+    expect(phases[1].kind === 'instruction' && phases[1].timerSec).toBeUndefined();
+  });
+
   it('descale is a single placeholder instruction', () => {
     const phases = buildWizard({
       id: 'c1',

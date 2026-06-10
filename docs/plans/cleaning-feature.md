@@ -53,7 +53,9 @@ export type CleanStep =
   | { id: string; type: 'coffeeSide'; profileId?: string; withChemical?: boolean } // forward-flush run
   | { id: string; type: 'flush' }                                                  // plain hot-water rinse
   | { id: string; type: 'steamWand'; withChemical?: boolean }                      // steam Rinza/water into a jug
-  | { id: string; type: 'steamWandSoak' };                                         // soak tip 10min + needle (no machine run)
+  | { id: string; type: 'steamWandSoak' }                                          // soak tip in hot water + needle (timer)
+  | { id: string; type: 'waterTank' }                                              // wash the water tank (manual)
+  | { id: string; type: 'thimble' };                                               // soak uptake thimble in 5% citric (timer)
 
 export type CleaningOperation =
   | { kind: 'clean'; steps: CleanStep[] }      // user-composed, reorderable
@@ -94,8 +96,8 @@ Local-first, swappable for a gateway impl later:
 - Wired into `RepositoriesContext` + `librarySync` (revision `Accessor<number>`; lists via `createResource(repos.revision, () => repos.cleanings.list())`).
 
 **Seeds** (carry good defaults so users tweak, not build from blank):
-- *Daily Rinse* — `clean` · `[coffeeSide(no chem), flush]` · every 1 day.
-- *Weekly Clean* — `clean` · `[coffeeSide(Cafiza), coffeeSide(no chem), flush, steamWand(Rinza), steamWandSoak]` · ~7 days / 50 shots.
+- *Daily Rinse* — `clean` · `[coffeeSide, flush, coffeeSide, flush, steamWandSoak]` · every 1 day.
+- *Weekly Clean* — `clean` · `[coffeeSide(Cafiza), flush, coffeeSide, flush, steamWand(Rinza), waterTank, thimble]` · ~7 days / 50 shots.
 - *Steam Wand* — `clean` · `[steamWand(Rinza), steamWandSoak]`.
 - *Descale* — `descale` · citric · reminders off (water-dependent) · hidden from Home by default.
 - coffeeSide steps resolve their profile from the `Cleaning/Forward Flush x5` title at first run.

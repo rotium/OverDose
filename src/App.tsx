@@ -479,6 +479,9 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
             loadCleaningProfile={loadCleaningProfile}
             onComplete={onCleaningComplete}
             onExit={onCleaningExit}
+            onTimerElapsed={() => {
+              if (prefs.soundCues()) playCue('ready');
+            }}
           />
         }
       >

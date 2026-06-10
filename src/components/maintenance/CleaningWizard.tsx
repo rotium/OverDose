@@ -35,6 +35,8 @@ export interface CleaningWizardProps {
   onComplete: (cleaning: Cleaning) => void;
   /** Called on close/abort without completing. */
   onExit: () => void;
+  /** Fired when a soak timer elapses (App plays a sound cue if enabled). */
+  onTimerElapsed?: () => void;
 }
 
 /**
@@ -83,6 +85,37 @@ export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
   });
   const elapsedSec = (): number =>
     runStartMs() === 0 ? 0 : Math.max(0, Math.floor((nowMs() - runStartMs()) / 1000));
+
+  // Soak timer for long instruction steps (steam-tip, thimble). A suggested
+  // countdown that chimes on elapse — does not auto-advance (the user has to
+  // come back and finish the physical task).
+  const [timerEndMs, setTimerEndMs] = createSignal(0);
+  let timerHandle: ReturnType<typeof setTimeout> | undefined;
+  const clearSoakTimer = () => {
+    if (timerHandle !== undefined) {
+      clearTimeout(timerHandle);
+      timerHandle = undefined;
+    }
+    setTimerEndMs(0);
+  };
+  onCleanup(clearSoakTimer);
+  const startSoakTimer = (sec: number) => {
+    if (timerHandle !== undefined) clearTimeout(timerHandle);
+    setTimerEndMs(Date.now() + sec * 1000);
+    timerHandle = setTimeout(() => {
+      timerHandle = undefined;
+      p.onTimerElapsed?.();
+    }, sec * 1000);
+  };
+  const timerRemainingSec = (): number => {
+    const end = timerEndMs();
+    return end === 0 ? 0 : Math.max(0, Math.ceil((end - nowMs()) / 1000));
+  };
+  const formatMMSS = (sec: number): string => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
+  };
 
   // Run monitor — mirrors RecipeBrewScreen: enter target ⇒ running; leave ⇒ done.
   createEffect(() => {
@@ -168,7 +201,10 @@ export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
     p.requestState('idle').catch((e) => console.warn('stop failed', e));
   };
 
-  const next = () => setStatus(currentIdx(), 'done');
+  const next = () => {
+    clearSoakTimer();
+    setStatus(currentIdx(), 'done');
+  };
 
   const complete = async () => {
     await restoreIfNeeded();
@@ -231,6 +267,32 @@ export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
               <ul class="cleaning-wizard__lines">
                 <For each={current()!.lines}>{(l) => <li>{l}</li>}</For>
               </ul>
+              <Show when={(current() as { timerSec?: number }).timerSec}>
+                {(secs) => (
+                  <Switch>
+                    <Match when={timerEndMs() === 0}>
+                      <button
+                        type="button"
+                        class="btn"
+                        data-testid="wizard-timer-start"
+                        onClick={() => startSoakTimer(secs())}
+                      >
+                        Start {Math.round(secs() / 60)}-min timer
+                      </button>
+                    </Match>
+                    <Match when={timerRemainingSec() > 0}>
+                      <p class="cleaning-wizard__status" data-testid="wizard-timer">
+                        Soaking… {formatMMSS(timerRemainingSec())}
+                      </p>
+                    </Match>
+                    <Match when={timerRemainingSec() === 0}>
+                      <p class="cleaning-wizard__status" data-testid="wizard-timer-done">
+                        Time’s up — finish and tap {currentIdx() === phases.length - 1 ? 'Finish' : 'Next'}.
+                      </p>
+                    </Match>
+                  </Switch>
+                )}
+              </Show>
               <button
                 type="button"
                 class="btn btn--primary"

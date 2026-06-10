@@ -18,13 +18,17 @@ export type CleanStepType =
   | 'coffeeSide'
   | 'flush'
   | 'steamWand'
-  | 'steamWandSoak';
+  | 'steamWandSoak'
+  | 'waterTank'
+  | 'thimble';
 
 export type CleanStep =
   | { id: string; type: 'coffeeSide'; profileId?: string; withChemical?: boolean }
   | { id: string; type: 'flush'; seconds?: number }
   | { id: string; type: 'steamWand'; withChemical?: boolean }
-  | { id: string; type: 'steamWandSoak' };
+  | { id: string; type: 'steamWandSoak' } // soak tip in hot water + needle
+  | { id: string; type: 'waterTank' } // wash the water tank
+  | { id: string; type: 'thimble' }; // soak the uptake thimble in citric
 
 /** Default flush duration (s) — the wizard stops the flush after this. */
 export const DEFAULT_FLUSH_SECONDS = 5;
@@ -74,6 +78,8 @@ export const CLEAN_STEP_TYPES: CleanStepType[] = [
   'flush',
   'steamWand',
   'steamWandSoak',
+  'waterTank',
+  'thimble',
 ];
 
 export const cleanStepLabel = (type: CleanStepType): string => {
@@ -85,7 +91,11 @@ export const cleanStepLabel = (type: CleanStepType): string => {
     case 'steamWand':
       return 'Steam wand';
     case 'steamWandSoak':
-      return 'Steam-wand soak';
+      return 'Steam-tip soak';
+    case 'waterTank':
+      return 'Water tank';
+    case 'thimble':
+      return 'Thimble';
   }
 };
 
@@ -108,6 +118,8 @@ export const newCleanStep = (type: CleanStepType): CleanStep => {
     case 'flush':
       return { id, type, seconds: DEFAULT_FLUSH_SECONDS };
     case 'steamWandSoak':
+    case 'waterTank':
+    case 'thimble':
       return { id, type };
   }
 };
@@ -124,7 +136,9 @@ export const operationSummary = (op: CleaningOperation): string => {
   for (const s of op.steps ?? []) {
     if (s.type === 'coffeeSide') add('Coffee-side');
     else if (s.type === 'flush') add('Flush');
-    else add('Steam wand'); // steamWand + steamWandSoak
+    else if (s.type === 'steamWand' || s.type === 'steamWandSoak') add('Steam wand');
+    else if (s.type === 'waterTank') add('Tank');
+    else if (s.type === 'thimble') add('Thimble');
   }
   return areas.length ? areas.join(' · ') : 'No steps';
 };
@@ -155,8 +169,19 @@ export const deriveStepPrep = (step: CleanStep): string[] => {
         : ['Fill a jug with clean water; submerge the tip.', 'Steam to flush the wand.'];
     case 'steamWandSoak':
       return [
-        'Soak the steam tip ~10 min — do NOT steam.',
-        'Poke a needle through the tip; wipe the wand.',
+        'Remove the steam tip and soak it in hot water (NOT citric) — do not steam.',
+        'When the timer is up: poke a needle through the hole, hold it to the light to check it’s clear, wash, and refit.',
+      ];
+    case 'waterTank':
+      return [
+        'Remove the water tank, empty it, and wash with soap & water (dishwasher-safe).',
+        'Rinse and refit.',
+      ];
+    case 'thimble':
+      return [
+        'Pull out the water-uptake thimble.',
+        'Soak it in 5% citric acid (~30 min) to dissolve scale.',
+        'When the timer is up: rinse and refit.',
       ];
   }
 };

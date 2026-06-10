@@ -16,8 +16,11 @@ export const SEED_CLEANINGS: Cleaning[] = [
     operation: {
       kind: 'clean',
       steps: [
-        { id: 'seed-daily-cs', type: 'coffeeSide', withChemical: false },
-        { id: 'seed-daily-flush', type: 'flush', seconds: 5 },
+        { id: 'seed-daily-cs1', type: 'coffeeSide', withChemical: false },
+        { id: 'seed-daily-flush1', type: 'flush', seconds: 5 },
+        { id: 'seed-daily-cs2', type: 'coffeeSide', withChemical: false },
+        { id: 'seed-daily-flush2', type: 'flush', seconds: 5 },
+        { id: 'seed-daily-soak', type: 'steamWandSoak' },
       ],
     },
     cadence: { byDays: 1 },
@@ -29,10 +32,12 @@ export const SEED_CLEANINGS: Cleaning[] = [
       kind: 'clean',
       steps: [
         { id: 'seed-weekly-cs1', type: 'coffeeSide', withChemical: true },
+        { id: 'seed-weekly-flush1', type: 'flush', seconds: 5 },
         { id: 'seed-weekly-cs2', type: 'coffeeSide', withChemical: false },
-        { id: 'seed-weekly-flush', type: 'flush', seconds: 5 },
+        { id: 'seed-weekly-flush2', type: 'flush', seconds: 5 },
         { id: 'seed-weekly-sw', type: 'steamWand', withChemical: true },
-        { id: 'seed-weekly-soak', type: 'steamWandSoak' },
+        { id: 'seed-weekly-tank', type: 'waterTank' },
+        { id: 'seed-weekly-thimble', type: 'thimble' },
       ],
     },
     cadence: { byDays: 7, byShots: 50 },
