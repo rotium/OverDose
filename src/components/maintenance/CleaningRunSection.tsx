@@ -12,10 +12,7 @@ import { useRepositories } from '../../RepositoriesContext';
 import { FlushIcon, WaterDropIcon } from '../icons';
 
 const KindIcon: Component<{ kind: CleaningKind }> = (p) => (
-  <Show
-    when={p.kind === 'profile' || p.kind === 'flush'}
-    fallback={<WaterDropIcon size={18} />}
-  >
+  <Show when={p.kind === 'clean'} fallback={<WaterDropIcon size={18} />}>
     <FlushIcon size={18} />
   </Show>
 );

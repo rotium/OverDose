@@ -1,6 +1,6 @@
 # Cleaning: a first-class configurable maintenance feature
 
-Status: **Settings + Maintenance-nav implemented** (branch `feat/cleaning-settings`) · 2026-06-10 · Run wiring (wizard) + other surfaces pending
+Status: **Settings + Maintenance-nav implemented; model = Clean(steps) + Descale** (branch `feat/cleaning-settings`) · 2026-06-10 · next: Run wiring (wizard, coffee-side first)
 
 Implemented: `domain/cleaning.ts`, `repositories/{cleaning_repository,local_cleaning_repository,seed_cleanings,link_seed_cleaning_profiles}.ts`, `components/settings/sections/library/{CleaningsSection,CleaningEditor}.tsx`, wired into `domain/index`, `repositories/index`, `RepositoriesContext`, `librarySync`, `App.tsx`, `LibraryTab`. Tests: `cleaning.test.ts`, `local_cleaning_repository.test.ts`, `CleaningsSection.test.tsx`, `CleaningEditor.test.tsx` (27 new; full suite 730 pass; `npm run build` clean). Deviation from the spec below: live `byShots` next-due needs the gateway shot total (no `api.shots()` yet) — Settings shows time-based next-due + a static "every N shots"; the live shots countdown lands with Alerts.
 
@@ -39,34 +39,47 @@ targets. They are **not** interchangeable:
 
 ## Entity (`src/domain/cleaning.ts`)
 
+> **Redesigned 2026-06-10:** a cleaning is **Clean** (a user-composed, reorderable
+> step list) or **Descale** (separate, fixed, app-owned). This replaced an earlier
+> flat-kind model (profile/clean/descale/flush) — real cleaning is multi-pass
+> (Cafiza forward-flush → rinse pass → flush → steam wand), which a fixed model
+> couldn't express. Firmware `clean` (redundant descale-lite) and the `flush`
+> kind were dropped; `flush` and `steamWandSoak` are now *steps*.
+
 ```ts
+export type CleanStep =
+  | { id: string; type: 'coffeeSide'; profileId?: string; withChemical?: boolean } // forward-flush run
+  | { id: string; type: 'flush' }                                                  // plain hot-water rinse
+  | { id: string; type: 'steamWand'; withChemical?: boolean }                      // steam Rinza/water into a jug
+  | { id: string; type: 'steamWandSoak' };                                         // soak tip 10min + needle (no machine run)
+
 export type CleaningOperation =
-  | { kind: 'profile'; profileId?: string; withChemical?: boolean }  // Cafiza in basket
-  | { kind: 'clean';   withChemical?: boolean }                      // citric in tank | water-only
-  | { kind: 'descale'; withChemical?: boolean }                      // citric in tank | water-only
-  | { kind: 'flush' };                                               // hot-water rinse, never chemical
+  | { kind: 'clean'; steps: CleanStep[] }      // user-composed, reorderable
+  | { kind: 'descale'; withChemical?: boolean };// fixed, app-owned
 
 export interface Cleaning {
   id: string;
   name: string;
   operation: CleaningOperation;
   cadence?: { byDays?: number; byShots?: number };  // "due" if EITHER threshold crosses
-  notes?: string;                                   // personal addendum to the derived prep
+  notes?: string;
   hidden?: boolean;                                 // shown on Home by default; hide to drop off
   order?: number;
   lastDoneAt?: string;                              // ISO; denormalized for fast due-calc
   lastDoneShotCount?: number;                       // espresso-shot total snapshot at completion
 }
-// `icon` and the prep text are DERIVED from operation, never stored.
+// `icon` and per-step prep text are DERIVED, never stored.
 ```
 
-`withChemical` is **kind-aware** (one boolean, label/meaning derived):
+**Chemical is per-step / per-mode, and three chemicals never cross paths:**
 
-| kind | `withChemical: true` | `withChemical: false` |
-|------|----------------------|------------------------|
-| profile | Cafiza in blind basket | no detergent (deep rinse) |
-| clean / descale | citric acid in tank | water-only internal flush |
-| flush | — | — |
+| where | chemical (`withChemical: true`) | location |
+|-------|----------------------------------|----------|
+| `coffeeSide` step | Cafiza | **blind basket** |
+| `steamWand` step | Rinza | **milk jug** |
+| `descale` | citric acid | **water tank** |
+
+Safety rule (per-step, shown in the wizard): detergent only in the basket, Rinza only in the jug, citric only in the tank — never the tank with detergent, never a non-citric descaler.
 
 ---
 
@@ -78,10 +91,12 @@ Local-first, swappable for a gateway impl later:
 - `src/repositories/seed_cleanings.ts` — seed data.
 - Wired into `RepositoriesContext` + `librarySync` (revision `Accessor<number>`; lists via `createResource(repos.revision, () => repos.cleanings.list())`).
 
-**Seeds:**
-- *Daily Rinse* — profile · `Cleaning/Forward Flush x5` · no chemical · every 1 day.
-- *Weekly Group Clean* — profile · `Cleaning/Forward Flush x5` · Cafiza · ~7 days / 50 shots.
-- *Descale* — descale · citric · reminders off (water-dependent) · hidden from Home by default.
+**Seeds** (carry good defaults so users tweak, not build from blank):
+- *Daily Rinse* — `clean` · `[coffeeSide(no chem), flush]` · every 1 day.
+- *Weekly Clean* — `clean` · `[coffeeSide(Cafiza), coffeeSide(no chem), flush, steamWand(Rinza), steamWandSoak]` · ~7 days / 50 shots.
+- *Steam Wand* — `clean` · `[steamWand(Rinza), steamWandSoak]`.
+- *Descale* — `descale` · citric · reminders off (water-dependent) · hidden from Home by default.
+- coffeeSide steps resolve their profile from the `Cleaning/Forward Flush x5` title at first run.
 
 Seed profiles are referenced **by title** (`Cleaning/Forward Flush x5`) and resolved to
 the gateway profile id at first run — gateway profile ids are content hashes and
@@ -116,52 +131,47 @@ vary per machine.
 
 ---
 
-## CleaningEditor (side-sheet, auto-save, fields conditional on kind)
+## CleaningEditor (side-sheet, auto-save)
 
-| # | Field | Control | Shown when |
-|---|-------|---------|------------|
-| 1 | **Name** | text | always |
-| 2 | **Operation** | read-only display (set at create; immutable — kinds are too different, make a new cleaning instead) | always |
-| 3 | **Profile** | picker + ✕ (reuses ProfilePicker) | kind = profile |
-| 4 | **Use chemical** | checkbox, kind-aware label | profile / clean / descale (not flush) |
-| 5 | **Reminders** | toggle + `days` + `shots` (DebouncedNumberField) | always — due if either crosses |
-| 6 | **Prep (auto)** | read-only box | always — derived from kind + chemical; safety ⚠ + est. duration |
-| 7 | **Notes** | text | always — addendum on top of prep |
-| 8 | **Last done · [ Reset reminder ]** | text + button | always |
-| 9 | **Hide from home** | toggle → `hidden`, on its own just above Delete (Recipe-style) | always |
-| 10 | **Delete** | button (confirm) | always |
+Two editors by mode (mode is set at create, read-only after):
 
-**Profile picker filter (kind = profile):** show profiles where
-`title.startsWith('Cleaning/') || beverage_type === 'cleaning'`, and **strip the
-`Cleaning/` prefix** in labels (e.g. "Forward Flush x5", "Weber Spring Clean").
-
+**Clean** — a user-composed **step builder** (mirrors `RoutineEditor`):
 ```
-┌─ Edit Cleaning ────────────────────────────────[X]─┐   Descale variant:
-│ Name        [ Weekly Group Clean              ]     │    – no Profile row
-│ Operation   [ Cleaning profile             ▾ ]      │    – chemical label →
-│ Profile     [ Forward Flush x5             ] [✕]    │      "Use citric acid (in tank)"
-│ [✓] Use chemical  (Cafiza in blind basket)          │    – prep swaps to citric +
-│                                                     │      ⚠ citric-only / v1.0-v1.1
-│ Reminders   [✓] Remind me                           │
-│      every [ 7 ] days   and/or   [ 50 ] shots       │
-│ ┌ Prep (auto) ──────────────────────────────────┐  │
-│ │ • Blind basket + ~3 g Cafiza                   │  │
-│ │ • ⚠ Never put detergent in the water tank      │  │
-│ │ • 5 pressure cycles (~90 s) → flush till clear │  │
-│ └────────────────────────────────────────────────┘ │
-│ Notes       [ green-lid Cafiza tub, ½ tsp     ]     │
-│ Last done   3 days ago            [ Reset reminder ]│
-│ [ ] Hide from the home screen                       │
-│                                        [ Delete ]   │
-└──────────────────────────────────────────────────────┘
+┌─ Edit Cleaning ─────────────────────────────[X]─┐
+│ Clean                                            │
+│ Name      [ Weekly Clean                     ]   │
+│ ┌─ Steps ──────────────────────────────────────┐│
+│ │ ↑ ↓   Coffee-side        ◉ Cafiza         ✕  ││
+│ │ ↑ ↓   Coffee-side        ○ no chemical    ✕  ││
+│ │ ↑ ↓   Flush                               ✕  ││
+│ │ ↑ ↓   Steam wand         ◉ Rinza          ✕  ││
+│ │ ↑ ↓   Steam-wand soak                     ✕  ││
+│ │ [ + Add step ]   → Coffee-side/Flush/Steam wand/Soak │
+│ └───────────────────────────────────────────────┘│
+│ Reminders [✓]  every [7] days · [50] shots       │
+│ Last done 3 days ago      [ Reset ]              │
+│ Notes     [ … ]                                  │
+│ [ ] Hide from the home screen                    │
+│ [ Delete cleaning ]                              │
+└──────────────────────────────────────────────────┘
 ```
+- Step row = `↑ ↓` reorder (first `↑` / last `↓` disabled) · type · inline chemical toggle (coffee-side/steam-wand only) · `✕`. Coffee-side **expands** to show its profile (defaults to `Cleaning/Forward Flush x5`, tucked).
+- **`+ Add step`** opens a type picker (Coffee-side / Flush / Steam wand / Steam-wand soak), mirroring RoutineEditor's add-step.
+- Reorder = **up/down arrows, not drag** — touch tablet (HTML5 DnD fails on touch), rows are tappable (drag/tap conflict), short lists, and consistent with RoutineEditor.
+- **No editor prep card** — per-step prep + safety surface in the *wizard* at run time (and a one-line hint on an expanded step).
+
+**Coffee-side profile picker filter:** `title.startsWith('Cleaning/') || beverage_type === 'cleaning'`, prefix stripped in labels.
+
+**Descale** — fixed editor: Name · `[✓] Citric acid in the tank` · Prep card (cooldown ⚠ / citric-only ⚠ / v1.0-v1.1) · Reminders · Notes · Hide · Delete. No steps.
+
+Shared (both): Reminders (days/shots, due if either crosses), Notes, Last done + Reset reminder, Hide from home (Recipe-style, just above Delete), Delete.
 
 ---
 
 ## Locked rules
 
-- **`withChemical` is kind-aware** and never crosses paths (detergent→basket, citric→tank). The safety lines are always shown in Prep and cannot be edited away.
-- **Prep is a derived, read-only preview** of the wizard's instruction/safety copy — it rewrites as Operation/chemical change. Only **Notes** is editable.
+- **Chemical is per-step/per-mode and never crosses paths** (Cafiza→basket, Rinza→jug, citric→tank). Safety lines are app-authored, shown per-step in the wizard, not editable.
+- **Clean = user-composed steps; Descale = fixed app-owned wizard.** The "no user-authored steps" rule was reversed for Clean only (safe surface ops); descale stays fixed (safety-critical).
 - **"Reset reminder"** is a *neutral, per-cleaning* action: it restarts that cleaning's countdown and does **not** claim a run happened. Real completions are auto-recorded by the **wizard** (see History). No bulk "mark all done."
 - **Icon is auto** (per kind + chemical), not user-editable in v1.
 - **Recipe-style `hidden`** — cleanings show on Home by default; a low-emphasis **Hide** toggle (on its own, just above Delete) drops one off. **Delete** is the sole removal.

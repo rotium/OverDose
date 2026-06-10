@@ -16,8 +16,17 @@ const seedRepo = (items: Cleaning[]): LocalCleaningRepository => {
 describe('CleaningRunSection', () => {
   it('lists every cleaning, including hidden ones', async () => {
     const repo = seedRepo([
-      { id: 'c1', name: 'Daily', operation: { kind: 'profile', withChemical: false } },
-      { id: 'c2', name: 'Descale', operation: { kind: 'descale', withChemical: true }, hidden: true },
+      {
+        id: 'c1',
+        name: 'Daily',
+        operation: { kind: 'clean', steps: [{ id: 's1', type: 'coffeeSide' }] },
+      },
+      {
+        id: 'c2',
+        name: 'Descale',
+        operation: { kind: 'descale', withChemical: true },
+        hidden: true,
+      },
     ]);
     render(() => (
       <WithRepositories cleanings={repo}>
@@ -31,7 +40,7 @@ describe('CleaningRunSection', () => {
   });
 
   it('disables Run when no onRun handler is wired', async () => {
-    const repo = seedRepo([{ id: 'c1', name: 'Daily', operation: { kind: 'flush' } }]);
+    const repo = seedRepo([{ id: 'c1', name: 'Daily', operation: { kind: 'clean', steps: [{ id: 's1', type: 'flush' }] } }]);
     render(() => (
       <WithRepositories cleanings={repo}>
         <CleaningRunSection />
@@ -42,7 +51,7 @@ describe('CleaningRunSection', () => {
   });
 
   it('calls onRun with the cleaning when Run is pressed', async () => {
-    const repo = seedRepo([{ id: 'c1', name: 'Daily', operation: { kind: 'flush' } }]);
+    const repo = seedRepo([{ id: 'c1', name: 'Daily', operation: { kind: 'clean', steps: [{ id: 's1', type: 'flush' }] } }]);
     const onRun = vi.fn();
     render(() => (
       <WithRepositories cleanings={repo}>

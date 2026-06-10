@@ -23,16 +23,23 @@ const renderSection = (repo: LocalCleaningRepository) =>
 describe('CleaningsSection', () => {
   it('renders a row per cleaning with name + operation summary', async () => {
     const repo = seedRepo([
-      { id: 'c1', name: 'Daily Rinse', operation: { kind: 'profile', withChemical: false } },
+      {
+        id: 'c1',
+        name: 'Daily Rinse',
+        operation: {
+          kind: 'clean',
+          steps: [{ id: 's1', type: 'coffeeSide' }, { id: 's2', type: 'flush' }],
+        },
+      },
       { id: 'c2', name: 'Descale', operation: { kind: 'descale', withChemical: true } },
     ]);
     renderSection(repo);
     await waitFor(() => screen.getByTestId('cleanings-list'));
     expect(screen.getByTestId('cleaning-row-c1')).toHaveTextContent('Daily Rinse');
-    expect(screen.getByTestId('cleaning-row-c1')).toHaveTextContent(
-      'Forward Flush · no detergent',
+    expect(screen.getByTestId('cleaning-row-c1')).toHaveTextContent('Coffee-side · Flush');
+    expect(screen.getByTestId('cleaning-row-c2')).toHaveTextContent(
+      'Citric acid · internals + steam',
     );
-    expect(screen.getByTestId('cleaning-row-c2')).toHaveTextContent('Descale · citric acid');
   });
 
   it('shows a due badge for an overdue cleaning', async () => {
@@ -40,7 +47,7 @@ describe('CleaningsSection', () => {
       {
         id: 'c1',
         name: 'Weekly',
-        operation: { kind: 'profile', withChemical: true },
+        operation: { kind: 'clean', steps: [{ id: 's1', type: 'coffeeSide' }] },
         cadence: { byDays: 7 },
         // never done → due
       },
@@ -52,7 +59,11 @@ describe('CleaningsSection', () => {
 
   it('toggles hide-from-home', async () => {
     const repo = seedRepo([
-      { id: 'c1', name: 'Daily', operation: { kind: 'flush' } },
+      {
+        id: 'c1',
+        name: 'Daily',
+        operation: { kind: 'clean', steps: [{ id: 's1', type: 'flush' }] },
+      },
     ]);
     renderSection(repo);
     const toggle = await waitFor(() =>

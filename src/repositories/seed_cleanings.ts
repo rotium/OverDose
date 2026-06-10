@@ -1,29 +1,52 @@
 import type { Cleaning } from '../domain';
 
 /**
- * Seed Cleanings shipped on first run so the Library isn't empty. The two
- * Forward-Flush entries differ only by `withChemical` (daily rinse vs weekly
- * Cafiza clean) and their cadence — the same profile backs both. Descale ships
- * with reminders off (it's water-dependent). IDs are stable so a re-seed never
- * duplicates.
+ * Seed Cleanings shipped on first run so the Library isn't empty. These carry
+ * the good multi-pass defaults so users *tweak* rather than build from scratch.
+ * IDs (cleaning + step) are stable so a re-seed never duplicates.
  *
- * Profile cleanings ship without a `profileId`: a profile is a gateway-owned,
- * content-hashed id that can't be known ahead of time. Each maps to an intended
- * profile *title* in `SEED_CLEANING_PROFILE_TITLES`, resolved on startup by
- * `linkSeedCleaningProfiles()` — see `link_seed_cleaning_profiles.ts`.
+ * Coffee-side steps leave `profileId` undefined — that means "the default
+ * Cleaning/Forward Flush x5", resolved by title when the step runs (gateway
+ * profile ids are content hashes, unknowable at seed time).
  */
 export const SEED_CLEANINGS: Cleaning[] = [
   {
     id: 'seed-clean-daily-rinse',
     name: 'Daily Rinse',
-    operation: { kind: 'profile', withChemical: false },
+    operation: {
+      kind: 'clean',
+      steps: [
+        { id: 'seed-daily-cs', type: 'coffeeSide', withChemical: false },
+        { id: 'seed-daily-flush', type: 'flush' },
+      ],
+    },
     cadence: { byDays: 1 },
   },
   {
-    id: 'seed-clean-weekly-group',
-    name: 'Weekly Group Clean',
-    operation: { kind: 'profile', withChemical: true },
+    id: 'seed-clean-weekly',
+    name: 'Weekly Clean',
+    operation: {
+      kind: 'clean',
+      steps: [
+        { id: 'seed-weekly-cs1', type: 'coffeeSide', withChemical: true },
+        { id: 'seed-weekly-cs2', type: 'coffeeSide', withChemical: false },
+        { id: 'seed-weekly-flush', type: 'flush' },
+        { id: 'seed-weekly-sw', type: 'steamWand', withChemical: true },
+        { id: 'seed-weekly-soak', type: 'steamWandSoak' },
+      ],
+    },
     cadence: { byDays: 7, byShots: 50 },
+  },
+  {
+    id: 'seed-clean-steam-wand',
+    name: 'Steam Wand',
+    operation: {
+      kind: 'clean',
+      steps: [
+        { id: 'seed-sw-sw', type: 'steamWand', withChemical: true },
+        { id: 'seed-sw-soak', type: 'steamWandSoak' },
+      ],
+    },
   },
   {
     id: 'seed-clean-descale',
@@ -33,14 +56,3 @@ export const SEED_CLEANINGS: Cleaning[] = [
     hidden: true,
   },
 ];
-
-/**
- * Intended cleaning profile for each profile-kind seed Cleaning, by gateway
- * profile *title*. Resolved to a real `profileId` on startup by
- * `linkSeedCleaningProfiles()` — only applied when the title matches a profile
- * loaded on the gateway.
- */
-export const SEED_CLEANING_PROFILE_TITLES: Record<string, string> = {
-  'seed-clean-daily-rinse': 'Cleaning/Forward Flush x5',
-  'seed-clean-weekly-group': 'Cleaning/Forward Flush x5',
-};

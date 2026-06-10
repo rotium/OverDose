@@ -7,12 +7,21 @@ import {
   createSignal,
   type Component,
 } from 'solid-js';
-import type { Cleaning, CleaningOperation } from '../../../../domain';
+import type {
+  Cleaning,
+  CleanStep,
+  CleanStepType,
+  CleaningOperation,
+} from '../../../../domain';
 import {
-  chemicalToggleLabel,
+  CLEAN_STEP_TYPES,
+  DESCALE_CHEMICAL_LABEL,
+  cleanStepLabel,
   cleaningKindLabel,
-  derivePrep,
-  kindUsesChemical,
+  deriveDescalePrep,
+  newCleanStep,
+  stepChemicalLabel,
+  stepUsesChemical,
 } from '../../../../domain';
 import { useRepositories } from '../../../../RepositoriesContext';
 import { DebouncedNumberField } from './DebouncedNumberField';
@@ -23,7 +32,7 @@ import { api, type ProfileRecord } from '../../../../api';
 const stripCleaningPrefix = (title: string): string =>
   title.replace(/^Cleaning\//i, '').trim();
 
-/** Cleaning profiles only: by the `Cleaning/` title convention or a cleaning beverage_type. */
+/** Cleaning profiles only: by the `Cleaning/` title convention or beverage_type. */
 const loadCleaningProfiles = (): Promise<ProfileRecord[]> =>
   api.profiles({}).then((recs) =>
     recs.filter(
@@ -32,12 +41,6 @@ const loadCleaningProfiles = (): Promise<ProfileRecord[]> =>
         r.profile.beverage_type === 'cleaning',
     ),
   );
-
-const opWithChemical = (op: CleaningOperation): boolean =>
-  op.kind !== 'flush' && op.withChemical === true;
-
-const profileIdOf = (op: CleaningOperation): string | undefined =>
-  op.kind === 'profile' ? op.profileId : undefined;
 
 const formatLastDone = (iso: string | undefined): string => {
   if (!iso) return 'never';
@@ -51,19 +54,16 @@ const formatLastDone = (iso: string | undefined): string => {
 export interface CleaningEditorProps {
   cleaningId: string;
   onClose: () => void;
-  /** Debounce override for tests. */
   debounceMs?: number;
   /** Profile-list fetcher seam (defaults to the cleaning-filtered gateway list). */
   loadProfiles?: () => Promise<ProfileRecord[]>;
-  /** Single-profile fetcher for the collapsed selected-profile row. */
-  loadProfileById?: (id: string) => Promise<ProfileRecord | null>;
 }
 
 /**
- * Cleaning editor — mirrors RecipeEditor (side-sheet, auto-save on change).
- * Fields are conditional on the operation kind; the Prep box is a derived,
- * read-only preview of the wizard's instruction/safety copy (only Notes is
- * editable). See docs/plans/cleaning-feature.md.
+ * Cleaning editor — mirrors RecipeEditor (side-sheet, auto-save). Two modes:
+ * **Clean** is a user-composed step builder (reorder via ↑/↓ like RoutineEditor,
+ * + Add step, per-step chemical, coffee-side profile); **Descale** is fixed
+ * (citric toggle + prep). See docs/plans/cleaning-feature.md.
  */
 export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
   const repos = useRepositories();
@@ -73,51 +73,108 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
   );
 
   const [confirmingDelete, setConfirmingDelete] = createSignal(false);
-  const [profileDialogOpen, setProfileDialogOpen] = createSignal(false);
+  const [addingStep, setAddingStep] = createSignal(false);
+  // Which coffee-side step's profile dialog is open (its step id), or null.
+  const [profileStepId, setProfileStepId] = createSignal<string | null>(null);
+
+  const [profiles] = createResource(() =>
+    (p.loadProfiles ?? loadCleaningProfiles)().catch(() => [] as ProfileRecord[]),
+  );
 
   const save = async (next: Cleaning) => {
     await repos.cleanings.update(next);
     refetch();
   };
 
+  const cleanSteps = (): CleanStep[] => {
+    const c = cleaning();
+    return c && c.operation.kind === 'clean' ? c.operation.steps : [];
+  };
+
+  const saveSteps = (steps: CleanStep[]) => {
+    const c = cleaning();
+    if (!c || c.operation.kind !== 'clean') return;
+    void save({ ...c, operation: { kind: 'clean', steps } });
+  };
+
+  const handleAddStep = (type: CleanStepType) => {
+    setAddingStep(false);
+    saveSteps([...cleanSteps(), newCleanStep(type)]);
+  };
+
+  const handleRemoveStep = (id: string) =>
+    saveSteps(cleanSteps().filter((s) => s.id !== id));
+
+  const handleMoveStep = (id: string, dir: -1 | 1) => {
+    const steps = [...cleanSteps()];
+    const i = steps.findIndex((s) => s.id === id);
+    const j = i + dir;
+    if (i === -1 || j < 0 || j >= steps.length) return;
+    [steps[i], steps[j]] = [steps[j], steps[i]];
+    saveSteps(steps);
+  };
+
+  const updateStep = (
+    id: string,
+    patch: { withChemical?: boolean; profileId?: string },
+  ) =>
+    saveSteps(
+      cleanSteps().map((s) => (s.id === id ? ({ ...s, ...patch } as CleanStep) : s)),
+    );
+
+  const profileTitleOf = (id?: string): string => {
+    if (!id) return 'Forward Flush x5 (default)';
+    const rec = (profiles() ?? []).find((r) => r.id === id);
+    return rec
+      ? stripCleaningPrefix((rec.profile.title ?? '').trim()) || '(untitled)'
+      : 'Selected profile';
+  };
+
+  const editingStepProfileId = (): string | undefined => {
+    const id = profileStepId();
+    const step = cleanSteps().find((s) => s.id === id);
+    return step && step.type === 'coffeeSide' ? step.profileId : undefined;
+  };
+
+  const handleStepProfileSelect = (profileId: string) => {
+    const id = profileStepId();
+    setProfileStepId(null);
+    if (id) updateStep(id, { profileId });
+  };
+
+  // Descale
+  const descaleWithChemical = (): boolean => {
+    const c = cleaning();
+    return c?.operation.kind === 'descale' ? !!c.operation.withChemical : false;
+  };
+  const handleDescaleChemical = (checked: boolean) => {
+    const c = cleaning();
+    if (!c || c.operation.kind !== 'descale') return;
+    void save({ ...c, operation: { kind: 'descale', withChemical: checked } });
+  };
+
+  // Shared
   const handleRename = (raw: string) => {
     const next = raw.trim();
     const c = cleaning();
     if (!c || !next || c.name === next) return;
     void save({ ...c, name: next });
   };
-
-  const handleChemicalToggle = (checked: boolean) => {
-    const c = cleaning();
-    if (!c || c.operation.kind === 'flush') return;
-    void save({ ...c, operation: { ...c.operation, withChemical: checked } });
-  };
-
-  const handleProfileSelect = (profileId: string) => {
-    const c = cleaning();
-    setProfileDialogOpen(false);
-    if (!c || c.operation.kind !== 'profile' || c.operation.profileId === profileId) return;
-    void save({ ...c, operation: { ...c.operation, profileId } });
-  };
-
   const handleRemindersToggle = (checked: boolean) => {
     const c = cleaning();
     if (!c) return;
     void save({ ...c, cadence: checked ? { byDays: 7 } : undefined });
   };
-
   const handleByDaysCommit = (n: number | undefined) => {
     const c = cleaning();
     if (!c) return;
     void save({ ...c, cadence: { ...c.cadence, byDays: n } });
   };
-
   const handleByShotsCommit = (n: number | undefined) => {
     const c = cleaning();
     if (!c) return;
     void save({ ...c, cadence: { ...c.cadence, byShots: n } });
   };
-
   const handleNotesChange = (raw: string) => {
     const c = cleaning();
     if (!c) return;
@@ -125,37 +182,22 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
     if (c.notes === next) return;
     void save({ ...c, notes: next });
   };
-
-  // Reset reminder: neutral — restart the cadence clock without claiming a run.
-  // (Shot-count baseline is reset by the wizard / Alerts once the live shot
-  // total is wired; here we reset the time dimension.)
   const handleReset = () => {
     const c = cleaning();
     if (!c) return;
     void save({ ...c, lastDoneAt: new Date().toISOString() });
   };
-
   const handleHiddenToggle = (checked: boolean) => {
     const c = cleaning();
     if (!c) return;
     void save({ ...c, hidden: checked });
   };
-
   const handleDelete = async () => {
     await repos.cleanings.delete(p.cleaningId);
     p.onClose();
   };
 
-  // Resolve the selected cleaning profile's title for the collapsed row.
-  const loadProfileById = (id: string): Promise<ProfileRecord | null> =>
-    (p.loadProfileById ?? ((x) => api.profileById(x).catch(() => null)))(id);
-  const [selectedProfile] = createResource<ProfileRecord | null, string>(
-    () => {
-      const c = cleaning();
-      return c ? profileIdOf(c.operation) : undefined;
-    },
-    (id) => loadProfileById(id),
-  );
+  const operationOf = (c: Cleaning): CleaningOperation => c.operation;
 
   return (
     <div class="settings-section-stack" data-testid="cleaning-editor">
@@ -173,15 +215,11 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
         <Match when={cleaning()}>
           {(c) => (
             <>
-              <p
-                class="cleaning-editor__subtitle"
-                data-testid="cleaning-operation"
-              >
-                {cleaningKindLabel(c().operation.kind)}
+              <p class="cleaning-editor__subtitle" data-testid="cleaning-operation">
+                {cleaningKindLabel(operationOf(c()).kind)}
               </p>
 
               <section class="settings-section">
-                <h3>Setup</h3>
                 <div class="cleaning-editor__fields">
                   <div class="cleaning-editor__row">
                     <span class="cleaning-editor__row-label">Name</span>
@@ -194,39 +232,166 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                       onChange={(e) => handleRename(e.currentTarget.value)}
                     />
                   </div>
-
-                  <Show when={c().operation.kind === 'profile'}>
-                    <div class="cleaning-editor__row">
-                      <span class="cleaning-editor__row-label">Profile</span>
-                      <ProfileFieldRow
-                        selectedId={profileIdOf(c().operation)}
-                        selectedProfile={() => selectedProfile() ?? null}
-                        loading={selectedProfile.loading}
-                        onOpen={() => setProfileDialogOpen(true)}
-                      />
-                    </div>
-                  </Show>
-
-                  <Show when={kindUsesChemical(c().operation.kind)}>
-                    <label
-                      class="settings-checkbox cleaning-editor__check"
-                      data-testid="cleaning-chemical-toggle"
-                    >
-                      <input
-                        type="checkbox"
-                        data-testid="cleaning-with-chemical"
-                        checked={opWithChemical(c().operation)}
-                        onChange={(e) =>
-                          handleChemicalToggle(e.currentTarget.checked)
-                        }
-                      />
-                      <span>{chemicalToggleLabel(c().operation.kind)}</span>
-                    </label>
-                  </Show>
-
                 </div>
               </section>
 
+              {/* ── Clean: step builder ───────────────────────────────── */}
+              <Show when={operationOf(c()).kind === 'clean'}>
+                <section class="settings-section">
+                  <h3>Steps</h3>
+                  <Show
+                    when={cleanSteps().length > 0}
+                    fallback={<p class="muted">No steps yet — add one below.</p>}
+                  >
+                    <ul class="cleaning-editor__steps" data-testid="cleaning-steps">
+                      <For each={cleanSteps()}>
+                        {(s, i) => (
+                          <li
+                            class="cleaning-editor__step"
+                            data-testid={`cleaning-step-${s.id}`}
+                          >
+                            <div class="cleaning-editor__step-reorder">
+                              <button
+                                type="button"
+                                class="icon-btn"
+                                aria-label="Move up"
+                                data-testid={`step-up-${s.id}`}
+                                disabled={i() === 0}
+                                onClick={() => handleMoveStep(s.id, -1)}
+                              >
+                                ↑
+                              </button>
+                              <button
+                                type="button"
+                                class="icon-btn"
+                                aria-label="Move down"
+                                data-testid={`step-down-${s.id}`}
+                                disabled={i() === cleanSteps().length - 1}
+                                onClick={() => handleMoveStep(s.id, 1)}
+                              >
+                                ↓
+                              </button>
+                            </div>
+                            <div class="cleaning-editor__step-main">
+                              <span class="cleaning-editor__step-label">
+                                {cleanStepLabel(s.type)}
+                              </span>
+                              <Show when={stepUsesChemical(s.type)}>
+                                <label class="settings-checkbox cleaning-editor__check">
+                                  <input
+                                    type="checkbox"
+                                    data-testid={`step-chemical-${s.id}`}
+                                    checked={
+                                      (s.type === 'coffeeSide' ||
+                                        s.type === 'steamWand') &&
+                                      s.withChemical === true
+                                    }
+                                    onChange={(e) =>
+                                      updateStep(s.id, {
+                                        withChemical: e.currentTarget.checked,
+                                      })
+                                    }
+                                  />
+                                  <span>{stepChemicalLabel(s.type)}</span>
+                                </label>
+                              </Show>
+                              <Show when={s.type === 'coffeeSide'}>
+                                <button
+                                  type="button"
+                                  class="cleaning-editor__step-profile"
+                                  data-testid={`step-profile-${s.id}`}
+                                  onClick={() => setProfileStepId(s.id)}
+                                >
+                                  Profile:{' '}
+                                  {profileTitleOf(
+                                    s.type === 'coffeeSide' ? s.profileId : undefined,
+                                  )}{' '}
+                                  ›
+                                </button>
+                              </Show>
+                            </div>
+                            <button
+                              type="button"
+                              class="cleaning-editor__step-remove"
+                              aria-label={`Remove ${cleanStepLabel(s.type)}`}
+                              data-testid={`step-remove-${s.id}`}
+                              onClick={() => handleRemoveStep(s.id)}
+                            >
+                              ×
+                            </button>
+                          </li>
+                        )}
+                      </For>
+                    </ul>
+                  </Show>
+
+                  <Show
+                    when={addingStep()}
+                    fallback={
+                      <button
+                        type="button"
+                        class="btn"
+                        data-testid="open-add-step"
+                        onClick={() => setAddingStep(true)}
+                      >
+                        + Add step
+                      </button>
+                    }
+                  >
+                    <div class="cleaning-editor__add-steps" data-testid="add-step-picker">
+                      <For each={CLEAN_STEP_TYPES}>
+                        {(t) => (
+                          <button
+                            type="button"
+                            class="btn"
+                            data-testid={`add-step-${t}`}
+                            onClick={() => handleAddStep(t)}
+                          >
+                            {cleanStepLabel(t)}
+                          </button>
+                        )}
+                      </For>
+                      <button
+                        type="button"
+                        class="btn"
+                        onClick={() => setAddingStep(false)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </Show>
+                </section>
+              </Show>
+
+              {/* ── Descale: fixed ────────────────────────────────────── */}
+              <Show when={operationOf(c()).kind === 'descale'}>
+                <section class="settings-section">
+                  <label
+                    class="settings-checkbox cleaning-editor__check"
+                    data-testid="descale-chemical-toggle"
+                  >
+                    <input
+                      type="checkbox"
+                      data-testid="descale-with-chemical"
+                      checked={descaleWithChemical()}
+                      onChange={(e) => handleDescaleChemical(e.currentTarget.checked)}
+                    />
+                    <span>{DESCALE_CHEMICAL_LABEL}</span>
+                  </label>
+                  <ul class="cleaning-editor__prep" data-testid="descale-prep">
+                    <For
+                      each={deriveDescalePrep({
+                        kind: 'descale',
+                        withChemical: descaleWithChemical(),
+                      })}
+                    >
+                      {(line) => <li>{line}</li>}
+                    </For>
+                  </ul>
+                </section>
+              </Show>
+
+              {/* ── Shared: reminders, notes, hide, delete ───────────── */}
               <section class="settings-section">
                 <h3>Reminders</h3>
                 <div class="cleaning-editor__fields">
@@ -238,9 +403,7 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                       type="checkbox"
                       data-testid="cleaning-remind-me"
                       checked={c().cadence !== undefined}
-                      onChange={(e) =>
-                        handleRemindersToggle(e.currentTarget.checked)
-                      }
+                      onChange={(e) => handleRemindersToggle(e.currentTarget.checked)}
                     />
                     <span>Remind me</span>
                   </label>
@@ -278,7 +441,6 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                       </label>
                     </div>
                   </Show>
-
                   <div class="cleaning-editor__row">
                     <span class="cleaning-editor__row-label">Last done</span>
                     <span
@@ -300,24 +462,7 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
               </section>
 
               <section class="settings-section">
-                <h3>Prep &amp; notes</h3>
                 <div class="cleaning-editor__fields">
-                  <ul
-                    class="cleaning-editor__prep"
-                    data-testid="cleaning-prep"
-                  >
-                    <For each={derivePrep(c().operation).lines}>
-                      {(line) => <li>{line}</li>}
-                    </For>
-                  </ul>
-                  <Show when={derivePrep(c().operation).durationHint}>
-                    <p
-                      class="settings-help"
-                      data-testid="cleaning-prep-duration"
-                    >
-                      Takes {derivePrep(c().operation).durationHint}.
-                    </p>
-                  </Show>
                   <div class="cleaning-editor__row">
                     <span class="cleaning-editor__row-label">Notes</span>
                     <input
@@ -326,7 +471,7 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                       value={c().notes ?? ''}
                       aria-label="Notes"
                       data-testid="cleaning-notes-input"
-                      placeholder="e.g. green-lid Cafiza tub, ½ tsp"
+                      placeholder="e.g. green-lid Cafiza; Rinza tablets"
                       onChange={(e) => handleNotesChange(e.currentTarget.value)}
                     />
                   </div>
@@ -387,17 +532,17 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
               </section>
 
               <PickerDialog
-                open={profileDialogOpen()}
-                onClose={() => setProfileDialogOpen(false)}
+                open={profileStepId() !== null}
+                onClose={() => setProfileStepId(null)}
                 title="Choose a cleaning profile"
                 description="Cleaning profiles loaded on the gateway."
                 testId="cleaning-profile-dialog"
                 maxWidthPx={1100}
               >
                 <ProfilePicker
-                  selectedId={profileIdOf(c().operation)}
-                  onSelect={handleProfileSelect}
-                  onCancel={() => setProfileDialogOpen(false)}
+                  selectedId={editingStepProfileId()}
+                  onSelect={handleStepProfileSelect}
+                  onCancel={() => setProfileStepId(null)}
                   loadProfiles={p.loadProfiles ?? loadCleaningProfiles}
                 />
               </PickerDialog>
@@ -405,52 +550,6 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
           )}
         </Match>
       </Switch>
-    </div>
-  );
-};
-
-interface ProfileFieldRowProps {
-  selectedId: string | undefined;
-  selectedProfile: () => ProfileRecord | null;
-  loading: boolean;
-  onOpen: () => void;
-}
-
-/** Collapsed display of the chosen cleaning profile (prefix stripped). */
-const ProfileFieldRow: Component<ProfileFieldRowProps> = (p) => {
-  const hasId = (): boolean => !!p.selectedId;
-  const title = (): string => {
-    const rec = p.selectedProfile();
-    if (rec) return stripCleaningPrefix((rec.profile.title ?? '').trim()) || '(untitled)';
-    if (p.loading) return 'Loading…';
-    return `(missing profile — ${p.selectedId})`;
-  };
-  return (
-    <div
-      class="recipe-editor__profile-field"
-      data-testid="cleaning-editor-profile-field"
-    >
-      <button
-        type="button"
-        class="recipe-editor__profile-button"
-        data-testid="cleaning-profile-open"
-        aria-haspopup="dialog"
-        onClick={p.onOpen}
-      >
-        <Show
-          when={hasId()}
-          fallback={
-            <span class="recipe-editor__profile-empty">
-              No profile selected — tap to choose
-            </span>
-          }
-        >
-          <span class="recipe-editor__profile-title">{title()}</span>
-        </Show>
-        <span class="recipe-editor__profile-chevron" aria-hidden="true">
-          ›
-        </span>
-      </button>
     </div>
   );
 };

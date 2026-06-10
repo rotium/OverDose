@@ -16,75 +16,121 @@ const seedRepo = (items: Cleaning[]): LocalCleaningRepository => {
 const renderEditor = (repo: LocalCleaningRepository, onClose = vi.fn()) => {
   render(() => (
     <WithRepositories cleanings={repo}>
-      <CleaningEditor cleaningId="c1" onClose={onClose} debounceMs={0} />
+      <CleaningEditor
+        cleaningId="c1"
+        onClose={onClose}
+        debounceMs={0}
+        loadProfiles={async () => []}
+      />
     </WithRepositories>
   ));
   return { onClose };
 };
 
-describe('CleaningEditor', () => {
-  it('renders name + operation (read-only), and the profile section for a profile cleaning', async () => {
-    const repo = seedRepo([
-      { id: 'c1', name: 'Daily', operation: { kind: 'profile', withChemical: true } },
-    ]);
-    renderEditor(repo);
+const weekly = (): Cleaning => ({
+  id: 'c1',
+  name: 'Weekly',
+  operation: {
+    kind: 'clean',
+    steps: [
+      { id: 's1', type: 'coffeeSide', withChemical: true },
+      { id: 's2', type: 'flush' },
+    ],
+  },
+});
+
+describe('CleaningEditor — Clean', () => {
+  it('renders the Clean subtitle and its steps', async () => {
+    renderEditor(seedRepo([weekly()]));
     await waitFor(() => screen.getByTestId('cleaning-editor'));
-    expect(screen.getByTestId('cleaning-name-input')).toHaveValue('Daily');
-    expect(screen.getByTestId('cleaning-operation')).toHaveTextContent('Cleaning profile');
-    // Operation is fixed at create time — no editable control.
-    expect(screen.queryByTestId('cleaning-operation-select')).toBeNull();
-    expect(screen.getByTestId('cleaning-editor-profile-field')).toBeInTheDocument();
-    expect(screen.getByTestId('cleaning-chemical-toggle')).toHaveTextContent(
-      /Cafiza in the blind basket/i,
-    );
+    expect(screen.getByTestId('cleaning-operation')).toHaveTextContent('Clean');
+    expect(screen.getByTestId('cleaning-step-s1')).toHaveTextContent('Coffee-side');
+    expect(screen.getByTestId('cleaning-step-s2')).toHaveTextContent('Flush');
   });
 
-  it('a descale cleaning shows the citric label and no profile row', async () => {
+  it('adds a step', async () => {
     const repo = seedRepo([
-      { id: 'c1', name: 'X', operation: { kind: 'descale', withChemical: true } },
+      { id: 'c1', name: 'X', operation: { kind: 'clean', steps: [] } },
     ]);
     renderEditor(repo);
-    await waitFor(() => screen.getByTestId('cleaning-editor'));
-    expect(screen.getByTestId('cleaning-operation')).toHaveTextContent('Descale');
-    expect(screen.queryByTestId('cleaning-editor-profile-field')).toBeNull();
-    expect(screen.getByTestId('cleaning-chemical-toggle')).toHaveTextContent(
-      /citric acid \(in the tank\)/i,
-    );
+    fireEvent.click(await waitFor(() => screen.getByTestId('open-add-step')));
+    fireEvent.click(screen.getByTestId('add-step-flush'));
+    await waitFor(async () => {
+      const c = await repo.get('c1');
+      expect(c?.operation.kind === 'clean' && c.operation.steps).toHaveLength(1);
+    });
   });
 
-  it('persists the chemical toggle', async () => {
-    const repo = seedRepo([
-      { id: 'c1', name: 'X', operation: { kind: 'descale', withChemical: true } },
-    ]);
+  it('toggles a coffee-side step chemical and persists', async () => {
+    const repo = seedRepo([weekly()]);
     renderEditor(repo);
     const cb = (await waitFor(() =>
-      screen.getByTestId('cleaning-with-chemical'),
+      screen.getByTestId('step-chemical-s1'),
     )) as HTMLInputElement;
     expect(cb.checked).toBe(true);
     fireEvent.click(cb);
-    await waitFor(async () =>
-      expect((await repo.get('c1'))?.operation).toMatchObject({
-        kind: 'descale',
-        withChemical: false,
-      }),
-    );
+    await waitFor(async () => {
+      const c = await repo.get('c1');
+      const s = c?.operation.kind === 'clean' ? c.operation.steps[0] : undefined;
+      expect(s).toMatchObject({ type: 'coffeeSide', withChemical: false });
+    });
   });
 
-  it('enabling reminders adds a cadence; disabling clears it', async () => {
-    const repo = seedRepo([{ id: 'c1', name: 'X', operation: { kind: 'flush' } }]);
+  it('removes a step', async () => {
+    const repo = seedRepo([weekly()]);
     renderEditor(repo);
-    const remind = (await waitFor(() =>
-      screen.getByTestId('cleaning-remind-me'),
-    )) as HTMLInputElement;
-    expect(remind.checked).toBe(false);
-    fireEvent.click(remind);
-    await waitFor(async () =>
-      expect((await repo.get('c1'))?.cadence).toBeDefined(),
-    );
+    fireEvent.click(await waitFor(() => screen.getByTestId('step-remove-s2')));
+    await waitFor(async () => {
+      const c = await repo.get('c1');
+      expect(c?.operation.kind === 'clean' && c.operation.steps).toHaveLength(1);
+    });
   });
 
+  it('reorders steps with the down arrow', async () => {
+    const repo = seedRepo([weekly()]);
+    renderEditor(repo);
+    fireEvent.click(await waitFor(() => screen.getByTestId('step-down-s1')));
+    await waitFor(async () => {
+      const c = await repo.get('c1');
+      const ids =
+        c?.operation.kind === 'clean' ? c.operation.steps.map((s) => s.id) : [];
+      expect(ids).toEqual(['s2', 's1']);
+    });
+  });
+});
+
+describe('CleaningEditor — Descale', () => {
+  const descale = (): Cleaning => ({
+    id: 'c1',
+    name: 'Descale',
+    operation: { kind: 'descale', withChemical: true },
+  });
+
+  it('shows the citric toggle + prep and no step list', async () => {
+    renderEditor(seedRepo([descale()]));
+    await waitFor(() => screen.getByTestId('cleaning-editor'));
+    expect(screen.getByTestId('cleaning-operation')).toHaveTextContent('Descale');
+    expect(screen.getByTestId('descale-prep')).toBeInTheDocument();
+    expect(screen.queryByTestId('cleaning-steps')).toBeNull();
+    expect(
+      (screen.getByTestId('descale-with-chemical') as HTMLInputElement).checked,
+    ).toBe(true);
+  });
+
+  it('persists the citric toggle', async () => {
+    const repo = seedRepo([descale()]);
+    renderEditor(repo);
+    fireEvent.click(await waitFor(() => screen.getByTestId('descale-with-chemical')));
+    await waitFor(async () => {
+      const c = await repo.get('c1');
+      expect(c?.operation).toMatchObject({ kind: 'descale', withChemical: false });
+    });
+  });
+});
+
+describe('CleaningEditor — shared', () => {
   it('Reset reminder stamps lastDoneAt', async () => {
-    const repo = seedRepo([{ id: 'c1', name: 'X', operation: { kind: 'flush' } }]);
+    const repo = seedRepo([weekly()]);
     renderEditor(repo);
     fireEvent.click(await waitFor(() => screen.getByTestId('cleaning-reset-reminder')));
     await waitFor(async () =>
@@ -93,7 +139,7 @@ describe('CleaningEditor', () => {
   });
 
   it('deletes after confirm and calls onClose', async () => {
-    const repo = seedRepo([{ id: 'c1', name: 'X', operation: { kind: 'flush' } }]);
+    const repo = seedRepo([weekly()]);
     const { onClose } = renderEditor(repo);
     fireEvent.click(await waitFor(() => screen.getByTestId('delete-cleaning-button')));
     fireEvent.click(screen.getByTestId('confirm-delete-cleaning-button'));

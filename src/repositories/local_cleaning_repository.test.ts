@@ -7,7 +7,7 @@ import { MemoryStorage } from '../test/memoryStorage';
 const sample = (id: string): Cleaning => ({
   id,
   name: `Cleaning ${id}`,
-  operation: { kind: 'profile', withChemical: false },
+  operation: { kind: 'clean', steps: [] },
 });
 
 describe('LocalCleaningRepository', () => {
@@ -24,7 +24,8 @@ describe('LocalCleaningRepository', () => {
       expect(all).toHaveLength(SEED_CLEANINGS.length);
       expect(all.map((c) => c.name)).toEqual([
         'Daily Rinse',
-        'Weekly Group Clean',
+        'Weekly Clean',
+        'Steam Wand',
         'Descale',
       ]);
     });
@@ -50,7 +51,7 @@ describe('LocalCleaningRepository', () => {
       await repo.create(sample('c1'));
       expect(await repo.get('c1')).toMatchObject({
         id: 'c1',
-        operation: { kind: 'profile' },
+        operation: { kind: 'clean' },
       });
     });
 

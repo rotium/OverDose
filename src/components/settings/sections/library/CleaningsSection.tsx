@@ -11,8 +11,10 @@ import {
 } from 'solid-js';
 import type { Cleaning, CleaningKind, CleaningOperation } from '../../../../domain';
 import {
+  CLEANING_KINDS,
   cleaningDue,
   cleaningKindLabel,
+  newCleanStep,
   operationSummary,
 } from '../../../../domain';
 import { useRepositories } from '../../../../RepositoriesContext';
@@ -21,24 +23,19 @@ import { CleaningEditor } from './CleaningEditor';
 
 const SHEET_ANIM_MS = 280;
 
-const KINDS: CleaningKind[] = ['profile', 'clean', 'descale', 'flush'];
-
 /** Default operation for a freshly-created cleaning of a given kind. */
 const defaultOperation = (kind: CleaningKind): CleaningOperation => {
   switch (kind) {
-    case 'profile':
-      return { kind: 'profile', withChemical: false };
     case 'clean':
-      return { kind: 'clean', withChemical: true };
+      // Start with one coffee-side step so a new Clean isn't empty.
+      return { kind: 'clean', steps: [newCleanStep('coffeeSide')] };
     case 'descale':
       return { kind: 'descale', withChemical: true };
-    case 'flush':
-      return { kind: 'flush' };
   }
 };
 
 const KindIcon: Component<{ kind: CleaningKind }> = (p) => (
-  <Show when={p.kind === 'profile' || p.kind === 'flush'} fallback={<WaterDropIcon size={18} />}>
+  <Show when={p.kind === 'clean'} fallback={<WaterDropIcon size={18} />}>
     <FlushIcon size={18} />
   </Show>
 );
@@ -59,7 +56,7 @@ export const CleaningsSection: Component = () => {
   const [animatingOut, setAnimatingOut] = createSignal(false);
   const [creating, setCreating] = createSignal(false);
   const [draftName, setDraftName] = createSignal('');
-  const [draftKind, setDraftKind] = createSignal<CleaningKind>('profile');
+  const [draftKind, setDraftKind] = createSignal<CleaningKind>('clean');
   let nameInputRef: HTMLInputElement | undefined;
   let exitTimer: number | undefined;
 
@@ -91,7 +88,7 @@ export const CleaningsSection: Component = () => {
 
   const openCreate = () => {
     setDraftName('');
-    setDraftKind('profile');
+    setDraftKind('clean');
     setCreating(true);
     queueMicrotask(() => nameInputRef?.focus());
   };
@@ -185,7 +182,7 @@ export const CleaningsSection: Component = () => {
                   setDraftKind(e.currentTarget.value as CleaningKind)
                 }
               >
-                <For each={KINDS}>
+                <For each={CLEANING_KINDS}>
                   {(k) => <option value={k}>{cleaningKindLabel(k)}</option>}
                 </For>
               </select>

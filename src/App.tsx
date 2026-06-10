@@ -27,7 +27,7 @@ import {
 } from './exploreBrew';
 import { LiveShotProvider, useLiveShot } from './LiveShotContext';
 import { frozenToGatewayShotRecord } from './liveShotAdapter';
-import { linkSeedRecipeProfiles, linkSeedCleaningProfiles } from './repositories';
+import { linkSeedRecipeProfiles } from './repositories';
 import { createLibrarySync } from './librarySync';
 import { RepositoriesProvider } from './RepositoriesContext';
 import { UserPrefsProvider, useUserPrefs } from './UserPrefsContext';
@@ -523,7 +523,6 @@ export const App: Component = () => {
       try {
         const profiles = await api.profiles({});
         await linkSeedRecipeProfiles(recipeRepository, profiles);
-        await linkSeedCleaningProfiles(cleaningRepository, profiles);
       } catch (e) {
         console.warn('link seed profiles failed', e);
       }

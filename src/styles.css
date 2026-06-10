@@ -2664,6 +2664,75 @@ html {
   min-width: 0;
 }
 
+/* Clean step builder */
+.cleaning-editor__steps {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.cleaning-editor__step {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+}
+
+.cleaning-editor__step-reorder {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.cleaning-editor__step-reorder .icon-btn {
+  padding: 0 0.2rem;
+  line-height: 1.1;
+}
+
+.cleaning-editor__step-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.cleaning-editor__step-label {
+  font-weight: 500;
+  color: var(--fg);
+}
+
+.cleaning-editor__step-profile {
+  align-self: flex-start;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.cleaning-editor__step-remove {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.25rem;
+}
+
+.cleaning-editor__add-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
 /* Lighter checkbox in the cleaning editor — the shared chip's accent border
    on :checked reads as too heavy for these simple toggles. */
 .cleaning-editor__check.settings-checkbox {
