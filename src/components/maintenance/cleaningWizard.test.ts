@@ -31,6 +31,15 @@ describe('buildWizard', () => {
     });
   });
 
+  it('flush carries its configured stop duration', () => {
+    const phases = buildWizard(clean([{ id: 's1', type: 'flush', seconds: 12 }]));
+    expect(phases[0]).toMatchObject({
+      kind: 'run',
+      target: 'flush',
+      durationSec: 12,
+    });
+  });
+
   it('steam-wand soak is a real instruction phase (do not steam)', () => {
     const phases = buildWizard(clean([{ id: 's1', type: 'steamWandSoak' }]));
     expect(phases).toHaveLength(1);

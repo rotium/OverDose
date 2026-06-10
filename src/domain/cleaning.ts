@@ -22,9 +22,12 @@ export type CleanStepType =
 
 export type CleanStep =
   | { id: string; type: 'coffeeSide'; profileId?: string; withChemical?: boolean }
-  | { id: string; type: 'flush' }
+  | { id: string; type: 'flush'; seconds?: number }
   | { id: string; type: 'steamWand'; withChemical?: boolean }
   | { id: string; type: 'steamWandSoak' };
+
+/** Default flush duration (s) — the wizard stops the flush after this. */
+export const DEFAULT_FLUSH_SECONDS = 20;
 
 export type CleaningKind = 'clean' | 'descale';
 
@@ -103,7 +106,7 @@ export const newCleanStep = (type: CleanStepType): CleanStep => {
     case 'steamWand':
       return { id, type, withChemical: false };
     case 'flush':
-      return { id, type };
+      return { id, type, seconds: DEFAULT_FLUSH_SECONDS };
     case 'steamWandSoak':
       return { id, type };
   }

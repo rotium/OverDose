@@ -97,6 +97,7 @@ export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
       setRunStartMs(Date.now());
       setStatus(idx, 'running');
     } else if (ss[idx] === 'running' && cur !== phase.target) {
+      clearRunTimer();
       setRunStartMs(0);
       setRunTotalSec(undefined);
       setStatus(idx, 'done');
@@ -108,6 +109,16 @@ export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
   // profile loaded as the active brewing profile (and repeats don't re-save).
   let savedWorkflow: unknown = null;
   let hasSaved = false;
+  // Flush is bounded by the wizard (the machine doesn't reliably auto-stop it):
+  // we requestState('idle') after the step's configured duration.
+  let runStopTimer: ReturnType<typeof setTimeout> | undefined;
+  const clearRunTimer = () => {
+    if (runStopTimer !== undefined) {
+      clearTimeout(runStopTimer);
+      runStopTimer = undefined;
+    }
+  };
+  onCleanup(clearRunTimer);
   const restoreIfNeeded = async () => {
     if (!hasSaved) return;
     hasSaved = false;
@@ -136,6 +147,15 @@ export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
         await p.requestState('espresso');
       } else {
         await p.requestState(phase.target);
+        if (phase.op.type === 'flush' && phase.durationSec) {
+          setRunTotalSec(phase.durationSec);
+          runStopTimer = setTimeout(() => {
+            runStopTimer = undefined;
+            p.requestState('idle').catch((e) =>
+              console.warn('flush stop failed', e),
+            );
+          }, phase.durationSec * 1000);
+        }
       }
     } catch (e) {
       console.warn('cleaning run start failed', e);
@@ -144,6 +164,7 @@ export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
   };
 
   const stopRun = () => {
+    clearRunTimer();
     p.requestState('idle').catch((e) => console.warn('stop failed', e));
   };
 
@@ -155,6 +176,7 @@ export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
   };
 
   const handleExit = async () => {
+    clearRunTimer();
     const idx = currentIdx();
     const phase = phases[idx];
     const st = statuses()[idx];

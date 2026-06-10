@@ -1,5 +1,5 @@
 import type { Cleaning } from '../../domain';
-import { cleanStepLabel, deriveStepPrep } from '../../domain';
+import { DEFAULT_FLUSH_SECONDS, cleanStepLabel, deriveStepPrep } from '../../domain';
 import type { MachineState } from '../../snapshot';
 
 /**
@@ -29,6 +29,9 @@ export type WizardPhase =
       target: MachineState;
       lines: string[];
       op: RunOp;
+      /** Wizard-enforced stop after N seconds (flush). Profile/steam runs end
+       *  on their own, so they leave this undefined. */
+      durationSec?: number;
     };
 
 export const buildWizard = (cleaning: Cleaning): WizardPhase[] => {
@@ -67,6 +70,7 @@ export const buildWizard = (cleaning: Cleaning): WizardPhase[] => {
           target: 'flush',
           lines: deriveStepPrep(s),
           op: { type: 'flush' },
+          durationSec: s.seconds ?? DEFAULT_FLUSH_SECONDS,
         });
         break;
       case 'steamWand':

@@ -86,6 +86,27 @@ describe('CleaningEditor — Clean', () => {
     });
   });
 
+  it('edits a flush step duration', async () => {
+    const repo = seedRepo([
+      {
+        id: 'c1',
+        name: 'X',
+        operation: { kind: 'clean', steps: [{ id: 's1', type: 'flush', seconds: 20 }] },
+      },
+    ]);
+    renderEditor(repo);
+    const field = (await waitFor(() =>
+      screen.getByTestId('step-seconds-s1'),
+    )) as HTMLInputElement;
+    fireEvent.input(field, { target: { value: '8' } });
+    fireEvent.blur(field);
+    await waitFor(async () => {
+      const c = await repo.get('c1');
+      const s = c?.operation.kind === 'clean' ? c.operation.steps[0] : undefined;
+      expect(s).toMatchObject({ type: 'flush', seconds: 8 });
+    });
+  });
+
   it('reorders steps with the down arrow', async () => {
     const repo = seedRepo([weekly()]);
     renderEditor(repo);

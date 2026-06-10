@@ -116,7 +116,7 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
 
   const updateStep = (
     id: string,
-    patch: { withChemical?: boolean; profileId?: string },
+    patch: { withChemical?: boolean; profileId?: string; seconds?: number },
   ) =>
     saveSteps(
       cleanSteps().map((s) => (s.id === id ? ({ ...s, ...patch } as CleanStep) : s)),
@@ -308,6 +308,25 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                                   )}{' '}
                                   ›
                                 </button>
+                              </Show>
+                              <Show when={s.type === 'flush'}>
+                                <label class="recipe-editor__field">
+                                  <span class="recipe-editor__field-label">
+                                    Flush for
+                                  </span>
+                                  <DebouncedNumberField
+                                    value={s.type === 'flush' ? s.seconds : undefined}
+                                    onCommit={(n) => updateStep(s.id, { seconds: n })}
+                                    min={1}
+                                    step={1}
+                                    placeholder="s"
+                                    ariaLabel="Flush seconds"
+                                    testId={`step-seconds-${s.id}`}
+                                    debounceMs={p.debounceMs}
+                                    class="step-field__input"
+                                  />
+                                  <span class="step-field__unit">s</span>
+                                </label>
                               </Show>
                             </div>
                             <button
