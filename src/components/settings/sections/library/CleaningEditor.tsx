@@ -15,6 +15,7 @@ import type {
 } from '../../../../domain';
 import {
   CLEAN_STEP_TYPES,
+  DEFAULT_FLUSH_SECONDS,
   DESCALE_CHEMICAL_LABEL,
   cleanStepLabel,
   cleaningKindLabel,
@@ -315,8 +316,16 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                                     Flush for
                                   </span>
                                   <DebouncedNumberField
-                                    value={s.type === 'flush' ? s.seconds : undefined}
-                                    onCommit={(n) => updateStep(s.id, { seconds: n })}
+                                    value={
+                                      s.type === 'flush'
+                                        ? s.seconds ?? DEFAULT_FLUSH_SECONDS
+                                        : undefined
+                                    }
+                                    onCommit={(n) =>
+                                      updateStep(s.id, {
+                                        seconds: n ?? DEFAULT_FLUSH_SECONDS,
+                                      })
+                                    }
                                     min={1}
                                     step={1}
                                     placeholder="s"

@@ -17,7 +17,7 @@ export const SEED_CLEANINGS: Cleaning[] = [
       kind: 'clean',
       steps: [
         { id: 'seed-daily-cs', type: 'coffeeSide', withChemical: false },
-        { id: 'seed-daily-flush', type: 'flush' },
+        { id: 'seed-daily-flush', type: 'flush', seconds: 5 },
       ],
     },
     cadence: { byDays: 1 },
@@ -30,7 +30,7 @@ export const SEED_CLEANINGS: Cleaning[] = [
       steps: [
         { id: 'seed-weekly-cs1', type: 'coffeeSide', withChemical: true },
         { id: 'seed-weekly-cs2', type: 'coffeeSide', withChemical: false },
-        { id: 'seed-weekly-flush', type: 'flush' },
+        { id: 'seed-weekly-flush', type: 'flush', seconds: 5 },
         { id: 'seed-weekly-sw', type: 'steamWand', withChemical: true },
         { id: 'seed-weekly-soak', type: 'steamWandSoak' },
       ],

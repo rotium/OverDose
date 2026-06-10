@@ -27,7 +27,7 @@ export type CleanStep =
   | { id: string; type: 'steamWandSoak' };
 
 /** Default flush duration (s) — the wizard stops the flush after this. */
-export const DEFAULT_FLUSH_SECONDS = 20;
+export const DEFAULT_FLUSH_SECONDS = 5;
 
 export type CleaningKind = 'clean' | 'descale';
 
