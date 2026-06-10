@@ -21,6 +21,14 @@ export interface CleaningWizardProps {
   cleaning: Cleaning;
   machineStream: () => WsStream<MachineSnapshot>;
   requestState: (state: MachineState) => Promise<void>;
+  /** Capture the current gateway workflow (opaque token) so a coffee-side
+   *  profile run can be restored afterward. Called once, before the first
+   *  profile run. */
+  captureWorkflow: () => Promise<unknown>;
+  /** Restore a previously-captured workflow (coffee-side cleanup). */
+  restoreWorkflow: (saved: unknown) => Promise<void>;
+  /** Load the cleaning profile for a coffee-side run (resolve + setWorkflow). */
+  loadCleaningProfile: (profileId?: string) => Promise<void>;
   /** Called when the wizard finishes — stamps lastDoneAt + closes. */
   onComplete: (cleaning: Cleaning) => void;
   /** Called on close/abort without completing. */
@@ -87,13 +95,39 @@ export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
     }
   });
 
+  // The user's workflow, captured before the first coffee-side profile run and
+  // restored once at the end — so a profile run never leaves the cleaning
+  // profile loaded as the active brewing profile (and repeats don't re-save).
+  let savedWorkflow: unknown = null;
+  let hasSaved = false;
+  const restoreIfNeeded = async () => {
+    if (!hasSaved) return;
+    hasSaved = false;
+    const w = savedWorkflow;
+    savedWorkflow = null;
+    try {
+      await p.restoreWorkflow(w);
+    } catch (e) {
+      console.warn('restore workflow failed', e);
+    }
+  };
+
   const startRun = async () => {
     const idx = currentIdx();
     const phase = phases[idx];
     if (!phase || phase.kind !== 'run') return;
     setStatus(idx, 'requested');
     try {
-      await p.requestState(phase.target);
+      if (phase.op.type === 'profile') {
+        if (!hasSaved) {
+          savedWorkflow = await p.captureWorkflow();
+          hasSaved = true;
+        }
+        await p.loadCleaningProfile(phase.op.profileId);
+        await p.requestState('espresso');
+      } else {
+        await p.requestState(phase.target);
+      }
     } catch (e) {
       console.warn('cleaning run start failed', e);
       setStatus(idx, 'pending');
@@ -106,6 +140,22 @@ export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
 
   const next = () => setStatus(currentIdx(), 'done');
 
+  const complete = async () => {
+    await restoreIfNeeded();
+    p.onComplete(p.cleaning);
+  };
+
+  const handleExit = async () => {
+    const idx = currentIdx();
+    const phase = phases[idx];
+    const st = statuses()[idx];
+    if (phase?.kind === 'run' && (st === 'requested' || st === 'running')) {
+      p.requestState('idle').catch((e) => console.warn('stop failed', e));
+    }
+    await restoreIfNeeded();
+    p.onExit();
+  };
+
   const status = (): PhaseStatus => statuses()[currentIdx()] ?? 'pending';
 
   return (
@@ -116,7 +166,7 @@ export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
           class="icon-btn"
           aria-label="Close"
           data-testid="wizard-close"
-          onClick={p.onExit}
+          onClick={() => void handleExit()}
         >
           ×
         </button>
@@ -138,7 +188,7 @@ export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
                 type="button"
                 class="btn btn--primary"
                 data-testid="wizard-finish"
-                onClick={() => p.onComplete(p.cleaning)}
+                onClick={() => void complete()}
               >
                 Done
               </button>

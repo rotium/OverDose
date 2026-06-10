@@ -9,16 +9,25 @@ const clean = (steps: CleanStep[]): Cleaning => ({
 });
 
 describe('buildWizard', () => {
-  it('lowers coffee-side to an instruction and flush to a run phase', () => {
+  it('lowers coffee-side to prep + profile-run, and flush to a run phase', () => {
     const phases = buildWizard(
       clean([
         { id: 's1', type: 'coffeeSide', withChemical: true },
         { id: 's2', type: 'flush' },
       ]),
     );
-    expect(phases).toHaveLength(2);
+    expect(phases).toHaveLength(3);
     expect(phases[0]).toMatchObject({ kind: 'instruction', title: 'Coffee-side' });
-    expect(phases[1]).toMatchObject({ kind: 'run', title: 'Flush', target: 'flush' });
+    expect(phases[1]).toMatchObject({
+      kind: 'run',
+      target: 'espresso',
+      op: { type: 'profile' },
+    });
+    expect(phases[2]).toMatchObject({
+      kind: 'run',
+      target: 'flush',
+      op: { type: 'flush' },
+    });
   });
 
   it('steam-wand soak is a real instruction phase (do not steam)', () => {

@@ -10,7 +10,13 @@ import {
   onMount,
   type Component,
 } from 'solid-js';
-import { api, type GatewayShotRecord } from './api';
+import {
+  api,
+  type GatewayShotRecord,
+  type Profile,
+  type WorkflowSnapshot,
+  type WorkflowContextUpdate,
+} from './api';
 import { Home, defaultStreams } from './Home';
 import { LiveBrewDrawer } from './components/LiveBrewDrawer';
 import { RecipeBrewScreen } from './components/RecipeBrewScreen';
@@ -135,6 +141,39 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
       .update({ ...c, lastDoneAt: new Date().toISOString() })
       .catch((e) => console.warn('stamp lastDone failed', e));
     setActiveCleaning(null);
+  };
+  // Coffee-side run plumbing: resolve the cleaning profile (the step's pick, or
+  // the default Cleaning/Forward Flush x5 by title), load it, and restore the
+  // user's workflow afterward. Workflow GET/PUT shapes differ, so the mapping
+  // lives here (the wizard treats the saved workflow as an opaque token).
+  const resolveCleaningProfile = async (
+    profileId?: string,
+  ): Promise<Profile | null> => {
+    try {
+      if (profileId) return (await api.profileById(profileId))?.profile ?? null;
+      const list = await api.profiles({});
+      const rec = list.find(
+        (r) =>
+          (r.profile.title ?? '').trim().toLowerCase() ===
+          'cleaning/forward flush x5',
+      );
+      return rec?.profile ?? null;
+    } catch (e) {
+      console.warn('resolve cleaning profile failed', e);
+      return null;
+    }
+  };
+  const loadCleaningProfile = async (profileId?: string) => {
+    const profile = await resolveCleaningProfile(profileId);
+    if (profile) await api.setWorkflow({ profile });
+  };
+  const restoreWorkflow = (saved: unknown) => {
+    const w = saved as WorkflowSnapshot;
+    return api.setWorkflow({
+      name: w.name,
+      profile: w.profile as unknown as Profile,
+      context: w.context as unknown as WorkflowContextUpdate,
+    });
   };
 
   // Recipe-brew runtime: another single-screen swap. Tile-tap on Home sets
@@ -410,6 +449,9 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
             cleaning={activeCleaning()!}
             machineStream={() => p.streams.machine}
             requestState={api.requestState}
+            captureWorkflow={api.workflow}
+            restoreWorkflow={restoreWorkflow}
+            loadCleaningProfile={loadCleaningProfile}
             onComplete={onCleaningComplete}
             onExit={onCleaningExit}
           />

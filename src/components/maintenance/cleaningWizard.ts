@@ -8,17 +8,28 @@ import type { MachineState } from '../../snapshot';
  *
  *   - `instruction` — guidance the user confirms with Next (no machine action).
  *   - `run` — request a machine state, then wait for it to finish (enter → leave
- *     the target state). Progress is monitored from the machine snapshot.
+ *     the target state). The `op` tells the engine how to begin: a plain state
+ *     request (flush/steam) or a profile run (coffee-side: load the cleaning
+ *     profile, run espresso, restore the prior workflow at the end).
  *
- * Coffee-side (profile run + save/restore), steam-wand (steam run) and the
- * descale flow render as instruction placeholders for now — they land in the
- * next increments. See docs/plans/cleaning-feature.md.
+ * Descale renders as an instruction placeholder for now — its guided flow is a
+ * later increment. See docs/plans/cleaning-feature.md.
  */
+export type RunOp =
+  | { type: 'flush' }
+  | { type: 'steam' }
+  | { type: 'profile'; profileId?: string };
+
 export type WizardPhase =
   | { id: string; kind: 'instruction'; title: string; lines: string[] }
-  | { id: string; kind: 'run'; title: string; target: MachineState; lines: string[] };
-
-const COMING_SOON = '(Running this from the wizard is coming soon.)';
+  | {
+      id: string;
+      kind: 'run';
+      title: string;
+      target: MachineState;
+      lines: string[];
+      op: RunOp;
+    };
 
 export const buildWizard = (cleaning: Cleaning): WizardPhase[] => {
   const op = cleaning.operation;
@@ -35,37 +46,55 @@ export const buildWizard = (cleaning: Cleaning): WizardPhase[] => {
 
   const phases: WizardPhase[] = [];
   for (const s of op.steps) {
+    const label = cleanStepLabel(s.type);
     switch (s.type) {
       case 'coffeeSide':
         phases.push({
-          id: `${s.id}-cs`,
+          id: `${s.id}-prep`,
           kind: 'instruction',
-          title: cleanStepLabel(s.type),
-          lines: [...deriveStepPrep(s), COMING_SOON],
+          title: label,
+          lines: deriveStepPrep(s),
+        });
+        phases.push({
+          id: `${s.id}-run`,
+          kind: 'run',
+          title: label,
+          target: 'espresso',
+          lines: ['Forward-flush profile running.'],
+          op: { type: 'profile', profileId: s.profileId },
         });
         break;
       case 'flush':
         phases.push({
-          id: `${s.id}-flush`,
+          id: `${s.id}-run`,
           kind: 'run',
-          title: cleanStepLabel(s.type),
+          title: label,
           target: 'flush',
           lines: deriveStepPrep(s),
+          op: { type: 'flush' },
         });
         break;
       case 'steamWand':
         phases.push({
-          id: `${s.id}-sw`,
+          id: `${s.id}-prep`,
           kind: 'instruction',
-          title: cleanStepLabel(s.type),
-          lines: [...deriveStepPrep(s), COMING_SOON],
+          title: label,
+          lines: deriveStepPrep(s),
+        });
+        phases.push({
+          id: `${s.id}-run`,
+          kind: 'run',
+          title: label,
+          target: 'steam',
+          lines: ['Steaming the jug.'],
+          op: { type: 'steam' },
         });
         break;
       case 'steamWandSoak':
         phases.push({
           id: `${s.id}-soak`,
           kind: 'instruction',
-          title: cleanStepLabel(s.type),
+          title: label,
           lines: deriveStepPrep(s),
         });
         break;

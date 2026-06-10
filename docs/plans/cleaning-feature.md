@@ -1,8 +1,8 @@
 # Cleaning: a first-class configurable maintenance feature
 
-Status: **Settings + Maintenance + wizard engine implemented** (branch `feat/cleaning-settings`) · 2026-06-10 · next: coffee-side profile run (save/restore), then steam-wand + descale wizards
+Status: **Settings + Maintenance + wizard (coffee-side / flush / steam-wand / soak)** (branch `feat/cleaning-settings`) · 2026-06-10 · next: UI cleanups, then descale fixed wizard
 
-> Wizard engine (`components/maintenance/{cleaningWizard.ts,CleaningWizard.tsx}`) walks a cleaning's phases: **flush runs** (requestState + snapshot monitor, GHC-safe) and **instruction/soak** phases work end-to-end; **completion stamps `lastDoneAt`**. Coffee-side, steam-wand, and descale render as **placeholder instructions** ("coming soon") — coffee-side's profile run + workflow save/restore is the next increment.
+> Wizard engine (`components/maintenance/{cleaningWizard.ts,CleaningWizard.tsx}`) walks a cleaning's phases. Working: **coffee-side** (prep → profile run: save workflow once → load cleaning profile → `requestState('espresso')` → monitor → restore at end), **flush** & **steam-wand** runs (requestState + snapshot monitor, GHC-safe), **instruction/soak** phases, and **completion stamps `lastDoneAt`**. Workflow save/restore + profile resolution live in App (opaque token to the engine). **Descale** still renders as a placeholder instruction (its fixed flow is a later increment).
 
 Implemented: `domain/cleaning.ts`, `repositories/{cleaning_repository,local_cleaning_repository,seed_cleanings,link_seed_cleaning_profiles}.ts`, `components/settings/sections/library/{CleaningsSection,CleaningEditor}.tsx`, wired into `domain/index`, `repositories/index`, `RepositoriesContext`, `librarySync`, `App.tsx`, `LibraryTab`. Tests: `cleaning.test.ts`, `local_cleaning_repository.test.ts`, `CleaningsSection.test.tsx`, `CleaningEditor.test.tsx` (27 new; full suite 730 pass; `npm run build` clean). Deviation from the spec below: live `byShots` next-due needs the gateway shot total (no `api.shots()` yet) — Settings shows time-based next-due + a static "every N shots"; the live shots countdown lands with Alerts.
 
