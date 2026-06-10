@@ -56,7 +56,7 @@ describe('operationSummary', () => {
           { id: '5', type: 'steamWandSoak' },
         ],
       }),
-    ).toBe('Coffee-side · Flush · Steam wand');
+    ).toBe('Group head · Flush · Steam wand');
   });
 
   it('describes descale', () => {

@@ -1,8 +1,8 @@
 # Cleaning: a first-class configurable maintenance feature
 
-Status: **Settings + Maintenance + wizard (coffee-side / flush / steam-wand / soak)** (branch `feat/cleaning-settings`) · 2026-06-10 · next: UI cleanups, then descale fixed wizard
+Status: **Settings + Maintenance + wizard (group-head / flush / steam-wand / soak)** (branch `feat/cleaning-settings`) · 2026-06-10 · next: UI cleanups, then descale fixed wizard
 
-> Wizard engine (`components/maintenance/{cleaningWizard.ts,CleaningWizard.tsx}`) walks a cleaning's phases. Working: **coffee-side** (prep → profile run: save workflow once → load cleaning profile → `requestState('espresso')` → monitor → restore at end), **flush** & **steam-wand** runs (requestState + snapshot monitor, GHC-safe), **instruction/soak** phases, and **completion stamps `lastDoneAt`**. Workflow save/restore + profile resolution live in App (opaque token to the engine). **Descale** still renders as a placeholder instruction (its fixed flow is a later increment).
+> Wizard engine (`components/maintenance/{cleaningWizard.ts,CleaningWizard.tsx}`) walks a cleaning's phases. Working: **group-head** (prep → profile run: save workflow once → load cleaning profile → `requestState('espresso')` → monitor → restore at end), **flush** & **steam-wand** runs (requestState + snapshot monitor, GHC-safe), **instruction/soak** phases, and **completion stamps `lastDoneAt`**. Workflow save/restore + profile resolution live in App (opaque token to the engine). **Descale** still renders as a placeholder instruction (its fixed flow is a later increment).
 
 Implemented: `domain/cleaning.ts`, `repositories/{cleaning_repository,local_cleaning_repository,seed_cleanings,link_seed_cleaning_profiles}.ts`, `components/settings/sections/library/{CleaningsSection,CleaningEditor}.tsx`, wired into `domain/index`, `repositories/index`, `RepositoriesContext`, `librarySync`, `App.tsx`, `LibraryTab`. Tests: `cleaning.test.ts`, `local_cleaning_repository.test.ts`, `CleaningsSection.test.tsx`, `CleaningEditor.test.tsx` (27 new; full suite 730 pass; `npm run build` clean). Deviation from the spec below: live `byShots` next-due needs the gateway shot total (no `api.shots()` yet) — Settings shows time-based next-due + a static "every N shots"; the live shots countdown lands with Alerts.
 
@@ -145,12 +145,12 @@ Two editors by mode (mode is set at create, read-only after):
 │ Clean                                            │
 │ Name      [ Weekly Clean                     ]   │
 │ ┌─ Steps ──────────────────────────────────────┐│
-│ │ ↑ ↓   Coffee-side        ◉ Cafiza         ✕  ││
-│ │ ↑ ↓   Coffee-side        ○ no chemical    ✕  ││
+│ │ ↑ ↓   Group head        ◉ Cafiza         ✕  ││
+│ │ ↑ ↓   Group head        ○ no chemical    ✕  ││
 │ │ ↑ ↓   Flush                               ✕  ││
 │ │ ↑ ↓   Steam wand         ◉ Rinza          ✕  ││
 │ │ ↑ ↓   Steam-wand soak                     ✕  ││
-│ │ [ + Add step ]   → Coffee-side/Flush/Steam wand/Soak │
+│ │ [ + Add step ]   → Group head/Flush/Steam wand/Soak │
 │ └───────────────────────────────────────────────┘│
 │ Reminders [✓]  every [7] days · [50] shots       │
 │ Last done 3 days ago      [ Reset ]              │
@@ -159,12 +159,12 @@ Two editors by mode (mode is set at create, read-only after):
 │ [ Delete cleaning ]                              │
 └──────────────────────────────────────────────────┘
 ```
-- Step row = `↑ ↓` reorder (first `↑` / last `↓` disabled) · type · inline chemical toggle (coffee-side/steam-wand only) · `✕`. Coffee-side **expands** to show its profile (defaults to `Cleaning/Forward Flush x5`, tucked).
-- **`+ Add step`** opens a type picker (Coffee-side / Flush / Steam wand / Steam-wand soak), mirroring RoutineEditor's add-step.
+- Step row = `↑ ↓` reorder (first `↑` / last `↓` disabled) · type · inline chemical toggle (group-head/steam-wand only) · `✕`. Group head **expands** to show its profile (defaults to `Cleaning/Forward Flush x5`, tucked).
+- **`+ Add step`** opens a type picker (Group head / Flush / Steam wand / Steam-wand soak), mirroring RoutineEditor's add-step.
 - Reorder = **up/down arrows, not drag** — touch tablet (HTML5 DnD fails on touch), rows are tappable (drag/tap conflict), short lists, and consistent with RoutineEditor.
 - **No editor prep card** — per-step prep + safety surface in the *wizard* at run time (and a one-line hint on an expanded step).
 
-**Coffee-side profile picker filter:** `title.startsWith('Cleaning/') || beverage_type === 'cleaning'`, prefix stripped in labels.
+**Group head profile picker filter:** `title.startsWith('Cleaning/') || beverage_type === 'cleaning'`, prefix stripped in labels.
 
 **Descale** — fixed editor: Name · `[✓] Citric acid in the tank` · Prep card (cooldown ⚠ / citric-only ⚠ / v1.0-v1.1) · Reminders · Notes · Hide · Delete. No steps.
 

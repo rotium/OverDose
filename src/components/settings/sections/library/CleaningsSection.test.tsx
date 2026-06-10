@@ -36,7 +36,7 @@ describe('CleaningsSection', () => {
     renderSection(repo);
     await waitFor(() => screen.getByTestId('cleanings-list'));
     expect(screen.getByTestId('cleaning-row-c1')).toHaveTextContent('Daily Rinse');
-    expect(screen.getByTestId('cleaning-row-c1')).toHaveTextContent('Coffee-side · Flush');
+    expect(screen.getByTestId('cleaning-row-c1')).toHaveTextContent('Group head · Flush');
     expect(screen.getByTestId('cleaning-row-c2')).toHaveTextContent(
       'Citric acid · internals + steam',
     );

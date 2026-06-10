@@ -44,7 +44,7 @@ describe('CleaningEditor — Clean', () => {
     renderEditor(seedRepo([weekly()]));
     await waitFor(() => screen.getByTestId('cleaning-editor'));
     expect(screen.getByTestId('cleaning-operation')).toHaveTextContent('Clean');
-    expect(screen.getByTestId('cleaning-step-s1')).toHaveTextContent('Coffee-side');
+    expect(screen.getByTestId('cleaning-step-s1')).toHaveTextContent('Group head');
     expect(screen.getByTestId('cleaning-step-s2')).toHaveTextContent('Flush');
   });
 

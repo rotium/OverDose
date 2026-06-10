@@ -90,7 +90,7 @@ export const CLEAN_STEP_TYPES: CleanStepType[] = [
 export const cleanStepLabel = (type: CleanStepType): string => {
   switch (type) {
     case 'coffeeSide':
-      return 'Coffee-side';
+      return 'Group head';
     case 'flush':
       return 'Flush';
     case 'steamWand':
@@ -141,7 +141,7 @@ export const operationSummary = (op: CleaningOperation): string => {
     if (!areas.includes(a)) areas.push(a);
   };
   for (const s of op.steps ?? []) {
-    if (s.type === 'coffeeSide') add('Coffee-side');
+    if (s.type === 'coffeeSide') add('Group head');
     else if (s.type === 'flush') add('Flush');
     else if (s.type === 'steamWand' || s.type === 'steamWandSoak') add('Steam wand');
     else if (s.type === 'waterTank') add('Tank');
