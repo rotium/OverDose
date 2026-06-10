@@ -11,10 +11,9 @@ import {
   type Component,
 } from 'solid-js';
 import type { Cleaning } from '../../domain';
-import { deriveStepFinish } from '../../domain';
 import type { MachineSnapshot, MachineState } from '../../snapshot';
 import type { WsStream } from '../../streams';
-import { buildWizard, type WizardPhase } from './cleaningWizard';
+import { buildWizard, wizardFinishLines, type WizardPhase } from './cleaningWizard';
 
 type PhaseStatus = 'pending' | 'requested' | 'running' | 'done';
 
@@ -51,11 +50,9 @@ export interface CleaningWizardProps {
  */
 export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
   const phases = buildWizard(p.cleaning);
-  // Deferred "finish" actions from soak/manual steps — shown on the closing step.
-  const finishLines =
-    p.cleaning.operation.kind === 'clean'
-      ? p.cleaning.operation.steps.flatMap(deriveStepFinish)
-      : [];
+  // Deferred "finish" actions from soak/manual steps — shown on the closing
+  // step in reverse step order (un-stack what you set up).
+  const finishLines = wizardFinishLines(p.cleaning);
   const [statuses, setStatuses] = createSignal<PhaseStatus[]>(
     phases.map(() => 'pending'),
   );

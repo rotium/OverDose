@@ -3,6 +3,7 @@ import {
   DEFAULT_FLUSH_SECONDS,
   DEFAULT_STEAM_SECONDS,
   cleanStepLabel,
+  deriveStepFinish,
   deriveStepPrep,
   stepTimerSec,
 } from '../../domain';
@@ -129,4 +130,14 @@ export const buildWizard = (cleaning: Cleaning): WizardPhase[] => {
     });
   }
   return phases;
+};
+
+/**
+ * The deferred "finish" actions for the wizard's closing step, in REVERSE step
+ * order — you un-stack what you set up (e.g. tank out → thimble out becomes
+ * thimble back → tank back).
+ */
+export const wizardFinishLines = (cleaning: Cleaning): string[] => {
+  const steps = cleaning.operation.kind === 'clean' ? cleaning.operation.steps : [];
+  return [...steps].reverse().flatMap(deriveStepFinish);
 };

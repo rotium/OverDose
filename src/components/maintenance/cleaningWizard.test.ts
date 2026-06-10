@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildWizard } from './cleaningWizard';
+import { buildWizard, wizardFinishLines } from './cleaningWizard';
 import type { Cleaning, CleanStep } from '../../domain';
 
 const clean = (steps: CleanStep[]): Cleaning => ({
@@ -64,6 +64,18 @@ describe('buildWizard', () => {
     expect(
       phases[1].kind === 'instruction' && phases[1].startsTimerSec,
     ).toBeUndefined();
+  });
+
+  it('finish actions are in reverse step order (un-stack what you set up)', () => {
+    const lines = wizardFinishLines(
+      clean([
+        { id: 'w', type: 'waterTank' },
+        { id: 't', type: 'thimble' },
+      ]),
+    );
+    // tank out → thimble out, so finish is thimble back → tank back.
+    expect(lines[0]).toMatch(/thimble/i);
+    expect(lines[1]).toMatch(/tank/i);
   });
 
   it('descale is a single placeholder instruction', () => {
