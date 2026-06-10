@@ -27,8 +27,10 @@ export interface CleaningWizardProps {
   captureWorkflow: () => Promise<unknown>;
   /** Restore a previously-captured workflow (coffee-side cleanup). */
   restoreWorkflow: (saved: unknown) => Promise<void>;
-  /** Load the cleaning profile for a coffee-side run (resolve + setWorkflow). */
-  loadCleaningProfile: (profileId?: string) => Promise<void>;
+  /** Load the cleaning profile for a coffee-side run (resolve + setWorkflow).
+   *  Returns the profile's total run seconds (for the progress bar), or
+   *  undefined if unknown. */
+  loadCleaningProfile: (profileId?: string) => Promise<number | undefined>;
   /** Called when the wizard finishes — stamps lastDoneAt + closes. */
   onComplete: (cleaning: Cleaning) => void;
   /** Called on close/abort without completing. */
@@ -70,6 +72,11 @@ export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
   // Elapsed clock for the active run phase.
   const [nowMs, setNowMs] = createSignal(0);
   const [runStartMs, setRunStartMs] = createSignal(0);
+  const [runTotalSec, setRunTotalSec] = createSignal<number | undefined>(undefined);
+  const progress = (): number | undefined => {
+    const total = runTotalSec();
+    return total ? Math.min(1, elapsedSec() / total) : undefined;
+  };
   onMount(() => {
     const t = setInterval(() => setNowMs(Date.now()), 500);
     onCleanup(() => clearInterval(t));
@@ -91,6 +98,7 @@ export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
       setStatus(idx, 'running');
     } else if (ss[idx] === 'running' && cur !== phase.target) {
       setRunStartMs(0);
+      setRunTotalSec(undefined);
       setStatus(idx, 'done');
     }
   });
@@ -123,7 +131,8 @@ export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
           savedWorkflow = await p.captureWorkflow();
           hasSaved = true;
         }
-        await p.loadCleaningProfile(phase.op.profileId);
+        const total = await p.loadCleaningProfile(phase.op.profileId);
+        setRunTotalSec(total);
         await p.requestState('espresso');
       } else {
         await p.requestState(phase.target);
@@ -233,6 +242,18 @@ export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
                       Running… {elapsedSec()}s
                     </Show>
                   </p>
+                  <Show when={status() === 'running' && progress() !== undefined}>
+                    <div
+                      class="cleaning-wizard__progress"
+                      data-testid="wizard-progress"
+                      role="progressbar"
+                    >
+                      <div
+                        class="cleaning-wizard__progress-fill"
+                        style={{ width: `${Math.round(progress()! * 100)}%` }}
+                      />
+                    </div>
+                  </Show>
                   <button
                     type="button"
                     class="btn"

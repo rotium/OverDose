@@ -8,6 +8,7 @@ import {
   createSignal,
   onCleanup,
   onMount,
+  untrack,
   type Component,
 } from 'solid-js';
 import {
@@ -163,9 +164,28 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
       return null;
     }
   };
-  const loadCleaningProfile = async (profileId?: string) => {
+  const loadCleaningProfile = async (
+    profileId?: string,
+  ): Promise<number | undefined> => {
     const profile = await resolveCleaningProfile(profileId);
-    if (profile) await api.setWorkflow({ profile });
+    if (!profile) return undefined;
+    // Run it bare: clear bean + dose/yield context so there's no scale stop
+    // and no coffee details on the run (it's a cleaning, not a shot).
+    await api.setWorkflow({
+      profile,
+      context: {
+        targetDoseWeight: null,
+        targetYield: null,
+        grinderSetting: null,
+        coffeeName: null,
+        coffeeRoaster: null,
+        extras: null,
+      },
+    });
+    const steps =
+      (profile as { steps?: Array<{ seconds?: number | string }> }).steps ?? [];
+    const total = steps.reduce((sum, st) => sum + (Number(st.seconds) || 0), 0);
+    return total > 0 ? total : undefined;
   };
   const restoreWorkflow = (saved: unknown) => {
     const w = saved as WorkflowSnapshot;
@@ -228,7 +248,12 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
   );
   createEffect(() => {
     const frozen = live.accumulator.frozenShot();
-    if (frozen) {
+    // A cleaning run is an espresso shot to the machine, but not a coffee —
+    // don't let it become the optimistic "last shot" (the gateway already
+    // excludes cleaning shots from persistence). Read activeCleaning untracked
+    // so clearing it (on wizard close) doesn't re-fire this with the stale
+    // frozen cleaning shot.
+    if (frozen && !untrack(activeCleaning)) {
       setOptimisticShot(frozenToGatewayShotRecord(frozen));
     }
     // Intentionally no `else` — we keep the previous optimistic value alive
@@ -564,7 +589,11 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
        </Show>
       </Show>
       </Show>
-      <LiveBrewDrawer />
+      {/* Suppressed during a cleaning — the wizard owns the live UI, and a
+          cleaning run isn't a brew to surface. */}
+      <Show when={!activeCleaning()}>
+        <LiveBrewDrawer />
+      </Show>
       {/* Always mounted; it owns its own enter/leave fade off `active`. */}
       <SleepOverlay active={isSleeping} onWake={onWakeFromOverlay} />
     </>

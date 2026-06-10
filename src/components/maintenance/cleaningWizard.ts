@@ -49,18 +49,13 @@ export const buildWizard = (cleaning: Cleaning): WizardPhase[] => {
     const label = cleanStepLabel(s.type);
     switch (s.type) {
       case 'coffeeSide':
-        phases.push({
-          id: `${s.id}-prep`,
-          kind: 'instruction',
-          title: label,
-          lines: deriveStepPrep(s),
-        });
+        // One page: the prep lines + Start (Start runs the profile).
         phases.push({
           id: `${s.id}-run`,
           kind: 'run',
           title: label,
           target: 'espresso',
-          lines: ['Forward-flush profile running.'],
+          lines: deriveStepPrep(s),
           op: { type: 'profile', profileId: s.profileId },
         });
         break;
@@ -75,18 +70,13 @@ export const buildWizard = (cleaning: Cleaning): WizardPhase[] => {
         });
         break;
       case 'steamWand':
-        phases.push({
-          id: `${s.id}-prep`,
-          kind: 'instruction',
-          title: label,
-          lines: deriveStepPrep(s),
-        });
+        // One page: the prep lines + Start.
         phases.push({
           id: `${s.id}-run`,
           kind: 'run',
           title: label,
           target: 'steam',
-          lines: ['Steaming the jug.'],
+          lines: deriveStepPrep(s),
           op: { type: 'steam' },
         });
         break;

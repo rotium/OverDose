@@ -2703,6 +2703,21 @@ html {
   font-variant-numeric: tabular-nums;
 }
 
+.cleaning-wizard__progress {
+  width: 100%;
+  max-width: 22rem;
+  height: 8px;
+  background: var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.cleaning-wizard__progress-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.4s ease;
+}
+
 /* Clean step builder */
 .cleaning-editor__steps {
   display: flex;

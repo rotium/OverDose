@@ -84,7 +84,7 @@ describe('CleaningWizard', () => {
           operation: {
             kind: 'clean',
             steps: [
-              { id: 's1', type: 'coffeeSide', withChemical: true }, // instruction (placeholder)
+              { id: 's1', type: 'steamWandSoak' }, // instruction
               { id: 's2', type: 'flush' }, // run
             ],
           },
@@ -97,10 +97,9 @@ describe('CleaningWizard', () => {
       />
     ));
     await waitFor(() => screen.getByTestId('wizard-instruction'));
-    // coffee-side → prep instruction + run; plus the flush run = 3 phases.
-    expect(screen.getByTestId('wizard-counter')).toHaveTextContent('1 / 3');
+    expect(screen.getByTestId('wizard-counter')).toHaveTextContent('1 / 2');
     fireEvent.click(screen.getByTestId('wizard-next'));
-    // Advanced to the coffee-side run phase.
+    // Advanced to the flush run phase.
     await waitFor(() => screen.getByTestId('wizard-run'));
   });
 
@@ -129,8 +128,7 @@ describe('CleaningWizard', () => {
       />
     ));
 
-    // Prep instruction → Next → run phase.
-    fireEvent.click(await waitFor(() => screen.getByTestId('wizard-next')));
+    // Coffee-side is a single run phase — Start runs the profile directly.
     fireEvent.click(await waitFor(() => screen.getByTestId('wizard-start')));
     await waitFor(() => expect(requestState).toHaveBeenCalledWith('espresso'));
     expect(captureWorkflow).toHaveBeenCalledTimes(1);

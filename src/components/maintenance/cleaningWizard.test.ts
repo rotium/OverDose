@@ -9,21 +9,22 @@ const clean = (steps: CleanStep[]): Cleaning => ({
 });
 
 describe('buildWizard', () => {
-  it('lowers coffee-side to prep + profile-run, and flush to a run phase', () => {
+  it('lowers coffee-side to a single profile-run phase, flush to a run phase', () => {
     const phases = buildWizard(
       clean([
         { id: 's1', type: 'coffeeSide', withChemical: true },
         { id: 's2', type: 'flush' },
       ]),
     );
-    expect(phases).toHaveLength(3);
-    expect(phases[0]).toMatchObject({ kind: 'instruction', title: 'Coffee-side' });
-    expect(phases[1]).toMatchObject({
+    expect(phases).toHaveLength(2);
+    expect(phases[0]).toMatchObject({
       kind: 'run',
       target: 'espresso',
       op: { type: 'profile' },
     });
-    expect(phases[2]).toMatchObject({
+    // The prep lines ride on the run phase (Start runs the profile).
+    expect(phases[0].kind === 'run' && phases[0].lines.join(' ')).toMatch(/blind basket/i);
+    expect(phases[1]).toMatchObject({
       kind: 'run',
       target: 'flush',
       op: { type: 'flush' },
