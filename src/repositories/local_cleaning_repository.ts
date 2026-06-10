@@ -2,8 +2,20 @@ import type { Cleaning } from '../domain';
 import type { CleaningRepository } from './cleaning_repository';
 import { SEED_CLEANINGS } from './seed_cleanings';
 
-const STORAGE_KEY = 'starter-skin.cleanings.v1';
-const SEEDED_FLAG = 'starter-skin.cleanings.seeded.v1';
+// v2: the cleaning model changed incompatibly (flat-kind → Clean steps +
+// Descale). Bumping the key drops the old, unreadable v1 data and re-seeds.
+const STORAGE_KEY = 'starter-skin.cleanings.v2';
+const SEEDED_FLAG = 'starter-skin.cleanings.seeded.v2';
+
+/** Drop entries that don't match the current model (e.g. stale v1 data that
+ *  flowed in via a gateway pull) so the UI never renders a malformed cleaning. */
+const isValidCleaning = (c: unknown): c is Cleaning => {
+  if (!c || typeof c !== 'object') return false;
+  const op = (c as Cleaning).operation;
+  if (!op) return false;
+  if (op.kind === 'clean') return Array.isArray(op.steps);
+  return op.kind === 'descale';
+};
 
 /**
  * localStorage-backed CleaningRepository. Mirrors the Recipe/Pitcher local
@@ -74,7 +86,7 @@ export class LocalCleaningRepository implements CleaningRepository {
     if (!raw) return [];
     try {
       const parsed = JSON.parse(raw) as Cleaning[];
-      return Array.isArray(parsed) ? parsed : [];
+      return Array.isArray(parsed) ? parsed.filter(isValidCleaning) : [];
     } catch {
       return [];
     }

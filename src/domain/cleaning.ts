@@ -118,7 +118,7 @@ export const operationSummary = (op: CleaningOperation): string => {
   const add = (a: string) => {
     if (!areas.includes(a)) areas.push(a);
   };
-  for (const s of op.steps) {
+  for (const s of op.steps ?? []) {
     if (s.type === 'coffeeSide') add('Coffee-side');
     else if (s.type === 'flush') add('Flush');
     else add('Steam wand'); // steamWand + steamWandSoak

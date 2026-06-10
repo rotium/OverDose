@@ -104,7 +104,9 @@ export function createLibrarySync(opts: LibrarySyncOptions = {}): LibrarySync {
       write: (a) => pitchers.replaceAll(a as never[]),
     },
     {
-      key: 'cleanings',
+      // v2: cleaning model changed incompatibly — a distinct gateway key
+      // avoids pulling stale v1 cleanings back over the new seeds.
+      key: 'cleanings.v2',
       read: () => cleanings.list() as Promise<unknown[]>,
       write: (a) => cleanings.replaceAll(a as never[]),
     },
