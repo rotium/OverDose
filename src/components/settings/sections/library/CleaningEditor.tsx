@@ -179,11 +179,6 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
     if (!c) return;
     void save({ ...c, cadence: { ...c.cadence, byDays: n } });
   };
-  const handleByShotsCommit = (n: number | undefined) => {
-    const c = cleaning();
-    if (!c) return;
-    void save({ ...c, cadence: { ...c.cadence, byShots: n } });
-  };
   const handleNotesChange = (raw: string) => {
     const c = cleaning();
     if (!c) return;
@@ -524,21 +519,8 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                         />
                         <span class="step-field__unit">days</span>
                       </label>
-                      <label class="recipe-editor__field">
-                        <span class="recipe-editor__field-label">and/or</span>
-                        <DebouncedNumberField
-                          value={c().cadence?.byShots}
-                          onCommit={handleByShotsCommit}
-                          placeholder="shots"
-                          min={0}
-                          step={1}
-                          ariaLabel="Remind every N shots"
-                          testId="cleaning-by-shots"
-                          debounceMs={p.debounceMs}
-                          class="step-field__input"
-                        />
-                        <span class="step-field__unit">shots</span>
-                      </label>
+                      {/* byShots reminder is hidden until the gateway shot
+                          total is wired — the model still supports it. */}
                     </div>
                   </Show>
                   <div class="cleaning-editor__row">

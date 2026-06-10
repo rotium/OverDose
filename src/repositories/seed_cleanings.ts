@@ -41,7 +41,7 @@ export const SEED_CLEANINGS: Cleaning[] = [
         { id: 'seed-weekly-thimble', type: 'thimble' },
       ],
     },
-    cadence: { byDays: 7, byShots: 50 },
+    cadence: { byDays: 7 },
   },
   {
     id: 'seed-clean-steam-wand',
