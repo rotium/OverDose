@@ -6,16 +6,10 @@ import {
   createResource,
   type Component,
 } from 'solid-js';
-import type { Cleaning, CleaningKind } from '../../domain';
+import type { Cleaning } from '../../domain';
 import { cleaningDue, operationSummary } from '../../domain';
 import { useRepositories } from '../../RepositoriesContext';
-import { FlushIcon, WaterDropIcon } from '../icons';
-
-const KindIcon: Component<{ kind: CleaningKind }> = (p) => (
-  <Show when={p.kind === 'clean'} fallback={<WaterDropIcon size={18} />}>
-    <FlushIcon size={18} />
-  </Show>
-);
+import { CleaningKindIcon } from '../CleaningKindIcon';
 
 export interface CleaningRunSectionProps {
   /** Launch a cleaning's runtime (the wizard). When omitted, Run is disabled
@@ -34,6 +28,15 @@ export const CleaningRunSection: Component<CleaningRunSectionProps> = (p) => {
   const [cleanings] = createResource(repos.revision, () =>
     repos.cleanings.list(),
   );
+
+  // Acknowledge a due reminder without running it — "I did it by hand / skip
+  // this one". Only offered while a cleaning is actually due (no point when the
+  // next alert is hours away). Stamps the ack clock; the revision bump clears
+  // the row's due state + the Home pill.
+  const dismiss = (c: Cleaning) =>
+    void repos.cleanings
+      .update({ ...c, lastDoneAt: new Date().toISOString() })
+      .catch((e) => console.warn('dismiss reminder failed', e));
 
   return (
     <div class="settings-section-stack">
@@ -68,7 +71,7 @@ export const CleaningRunSection: Component<CleaningRunSectionProps> = (p) => {
                       >
                         <div class="library-list__main">
                           <span class="library-list__name">
-                            <KindIcon kind={c.operation.kind} /> {c.name}
+                            <CleaningKindIcon kind={c.operation.kind} /> {c.name}
                           </span>
                           <span class="library-list__meta recipes-section__meta">
                             <span class="recipes-section__routine">
@@ -83,16 +86,29 @@ export const CleaningRunSection: Component<CleaningRunSectionProps> = (p) => {
                             </span>
                           </span>
                         </div>
-                        <button
-                          type="button"
-                          class="btn"
-                          data-testid={`run-cleaning-${c.id}`}
-                          disabled={!p.onRun}
-                          title={p.onRun ? undefined : 'Coming soon'}
-                          onClick={() => p.onRun?.(c)}
-                        >
-                          Run
-                        </button>
+                        <div class="run-cleaning__actions">
+                          <Show when={due().due}>
+                            <button
+                              type="button"
+                              class="btn"
+                              data-testid={`dismiss-cleaning-${c.id}`}
+                              title="Clear this reminder without running it"
+                              onClick={() => dismiss(c)}
+                            >
+                              Dismiss
+                            </button>
+                          </Show>
+                          <button
+                            type="button"
+                            class="btn"
+                            data-testid={`run-cleaning-${c.id}`}
+                            disabled={!p.onRun}
+                            title={p.onRun ? undefined : 'Coming soon'}
+                            onClick={() => p.onRun?.(c)}
+                          >
+                            Run
+                          </button>
+                        </div>
                       </li>
                     );
                   }}

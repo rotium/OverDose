@@ -8,8 +8,8 @@ import type { Cleaning } from '../../../../domain';
 
 const seedRepo = (items: Cleaning[]): LocalCleaningRepository => {
   const s = new MemoryStorage();
-  s.setItem('starter-skin.cleanings.v2', JSON.stringify(items));
-  s.setItem('starter-skin.cleanings.seeded.v2', '1');
+  s.setItem('starter-skin.cleanings.v3', JSON.stringify(items));
+  s.setItem('starter-skin.cleanings.seeded.v3', '1');
   return new LocalCleaningRepository(s);
 };
 
@@ -150,15 +150,6 @@ describe('CleaningEditor — Descale', () => {
 });
 
 describe('CleaningEditor — shared', () => {
-  it('Reset reminder stamps lastDoneAt', async () => {
-    const repo = seedRepo([weekly()]);
-    renderEditor(repo);
-    fireEvent.click(await waitFor(() => screen.getByTestId('cleaning-reset-reminder')));
-    await waitFor(async () =>
-      expect((await repo.get('c1'))?.lastDoneAt).toBeTruthy(),
-    );
-  });
-
   it('deletes after confirm and calls onClose', async () => {
     const repo = seedRepo([weekly()]);
     const { onClose } = renderEditor(repo);

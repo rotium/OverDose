@@ -254,6 +254,33 @@ html {
   color: #fff;
 }
 
+/* Cleaning-due pill is a tappable button carrying a (mixed-case) cleaning name,
+   so it drops the uppercase treatment and resets button chrome. */
+.alert-pill--cleaning {
+  background: var(--accent);
+  color: #fff;
+  text-transform: none;
+  letter-spacing: 0;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.8125rem;
+}
+
+.alert-pill--cleaning .alert-pill__label {
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-cleaning__actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
 .icon-btn {
   background: var(--bg-elev);
   color: var(--fg);
@@ -2393,6 +2420,19 @@ html {
 .step-field__input::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
+}
+
+/* Native time control — sizes to its own HH:MM + spinner, so it must not
+   inherit the narrow, right-aligned numeric field width (clips the minutes). */
+.cleaning-editor__time-input {
+  width: auto;
+  min-width: 7rem;
+  padding: 0.5rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
 }
 
 .step-field__input::placeholder {

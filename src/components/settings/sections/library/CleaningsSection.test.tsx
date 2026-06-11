@@ -8,8 +8,8 @@ import type { Cleaning } from '../../../../domain';
 
 const seedRepo = (items: Cleaning[]): LocalCleaningRepository => {
   const s = new MemoryStorage();
-  s.setItem('starter-skin.cleanings.v2', JSON.stringify(items));
-  s.setItem('starter-skin.cleanings.seeded.v2', '1');
+  s.setItem('starter-skin.cleanings.v3', JSON.stringify(items));
+  s.setItem('starter-skin.cleanings.seeded.v3', '1');
   return new LocalCleaningRepository(s);
 };
 
@@ -48,8 +48,13 @@ describe('CleaningsSection', () => {
         id: 'c1',
         name: 'Weekly',
         operation: { kind: 'clean', steps: [{ id: 's1', type: 'coffeeSide' }] },
-        cadence: { byDays: 7 },
-        // never done → due
+        // anchored 2 days ago, never done → an occurrence has passed → due
+        reminder: {
+          every: 1,
+          unit: 'day',
+          atTime: '08:00',
+          anchor: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+        },
       },
     ]);
     renderSection(repo);

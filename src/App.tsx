@@ -43,6 +43,7 @@ import { setDebugLogging as setDebugLoggingEnabled, dlog } from './debugLog';
 import { deriveActivity } from './machineActivity';
 import { isWaterBlocked, waterSeverity, type WaterSeverity } from './water';
 import type { Recipe, Cleaning } from './domain';
+import { cleaningDue, dueOccurrence, nextOccurrence } from './domain';
 import {
   isScaleStatusFrame,
   type MachineSnapshot,
@@ -143,6 +144,79 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
       .catch((e) => console.warn('stamp lastDone failed', e));
     setActiveCleaning(null);
   };
+
+  // ── Cleaning reminders (Alerts v1) ──────────────────────────────────────────
+  // "What's due" derived from the cleanings list + a `now` that ticks on
+  // app-open, focus, and a slow interval. The webview can't push in the
+  // background, so dueness is observed whenever the app is alive. Surfaces as
+  // header alert pills (Home) + a once-per-occurrence chime.
+  const [cleanings] = createResource(librarySync.revision, () =>
+    cleaningRepository.list(),
+  );
+  // Reminder "clock". Rather than polling, we advance `nowMs` exactly when the
+  // due-set can next change: a single timer armed to the *soonest* upcoming
+  // occurrence across all cleanings, re-armed on fire, on a cleanings-list
+  // change, and on focus. Between reminders the event loop is fully idle — no
+  // periodic wakeups, which matters for an always-on tablet.
+  const [nowMs, setNowMs] = createSignal(Date.now());
+  const dueCleanings = createMemo<Cleaning[]>(() =>
+    (cleanings() ?? []).filter((c) => cleaningDue(c, { now: nowMs() }).due),
+  );
+  // setTimeout delays cap at ~24.8 days; clamp + re-arm so longer gaps still fire.
+  const MAX_TIMER_MS = 21 * 86_400_000;
+  let reminderTimer: ReturnType<typeof setTimeout> | undefined;
+  const armReminderTimer = (): void => {
+    if (reminderTimer !== undefined) clearTimeout(reminderTimer);
+    const now = Date.now();
+    setNowMs(now);
+    let soonest = Infinity;
+    for (const c of cleanings() ?? []) {
+      if (!c.reminder) continue;
+      const next = nextOccurrence(c.reminder, now);
+      if (next < soonest) soonest = next;
+    }
+    if (soonest === Infinity) return; // no reminders → fully idle, no timer
+    reminderTimer = setTimeout(
+      armReminderTimer,
+      Math.min(MAX_TIMER_MS, Math.max(0, soonest - now)),
+    );
+  };
+  // Re-arm whenever the cleanings list changes (edit / gateway sync pull).
+  createEffect(() => {
+    cleanings();
+    armReminderTimer();
+  });
+  onMount(() => {
+    const onVisible = () => {
+      if (!document.hidden) armReminderTimer();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    onCleanup(() => {
+      document.removeEventListener('visibilitychange', onVisible);
+      if (reminderTimer !== undefined) clearTimeout(reminderTimer);
+    });
+  });
+  const onCleaningPill = (): void => {
+    setMaintenanceOpen(true);
+  };
+
+  // Chime on the rising edge — once per occurrence (a cleaning crossing its due
+  // time, or already past on app-open). Same discipline as the water cue.
+  const chimedOccurrences = new Set<string>();
+  createEffect(() => {
+    const now = nowMs();
+    let fresh = false;
+    for (const c of dueCleanings()) {
+      const occ = dueOccurrence(c, now);
+      if (occ === undefined) continue;
+      const key = `${c.id}@${occ}`;
+      if (!chimedOccurrences.has(key)) {
+        chimedOccurrences.add(key);
+        fresh = true;
+      }
+    }
+    if (fresh && prefs.soundCues()) playCue('cleaningDue');
+  });
   // Coffee-side run plumbing: resolve the cleaning profile (the step's pick, or
   // the default Cleaning/Forward Flush x5 by title), load it, and restore the
   // user's workflow afterward. Workflow GET/PUT shapes differ, so the mapping
@@ -523,6 +597,8 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
                 onUpdateShotSettings={onUpdateShotSettings}
                 onMenu={onMenu}
                 onMaintenance={onMaintenance}
+                dueCleanings={dueCleanings}
+                onCleaningPill={onCleaningPill}
                 onSelectRecipe={onSelectRecipe}
                 onExplore={onExplore}
                 onSeeAllShots={onSeeAllShots}

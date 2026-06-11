@@ -44,27 +44,70 @@ export type CleaningOperation =
   | { kind: 'clean'; steps: CleanStep[] }
   | { kind: 'descale'; withChemical?: boolean };
 
+export type ReminderUnit = 'day' | 'week' | 'month';
+
+/**
+ * A reminder schedule — a fixed **calendar grid** ("every X unit at <slot>,
+ * <time>"), not a relative "N days since last done". `anchor` is the first
+ * occurrence; the grid repeats every `every·unit` from there. See cleaningDue /
+ * computeFirstOccurrence and docs/plans/cleaning-feature.md.
+ */
+export interface Reminder {
+  /** Interval count (≥ 1). */
+  every: number;
+  unit: ReminderUnit;
+  /** Time of day the occurrence fires, "HH:MM" (24h). */
+  atTime: string;
+  /** 0=Sun … 6=Sat — the slot weekday when `unit === 'week'`. */
+  weekday?: number;
+  /** 1–31 — the slot day-of-month when `unit === 'month'` (clamped to month length). */
+  dayOfMonth?: number;
+  /** ISO timestamp of the first occurrence. Recomputed whenever the spec changes. */
+  anchor: string;
+}
+
 export interface Cleaning {
   id: string;
   name: string;
   operation: CleaningOperation;
   /**
-   * Reminder cadence. "Due" when *either* threshold is crossed. Absent (or both
-   * undefined) means no reminders. `byShots` counts espresso shots since the
-   * last completion (the gateway excludes cleaning runs from the shot total).
+   * Reminder schedule (calendar grid). Absent means no reminders. "Due" when an
+   * occurrence has passed since the last acknowledgement (`lastDoneAt`); sticky
+   * until acknowledged. Acknowledge = run the cleaning *or* Reset reminder.
    */
-  cadence?: { byDays?: number; byShots?: number };
+  reminder?: Reminder;
   /** Personal note. */
   notes?: string;
   /** Hidden from the Home quick-buttons when true (mirrors `Recipe.hidden`).
    *  Cleanings show on Home by default; still listed/runnable in Maintenance. */
   hidden?: boolean;
   order?: number;
-  /** ISO timestamp of the last completion (wizard finish or manual reset). */
+  /** ISO timestamp of the last acknowledgement — wizard completion or Reset.
+   *  This is the clock `cleaningDue` compares occurrences against. */
   lastDoneAt?: string;
-  /** Espresso-shot total snapshot at last completion — baseline for `byShots`. */
-  lastDoneShotCount?: number;
 }
+
+// ── Reminder constants ───────────────────────────────────────────────────────
+
+export const REMINDER_UNITS: ReminderUnit[] = ['day', 'week', 'month'];
+
+export const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+const MONTH_LABELS = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+export const reminderUnitLabel = (unit: ReminderUnit, count = 1): string =>
+  `${unit}${count === 1 ? '' : 's'}`;
+
+/** Default spec used when reminders are first switched on (weekly, Monday 09:00). */
+export const DEFAULT_REMINDER: Omit<Reminder, 'anchor'> = {
+  every: 1,
+  unit: 'week',
+  weekday: 1,
+  atTime: '09:00',
+};
 
 // ── Kinds ──────────────────────────────────────────────────────────────────
 
@@ -235,7 +278,7 @@ export const deriveDescalePrep = (op: {
         'Water-only rinse pass through the internals + steam path.',
       ];
 
-// ── Cadence / due ─────────────────────────────────────────────────────────────
+// ── Reminder occurrences / due ───────────────────────────────────────────────
 
 const DAY_MS = 86_400_000;
 
@@ -249,6 +292,115 @@ const formatDuration = (ms: number): string => {
   return `${hours} h`;
 };
 
+const daysInMonth = (year: number, month: number): number =>
+  new Date(year, month + 1, 0).getDate();
+
+const parseHM = (t: string): [number, number] => {
+  const [h, m] = t.split(':');
+  return [Number(h) || 0, Number(m) || 0];
+};
+
+/** The k-th occurrence timestamp (k may be 0). Day/week step by a fixed span;
+ *  month steps by calendar months, preserving the slot day (clamped). */
+export const nthOccurrence = (r: Reminder, k: number): number => {
+  const a = Date.parse(r.anchor);
+  if (r.unit === 'day') return a + k * r.every * DAY_MS;
+  if (r.unit === 'week') return a + k * r.every * 7 * DAY_MS;
+  const d = new Date(a);
+  const t = new Date(d.getFullYear(), d.getMonth() + k * r.every, 1, d.getHours(), d.getMinutes(), 0, 0);
+  t.setDate(Math.min(d.getDate(), daysInMonth(t.getFullYear(), t.getMonth())));
+  return t.getTime();
+};
+
+/** Index of the latest occurrence ≤ now, or -1 if now is before the first. */
+const indexAtOrBefore = (r: Reminder, now: number): number => {
+  const a = Date.parse(r.anchor);
+  if (now < a) return -1;
+  if (r.unit === 'month') {
+    const an = new Date(a);
+    const nw = new Date(now);
+    let k = Math.floor(
+      (nw.getFullYear() * 12 + nw.getMonth() - (an.getFullYear() * 12 + an.getMonth())) /
+        r.every,
+    );
+    if (k < 0) k = 0;
+    while (k > 0 && nthOccurrence(r, k) > now) k--;
+    while (nthOccurrence(r, k + 1) <= now) k++;
+    return k;
+  }
+  const step = (r.unit === 'day' ? r.every : r.every * 7) * DAY_MS;
+  return Math.floor((now - a) / step);
+};
+
+/** The next occurrence strictly after `now`. */
+export const nextOccurrence = (r: Reminder, now: number): number => {
+  const k = indexAtOrBefore(r, now);
+  return k < 0 ? nthOccurrence(r, 0) : nthOccurrence(r, k + 1);
+};
+
+/**
+ * The occurrence currently making a cleaning due — the latest passed slot that's
+ * newer than the last acknowledgement — or undefined when not due. The chime
+ * de-dupes on this value (one ping per occurrence).
+ */
+export const dueOccurrence = (c: Cleaning, now: number): number | undefined => {
+  const r = c.reminder;
+  if (!r) return undefined;
+  const k = indexAtOrBefore(r, now);
+  if (k < 0) return undefined;
+  const prev = nthOccurrence(r, k);
+  const lastAck = c.lastDoneAt ? Date.parse(c.lastDoneAt) : -Infinity;
+  return prev > lastAck ? prev : undefined;
+};
+
+/**
+ * First occurrence at or after `from` for a spec (no anchor yet), as ISO. Called
+ * on save/edit to (re)anchor the grid.
+ */
+export const computeFirstOccurrence = (
+  spec: Omit<Reminder, 'anchor'>,
+  from: number,
+): string => {
+  const [hh, mm] = parseHM(spec.atTime);
+  const b = new Date(from);
+  if (spec.unit === 'day') {
+    const c = new Date(b.getFullYear(), b.getMonth(), b.getDate(), hh, mm, 0, 0);
+    if (c.getTime() < from) c.setDate(c.getDate() + 1);
+    return c.toISOString();
+  }
+  if (spec.unit === 'week') {
+    const wd = spec.weekday ?? 0;
+    const c = new Date(b.getFullYear(), b.getMonth(), b.getDate(), hh, mm, 0, 0);
+    let delta = (wd - c.getDay() + 7) % 7;
+    if (delta === 0 && c.getTime() < from) delta = 7;
+    c.setDate(c.getDate() + delta);
+    return c.toISOString();
+  }
+  const dom = spec.dayOfMonth ?? 1;
+  const make = (y: number, m: number): Date =>
+    new Date(y, m, Math.min(dom, daysInMonth(y, m)), hh, mm, 0, 0);
+  let y = b.getFullYear();
+  let m = b.getMonth();
+  let c = make(y, m);
+  if (c.getTime() < from) {
+    m += 1;
+    if (m > 11) {
+      m = 0;
+      y += 1;
+    }
+    c = make(y, m);
+  }
+  return c.toISOString();
+};
+
+/** Absolute "Fri Jun 13, 15:00"-style label — used by the editor's Next preview. */
+export const formatOccurrence = (ms: number): string => {
+  const d = new Date(ms);
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${WEEKDAY_LABELS[d.getDay()]} ${MONTH_LABELS[d.getMonth()]} ${d.getDate()}, ${hh}:${mm}`;
+};
+
 export interface CleaningDue {
   due: boolean;
   /** Short forward-looking label, e.g. "Next in 3 days" / "Due now" / "Overdue 2 days". */
@@ -256,54 +408,19 @@ export interface CleaningDue {
 }
 
 /**
- * Compute reminder state. Time (`byDays`) is evaluated live from `lastDoneAt`.
- * `byShots` contributes only when a live `totalShots` is supplied; without it a
- * shots threshold is reported statically ("every N shots") and doesn't affect
- * `due`.
+ * Compute reminder state from the calendar grid. Due when an occurrence has
+ * passed since `lastDoneAt`; otherwise a forward-looking "Next in …" label.
  */
-export const cleaningDue = (
-  c: Cleaning,
-  opts: { now: number; totalShots?: number },
-): CleaningDue => {
-  const byDays = c.cadence?.byDays;
-  const byShots = c.cadence?.byShots;
-  if (!byDays && !byShots) return { due: false, label: 'No reminder' };
-
-  let timeDue = false;
-  let timeLabel: string | undefined;
-  if (byDays) {
-    if (!c.lastDoneAt) {
-      timeDue = true;
-    } else {
-      const elapsed = opts.now - Date.parse(c.lastDoneAt);
-      const remaining = byDays * DAY_MS - elapsed;
-      if (remaining <= 0) {
-        timeDue = true;
-        timeLabel = `Overdue ${formatDuration(-remaining)}`;
-      } else {
-        timeLabel = `Next in ${formatDuration(remaining)}`;
-      }
-    }
+export const cleaningDue = (c: Cleaning, opts: { now: number }): CleaningDue => {
+  const r = c.reminder;
+  if (!r) return { due: false, label: 'No reminder' };
+  const occ = dueOccurrence(c, opts.now);
+  if (occ !== undefined) {
+    const overdue = opts.now - occ;
+    return {
+      due: true,
+      label: overdue >= DAY_MS ? `Overdue ${formatDuration(overdue)}` : 'Due now',
+    };
   }
-
-  let shotsDue = false;
-  let shotsLabel: string | undefined;
-  if (byShots) {
-    if (opts.totalShots === undefined || c.lastDoneShotCount === undefined) {
-      shotsLabel = `every ${byShots} shots`;
-    } else {
-      const since = Math.max(0, opts.totalShots - c.lastDoneShotCount);
-      const remaining = byShots - since;
-      if (remaining <= 0) {
-        shotsDue = true;
-        shotsLabel = `${-remaining} shots over`;
-      } else {
-        shotsLabel = `in ${remaining} shots`;
-      }
-    }
-  }
-
-  if (timeDue || shotsDue) return { due: true, label: 'Due now' };
-  const label = [timeLabel, shotsLabel].filter(Boolean).join(' · ');
-  return { due: false, label: label || 'No reminder' };
+  return { due: false, label: `Next in ${formatDuration(nextOccurrence(r, opts.now) - opts.now)}` };
 };

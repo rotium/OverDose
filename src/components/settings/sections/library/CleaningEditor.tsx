@@ -12,18 +12,27 @@ import type {
   CleanStep,
   CleanStepType,
   CleaningOperation,
+  Reminder,
+  ReminderUnit,
 } from '../../../../domain';
 import {
   CLEAN_STEP_TYPES,
   DEFAULT_FLUSH_SECONDS,
+  DEFAULT_REMINDER,
   DEFAULT_STEAM_SECONDS,
   DEFAULT_THIMBLE_MIN,
   DEFAULT_TIP_SOAK_MIN,
   DESCALE_CHEMICAL_LABEL,
+  REMINDER_UNITS,
+  WEEKDAY_LABELS,
   cleanStepLabel,
   cleaningKindLabel,
+  computeFirstOccurrence,
   deriveDescalePrep,
+  formatOccurrence,
   newCleanStep,
+  nextOccurrence,
+  reminderUnitLabel,
   stepChemicalLabel,
   stepUsesChemical,
 } from '../../../../domain';
@@ -172,12 +181,19 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
   const handleRemindersToggle = (checked: boolean) => {
     const c = cleaning();
     if (!c) return;
-    void save({ ...c, cadence: checked ? { byDays: 7 } : undefined });
+    const reminder = checked
+      ? { ...DEFAULT_REMINDER, anchor: computeFirstOccurrence(DEFAULT_REMINDER, Date.now()) }
+      : undefined;
+    void save({ ...c, reminder });
   };
-  const handleByDaysCommit = (n: number | undefined) => {
+  /** Merge a spec change and re-anchor the grid from now. */
+  const updateReminder = (patch: Partial<Omit<Reminder, 'anchor'>>) => {
     const c = cleaning();
-    if (!c) return;
-    void save({ ...c, cadence: { ...c.cadence, byDays: n } });
+    if (!c?.reminder) return;
+    const spec: Omit<Reminder, 'anchor'> = { ...c.reminder, ...patch };
+    if (spec.unit === 'week' && spec.weekday === undefined) spec.weekday = 1;
+    if (spec.unit === 'month' && spec.dayOfMonth === undefined) spec.dayOfMonth = 1;
+    void save({ ...c, reminder: { ...spec, anchor: computeFirstOccurrence(spec, Date.now()) } });
   };
   const handleNotesChange = (raw: string) => {
     const c = cleaning();
@@ -185,11 +201,6 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
     const next = raw.trim() || undefined;
     if (c.notes === next) return;
     void save({ ...c, notes: next });
-  };
-  const handleReset = () => {
-    const c = cleaning();
-    if (!c) return;
-    void save({ ...c, lastDoneAt: new Date().toISOString() });
   };
   const handleHiddenToggle = (checked: boolean) => {
     const c = cleaning();
@@ -497,31 +508,96 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                     <input
                       type="checkbox"
                       data-testid="cleaning-remind-me"
-                      checked={c().cadence !== undefined}
+                      checked={c().reminder !== undefined}
                       onChange={(e) => handleRemindersToggle(e.currentTarget.checked)}
                     />
                     <span>Remind me</span>
                   </label>
-                  <Show when={c().cadence !== undefined}>
-                    <div class="recipe-editor__field-row">
-                      <label class="recipe-editor__field">
-                        <span class="recipe-editor__field-label">Every</span>
-                        <DebouncedNumberField
-                          value={c().cadence?.byDays}
-                          onCommit={handleByDaysCommit}
-                          placeholder="days"
-                          min={0}
-                          step={1}
-                          ariaLabel="Remind every N days"
-                          testId="cleaning-by-days"
-                          debounceMs={p.debounceMs}
-                          class="step-field__input"
-                        />
-                        <span class="step-field__unit">days</span>
-                      </label>
-                      {/* byShots reminder is hidden until the gateway shot
-                          total is wired — the model still supports it. */}
-                    </div>
+                  <Show when={c().reminder}>
+                    {(r) => (
+                      <>
+                        <div class="recipe-editor__field-row cleaning-editor__reminder">
+                          <label class="recipe-editor__field">
+                            <span class="recipe-editor__field-label">Every</span>
+                            <DebouncedNumberField
+                              value={r().every}
+                              onCommit={(n) => updateReminder({ every: Math.max(1, n ?? 1) })}
+                              min={1}
+                              step={1}
+                              placeholder="1"
+                              ariaLabel="Remind every"
+                              testId="cleaning-every"
+                              debounceMs={p.debounceMs}
+                              class="step-field__input"
+                            />
+                          </label>
+                          <select
+                            aria-label="Reminder unit"
+                            data-testid="cleaning-unit"
+                            class="recipe-editor__routine-select"
+                            value={r().unit}
+                            onChange={(e) =>
+                              updateReminder({ unit: e.currentTarget.value as ReminderUnit })
+                            }
+                          >
+                            <For each={REMINDER_UNITS}>
+                              {(u) => (
+                                <option value={u}>{reminderUnitLabel(u, r().every)}</option>
+                              )}
+                            </For>
+                          </select>
+                          <Show when={r().unit === 'week'}>
+                            <select
+                              aria-label="Reminder weekday"
+                              data-testid="cleaning-weekday"
+                              class="recipe-editor__routine-select"
+                              value={String(r().weekday ?? 1)}
+                              onChange={(e) =>
+                                updateReminder({ weekday: Number(e.currentTarget.value) })
+                              }
+                            >
+                              <For each={WEEKDAY_LABELS}>
+                                {(label, i) => <option value={String(i())}>{label}</option>}
+                              </For>
+                            </select>
+                          </Show>
+                          <Show when={r().unit === 'month'}>
+                            <label class="recipe-editor__field">
+                              <span class="recipe-editor__field-label">on day</span>
+                              <DebouncedNumberField
+                                value={r().dayOfMonth ?? 1}
+                                onCommit={(n) =>
+                                  updateReminder({
+                                    dayOfMonth: Math.min(31, Math.max(1, n ?? 1)),
+                                  })
+                                }
+                                min={1}
+                                step={1}
+                                placeholder="1"
+                                ariaLabel="Day of month"
+                                testId="cleaning-day-of-month"
+                                debounceMs={p.debounceMs}
+                                class="step-field__input"
+                              />
+                            </label>
+                          </Show>
+                          <label class="recipe-editor__field">
+                            <span class="recipe-editor__field-label">at</span>
+                            <input
+                              type="time"
+                              class="cleaning-editor__time-input"
+                              data-testid="cleaning-at-time"
+                              aria-label="Reminder time"
+                              value={r().atTime}
+                              onChange={(e) => updateReminder({ atTime: e.currentTarget.value })}
+                            />
+                          </label>
+                        </div>
+                        <p class="settings-help" data-testid="cleaning-next-preview">
+                          Next: {formatOccurrence(nextOccurrence(r(), Date.now()))}
+                        </p>
+                      </>
+                    )}
                   </Show>
                   <div class="cleaning-editor__row">
                     <span class="cleaning-editor__row-label">Last done</span>
@@ -531,14 +607,6 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                     >
                       {formatLastDone(c().lastDoneAt)}
                     </span>
-                    <button
-                      type="button"
-                      class="btn"
-                      data-testid="cleaning-reset-reminder"
-                      onClick={handleReset}
-                    >
-                      Reset reminder
-                    </button>
                   </div>
                 </div>
               </section>

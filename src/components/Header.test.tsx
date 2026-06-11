@@ -4,6 +4,7 @@ import { createSignal } from 'solid-js';
 import { Header } from './Header';
 import type { WsStatus } from '../streams';
 import type { WaterSeverity } from '../water';
+import type { Cleaning } from '../domain';
 
 const setup = (
   initial: {
@@ -14,8 +15,13 @@ const setup = (
     isWarming?: boolean;
     isHeaterOff?: boolean;
     showScale?: boolean;
+    dueCleanings?: Cleaning[];
   } = {},
-  handlers: Partial<{ onMenu: () => void; onToggleSleep: () => void }> = {},
+  handlers: Partial<{
+    onMenu: () => void;
+    onToggleSleep: () => void;
+    onCleaningPill: (c: Cleaning) => void;
+  }> = {},
 ) => {
   const [machine, setMachine] = createSignal<WsStatus>(initial.machine ?? 'connecting');
   const [scale, setScale] = createSignal<WsStatus>(initial.scale ?? 'connecting');
@@ -28,8 +34,10 @@ const setup = (
     initial.isHeaterOff ?? false,
   );
   const [showScale] = createSignal<boolean>(initial.showScale ?? true);
+  const [due, setDue] = createSignal<Cleaning[]>(initial.dueCleanings ?? []);
   const onMenu = handlers.onMenu ?? vi.fn();
   const onToggleSleep = handlers.onToggleSleep ?? vi.fn();
+  const onCleaningPill = handlers.onCleaningPill ?? vi.fn();
   render(() => (
     <Header
       machineStatus={machine}
@@ -40,6 +48,8 @@ const setup = (
       isWarming={warming}
       isHeaterOff={heaterOff}
       onMenu={onMenu}
+      dueCleanings={due}
+      onCleaningPill={onCleaningPill}
       onToggleSleep={onToggleSleep}
     />
   ));
@@ -50,10 +60,18 @@ const setup = (
     setSleeping,
     setWarming,
     setHeaterOff,
+    setDue,
     onMenu,
     onToggleSleep,
+    onCleaningPill,
   };
 };
+
+const cleaning = (id: string, name: string): Cleaning => ({
+  id,
+  name,
+  operation: { kind: 'clean', steps: [] },
+});
 
 describe('Header', () => {
   it('renders the title', () => {
@@ -222,6 +240,45 @@ describe('Header', () => {
       setHeaterOff(false);
       expect(
         screen.queryByTestId('header-heater-off-pill'),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  describe('cleaning-due pills', () => {
+    it('renders no pills when nothing is due', () => {
+      setup();
+      expect(
+        screen.queryByTestId('header-cleaning-pill-c1'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('renders a pill per due cleaning, carrying its name', () => {
+      setup({ dueCleanings: [cleaning('c1', 'Weekly Clean')] });
+      const pill = screen.getByTestId('header-cleaning-pill-c1');
+      expect(pill).toHaveAttribute('data-severity', 'cleaning');
+      expect(pill).toHaveTextContent('Weekly Clean');
+    });
+
+    it('invokes onCleaningPill with the cleaning when tapped', () => {
+      const { onCleaningPill } = setup({
+        dueCleanings: [cleaning('c1', 'Weekly Clean')],
+      });
+      fireEvent.click(screen.getByTestId('header-cleaning-pill-c1'));
+      expect(onCleaningPill).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'c1' }),
+      );
+    });
+
+    it('appears and disappears reactively as the due list changes', () => {
+      const { setDue } = setup();
+      expect(
+        screen.queryByTestId('header-cleaning-pill-c1'),
+      ).not.toBeInTheDocument();
+      setDue([cleaning('c1', 'Weekly Clean')]);
+      expect(screen.getByTestId('header-cleaning-pill-c1')).toBeInTheDocument();
+      setDue([]);
+      expect(
+        screen.queryByTestId('header-cleaning-pill-c1'),
       ).not.toBeInTheDocument();
     });
   });

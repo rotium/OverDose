@@ -14,7 +14,8 @@ export type Cue =
   | 'wake'
   | 'ready'
   | 'waterLow'
-  | 'waterCritical';
+  | 'waterCritical'
+  | 'cleaningDue';
 
 const SOURCES: Record<Cue, string> = {
   sleep: '/sounds/sleep.mp3',
@@ -22,6 +23,7 @@ const SOURCES: Record<Cue, string> = {
   ready: '/sounds/ready.mp3',
   waterLow: '/sounds/water-low.mp3',
   waterCritical: '/sounds/water-critical.mp3',
+  cleaningDue: '/sounds/cleaning-due.mp3',
 };
 
 // Reused, preloaded Audio elements (built lazily so module load is cheap and

@@ -1,6 +1,8 @@
-import { Show, type Accessor, type Component } from 'solid-js';
+import { For, Show, type Accessor, type Component } from 'solid-js';
+import type { Cleaning } from '../domain';
 import type { WsStatus } from '../streams';
 import type { WaterSeverity } from '../water';
+import { CleaningKindIcon } from './CleaningKindIcon';
 import { Logo } from './Logo';
 import {
   MoonIcon,
@@ -43,6 +45,11 @@ export interface HeaderProps {
   onMenu: () => void;
   /** Opens the Maintenance overlay. Optional — button only renders when set. */
   onMaintenance?: () => void;
+  /** Cleanings currently due — each rendered as a tappable alert pill in the
+   *  status row (the informative half of the nudge; the wrench is the action). */
+  dueCleanings?: Accessor<Cleaning[]>;
+  /** Tap a due-cleaning pill — opens Maintenance to run/Reset it. */
+  onCleaningPill?: (c: Cleaning) => void;
   /** Toggle handler — parent decides whether to sleep or wake based on isSleeping. */
   onToggleSleep: () => void;
 }
@@ -106,6 +113,20 @@ export const Header: Component<HeaderProps> = (p) => (
           warming up
         </span>
       </Show>
+      <For each={p.dueCleanings?.() ?? []}>
+        {(c) => (
+          <button
+            type="button"
+            class="alert-pill alert-pill--cleaning"
+            data-severity="cleaning"
+            data-testid={`header-cleaning-pill-${c.id}`}
+            onClick={() => p.onCleaningPill?.(c)}
+          >
+            <CleaningKindIcon kind={c.operation.kind} size={14} />
+            <span class="alert-pill__label">{c.name}</span>
+          </button>
+        )}
+      </For>
     </div>
     <div class="app-header__actions">
       <Show when={p.onMaintenance}>

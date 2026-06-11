@@ -8,8 +8,8 @@ import type { Cleaning } from '../../domain';
 
 const seedRepo = (items: Cleaning[]): LocalCleaningRepository => {
   const s = new MemoryStorage();
-  s.setItem('starter-skin.cleanings.v2', JSON.stringify(items));
-  s.setItem('starter-skin.cleanings.seeded.v2', '1');
+  s.setItem('starter-skin.cleanings.v3', JSON.stringify(items));
+  s.setItem('starter-skin.cleanings.seeded.v3', '1');
   return new LocalCleaningRepository(s);
 };
 
@@ -61,5 +61,44 @@ describe('CleaningRunSection', () => {
     fireEvent.click(await waitFor(() => screen.getByTestId('run-cleaning-c1')));
     expect(onRun).toHaveBeenCalledTimes(1);
     expect(onRun.mock.calls[0][0]).toMatchObject({ id: 'c1' });
+  });
+
+  it('offers Dismiss only while due, and acknowledges without running', async () => {
+    const repo = seedRepo([
+      {
+        id: 'c1',
+        name: 'Daily',
+        operation: { kind: 'clean', steps: [{ id: 's1', type: 'flush' }] },
+        // anchored 2 days ago, never done → an occurrence has passed → due
+        reminder: {
+          every: 1,
+          unit: 'day',
+          atTime: '08:00',
+          anchor: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+        },
+      },
+    ]);
+    render(() => (
+      <WithRepositories cleanings={repo}>
+        <CleaningRunSection onRun={vi.fn()} />
+      </WithRepositories>
+    ));
+    fireEvent.click(await waitFor(() => screen.getByTestId('dismiss-cleaning-c1')));
+    await waitFor(async () =>
+      expect((await repo.get('c1'))?.lastDoneAt).toBeTruthy(),
+    );
+  });
+
+  it('hides Dismiss when the cleaning is not due', async () => {
+    const repo = seedRepo([
+      { id: 'c1', name: 'Daily', operation: { kind: 'clean', steps: [{ id: 's1', type: 'flush' }] } },
+    ]);
+    render(() => (
+      <WithRepositories cleanings={repo}>
+        <CleaningRunSection onRun={vi.fn()} />
+      </WithRepositories>
+    ));
+    await waitFor(() => screen.getByTestId('run-cleaning-c1'));
+    expect(screen.queryByTestId('dismiss-cleaning-c1')).not.toBeInTheDocument();
   });
 });

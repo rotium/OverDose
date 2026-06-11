@@ -104,9 +104,10 @@ export function createLibrarySync(opts: LibrarySyncOptions = {}): LibrarySync {
       write: (a) => pitchers.replaceAll(a as never[]),
     },
     {
-      // v2: cleaning model changed incompatibly — a distinct gateway key
-      // avoids pulling stale v1 cleanings back over the new seeds.
-      key: 'cleanings.v2',
+      // v3: the reminder model changed incompatibly (cadence → calendar grid)
+      // — a distinct gateway key avoids pulling stale-shaped cleanings back
+      // over the new seeds. (v2 was the flat-kind → Clean-steps redesign.)
+      key: 'cleanings.v3',
       read: () => cleanings.list() as Promise<unknown[]>,
       write: (a) => cleanings.replaceAll(a as never[]),
     },

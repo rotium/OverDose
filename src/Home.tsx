@@ -9,7 +9,7 @@ import {
   type ExploreBlockReason,
   type ExploreOp,
 } from './components/ExploreTray';
-import type { Recipe } from './domain';
+import type { Cleaning, Recipe } from './domain';
 import type { RecipeRepository } from './repositories';
 import {
   isHeaterOff,
@@ -54,6 +54,10 @@ export interface HomeProps {
   onUpdateShotSettings: (settings: ShotSettingsSnapshot) => void;
   onMenu: () => void;
   onMaintenance?: () => void;
+  /** Cleanings currently due — surfaced as header alert pills. */
+  dueCleanings?: Accessor<Cleaning[]>;
+  /** Tap a due-cleaning pill (opens Maintenance). */
+  onCleaningPill?: (c: Cleaning) => void;
   onSelectRecipe: (r: Recipe) => void;
   /** Run a machine op directly from the Explore tray. `brew` opens the
    *  ad-hoc prep flow; steam/water/flush start immediately. */
@@ -177,6 +181,8 @@ export const Home: Component<HomeProps> = (p) => {
         isHeaterOff={heaterOff}
         onMenu={p.onMenu}
         onMaintenance={p.onMaintenance}
+        dueCleanings={p.dueCleanings}
+        onCleaningPill={p.onCleaningPill}
         onToggleSleep={handleToggleSleep}
       />
       <main class="home__main">

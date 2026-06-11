@@ -18,7 +18,8 @@ import {
   operationSummary,
 } from '../../../../domain';
 import { useRepositories } from '../../../../RepositoriesContext';
-import { EyeIcon, EyeOffIcon, FlushIcon, WaterDropIcon } from '../../../icons';
+import { EyeIcon, EyeOffIcon } from '../../../icons';
+import { CleaningKindIcon } from '../../../CleaningKindIcon';
 import { CleaningEditor } from './CleaningEditor';
 
 const SHEET_ANIM_MS = 280;
@@ -33,12 +34,6 @@ const defaultOperation = (kind: CleaningKind): CleaningOperation => {
       return { kind: 'descale', withChemical: true };
   }
 };
-
-const KindIcon: Component<{ kind: CleaningKind }> = (p) => (
-  <Show when={p.kind === 'clean'} fallback={<WaterDropIcon size={18} />}>
-    <FlushIcon size={18} />
-  </Show>
-);
 
 /**
  * Cleanings list + side-sheet editor. Mirrors RecipesSection: clickable rows
@@ -236,7 +231,7 @@ export const CleaningsSection: Component = () => {
                             onClick={() => openEditor(c.id)}
                           >
                             <span class="library-list__name">
-                              <KindIcon kind={c.operation.kind} /> {c.name}
+                              <CleaningKindIcon kind={c.operation.kind} /> {c.name}
                             </span>
                             <span class="library-list__meta recipes-section__meta">
                               <span class="recipes-section__routine">

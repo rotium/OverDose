@@ -2,10 +2,11 @@ import type { Cleaning } from '../domain';
 import type { CleaningRepository } from './cleaning_repository';
 import { SEED_CLEANINGS } from './seed_cleanings';
 
-// v2: the cleaning model changed incompatibly (flat-kind → Clean steps +
-// Descale). Bumping the key drops the old, unreadable v1 data and re-seeds.
-const STORAGE_KEY = 'starter-skin.cleanings.v2';
-const SEEDED_FLAG = 'starter-skin.cleanings.seeded.v2';
+// v3: the reminder model changed incompatibly (relative `cadence.byDays` →
+// `reminder` calendar grid). Bumping the key drops the old data and re-seeds
+// with model-B reminders. (v2 was the flat-kind → Clean-steps redesign.)
+const STORAGE_KEY = 'starter-skin.cleanings.v3';
+const SEEDED_FLAG = 'starter-skin.cleanings.seeded.v3';
 
 /** Drop entries that don't match the current model (e.g. stale v1 data that
  *  flowed in via a gateway pull) so the UI never renders a malformed cleaning. */

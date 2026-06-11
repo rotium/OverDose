@@ -61,19 +61,41 @@ export type CleaningOperation =
   | { kind: 'clean'; steps: CleanStep[] }      // user-composed, reorderable
   | { kind: 'descale'; withChemical?: boolean };// fixed, app-owned
 
+export interface Reminder {                         // calendar grid: "every X unit at slot/time"
+  every: number;                                    // X ≥ 1
+  unit: 'day' | 'week' | 'month';
+  atTime: string;                                   // "HH:MM"
+  weekday?: number;                                 // 0–6, when unit==='week'
+  dayOfMonth?: number;                              // 1–31, when unit==='month'
+  anchor: string;                                   // ISO of the first occurrence; grid repeats every X·unit
+}
+
 export interface Cleaning {
   id: string;
   name: string;
   operation: CleaningOperation;
-  cadence?: { byDays?: number; byShots?: number };  // "due" if EITHER threshold crosses
+  reminder?: Reminder;                              // absent = no reminders
   notes?: string;
   hidden?: boolean;                                 // shown on Home by default; hide to drop off
   order?: number;
-  lastDoneAt?: string;                              // ISO; denormalized for fast due-calc
-  lastDoneShotCount?: number;                       // espresso-shot total snapshot at completion
+  lastDoneAt?: string;                              // ISO; the acknowledgement clock (run OR Reset)
 }
 // `icon` and per-step prep text are DERIVED, never stored.
 ```
+
+**Reminder model (model B, locked 2026-06-12).** A reminder is a fixed **calendar
+grid**, not a relative "every N days since last done". `anchor` = the first
+occurrence (next matching slot at save time), recomputed by `computeFirstOccurrence`
+whenever the spec changes; occurrences repeat every `every·unit`. **Due** = an
+occurrence has passed since `lastDoneAt` (`dueOccurrence`); it's *sticky* until
+acknowledged. **Acknowledge** = run the cleaning *or* Reset reminder — both set
+`lastDoneAt = now`. Cleaning *off-schedule* doesn't pre-clear a future occurrence
+(the next slot is still in the future, so it fires) — that falls out of the one
+timestamp. A brand-new reminder fires at its first occurrence, not "due now".
+Single weekday / day-of-month per cleaning in v1. byShots is dropped (parked as a
+separate usage axis, needs the gateway shot-total). Observe-only — the slot time is
+a threshold checked when the app is alive (open / focus / ~60 s tick), not an OS
+alarm; no native push in the webview.
 
 **Chemical is per-step / per-mode, and three chemicals never cross paths:**
 
@@ -210,7 +232,24 @@ citric 5%; v1.0/v1.1 ≤ 5% warning; two taste-gated rinse loops asking after ea
 pass; re-enable steam heater at the end) are captured in design notes.
 
 **Home quick-buttons** — pinned cleanings on home; placement (dedicated
-"Maintenance" row vs extending the Explore tray) not yet decided.
+"Maintenance" row vs extending the Explore tray) not yet decided. **Deferred** past
+the v1 Alerts cut below.
 
-**Alerts** — in-app only (webview, no native push); **nudge-only, never block**.
-`due = (now − lastDoneAt ≥ byDays) OR (currentTotalShots − lastDoneShotCount ≥ byShots)`.
+**Alerts (v1 — building 2026-06-12)** — in-app only (webview, no native push);
+**nudge-only, never block**. Three layers, mirroring the water-warning pattern:
+- **Engine** — a reactive `dueCleanings()` at the App level (`createMemo` over the
+  cleanings list + a `now` signal ticked on app-open, `visibilitychange` focus, and
+  a ~60 s interval). `due` per `cleaningDue`/`dueOccurrence`.
+- **Header pill(s)** — one `alert-pill` per due cleaning in `app-header__pills`
+  (the water/heater/warming row): **kind icon + cleaning name** (truncated),
+  tappable → opens Maintenance, `data-severity="cleaning"`. No separate wrench dot —
+  the pill *is* the badge (informative, in the same eyeline). The "how many" lives
+  here in words, never as a bare number.
+- **Sound** — a dedicated `cleaningDue` cue (`public/sounds/cleaning-due.mp3`),
+  played on the **rising edge** (a cleaning crosses its occurrence, or is already
+  past on app-open), **once per occurrence** (a `${id}@${occurrenceMs}` chimed-set),
+  gated on `prefs.soundCues()` — same discipline as the water cue.
+
+Acknowledging is via run / Reset (no separate "dismiss the banner"); the pill +
+sound follow `dueCleanings()`. **Deferred:** Home quick-buttons, byShots, deep-link
+straight into the wizard, a non-placeholder sound asset.

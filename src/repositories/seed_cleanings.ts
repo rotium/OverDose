@@ -1,4 +1,10 @@
-import type { Cleaning } from '../domain';
+import { computeFirstOccurrence, type Cleaning, type Reminder } from '../domain';
+
+/** Build a seed reminder, anchoring its grid from first-seed time. */
+const remind = (spec: Omit<Reminder, 'anchor'>): Reminder => ({
+  ...spec,
+  anchor: computeFirstOccurrence(spec, Date.now()),
+});
 
 /**
  * Seed Cleanings shipped on first run so the Library isn't empty. These carry
@@ -24,7 +30,7 @@ export const SEED_CLEANINGS: Cleaning[] = [
         { id: 'seed-daily-flush2', type: 'flush', seconds: 5 },
       ],
     },
-    cadence: { byDays: 1 },
+    reminder: remind({ every: 1, unit: 'day', atTime: '08:00' }),
   },
   {
     id: 'seed-clean-weekly',
@@ -41,7 +47,8 @@ export const SEED_CLEANINGS: Cleaning[] = [
         { id: 'seed-weekly-thimble', type: 'thimble' },
       ],
     },
-    cadence: { byDays: 7 },
+    // Friday afternoons by default — a common deep-clean slot.
+    reminder: remind({ every: 1, unit: 'week', weekday: 5, atTime: '15:00' }),
   },
   {
     id: 'seed-clean-steam-wand',
