@@ -83,9 +83,11 @@ what must never go in the tank), what to do, and a live countdown for
 each machine run. Long soaks start a background timer and chime when
 they're ready.
 
-| Group head | Flush | Steam wand |
-|:---:|:---:|:---:|
-| <img src="docs/screenshots/cleaning-daily-rinse-grouphead.png" alt="Cleaning wizard — group-head forward-flush step" width="240"> | <img src="docs/screenshots/cleaning-daily-rinse-flash.png" alt="Cleaning wizard — flush step" width="240"> | <img src="docs/screenshots/cleaning-weekly-clean-steam-wand.png" alt="Cleaning wizard — steam-wand step" width="240"> |
+<p>
+  <img src="docs/screenshots/cleaning-daily-rinse-grouphead.png" alt="Cleaning wizard — group-head forward-flush step" width="240">
+  <img src="docs/screenshots/cleaning-daily-rinse-flash.png" alt="Cleaning wizard — flush step" width="240">
+  <img src="docs/screenshots/cleaning-weekly-clean-steam-wand.png" alt="Cleaning wizard — steam-wand step" width="240">
+</p>
 
 Give a routine a schedule — every Friday afternoon, daily, the first of
 the month — and OverDose reminds you when it's due: a pill in the header
