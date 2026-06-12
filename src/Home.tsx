@@ -1,4 +1,10 @@
-import { createEffect, createSignal, type Accessor, type Component } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  type Accessor,
+  type Component,
+} from 'solid-js';
 import { api, type GatewayShotRecord } from './api';
 import { Header } from './components/Header';
 import { LastShotCard } from './components/LastShotCard';
@@ -58,6 +64,10 @@ export interface HomeProps {
   dueCleanings?: Accessor<Cleaning[]>;
   /** Tap a due-cleaning pill (opens Maintenance). */
   onCleaningPill?: (c: Cleaning) => void;
+  /** Home-visible (non-hidden) cleanings — quick-launch tiles in the Explore row. */
+  exploreCleanings?: Accessor<Cleaning[]>;
+  /** Launch a cleaning's wizard from its quick-launch tile. */
+  onRunCleaning?: (c: Cleaning) => void;
   onSelectRecipe: (r: Recipe) => void;
   /** Run a machine op directly from the Explore tray. `brew` opens the
    *  ad-hoc prep flow; steam/water/flush start immediately. */
@@ -84,6 +94,12 @@ export const Home: Component<HomeProps> = (p) => {
   };
 
   const prefs = useUserPrefs();
+
+  // Ids of due cleanings, for the Explore-row tile highlight (derived from the
+  // same due list the header pill uses).
+  const dueCleaningIds = createMemo(
+    () => new Set((p.dueCleanings?.() ?? []).map((c) => c.id)),
+  );
 
   // Single source of truth for the water-alert UI. Before any frame arrives
   // we say 'normal' — a missing snapshot shouldn't pretend the tank is empty.
@@ -197,6 +213,9 @@ export const Home: Component<HomeProps> = (p) => {
           <ExploreTray
             onSelect={p.onExplore}
             blockReason={exploreBlockReason}
+            cleanings={p.exploreCleanings}
+            dueCleaningIds={dueCleaningIds}
+            onRunCleaning={p.onRunCleaning}
           />
         </div>
         <aside class="home__sidebar">

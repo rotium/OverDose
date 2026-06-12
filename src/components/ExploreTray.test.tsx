@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@solidjs/testing-library';
 import { ExploreTray } from './ExploreTray';
+import type { Cleaning } from '../domain';
+
+const cleaning = (id: string, name: string): Cleaning => ({
+  id,
+  name,
+  operation: { kind: 'clean', steps: [] },
+});
 
 describe('ExploreTray', () => {
   it('renders the four machine ops', () => {
@@ -60,5 +67,66 @@ describe('ExploreTray', () => {
     for (const op of ['brew', 'steam', 'water', 'flush']) {
       expect(screen.getByTestId(`explore-${op}`)).not.toBeDisabled();
     }
+  });
+
+  describe('cleaning quick-launch tiles', () => {
+    it('renders no cleaning tiles when none are passed', () => {
+      render(() => <ExploreTray onSelect={() => {}} />);
+      expect(screen.queryByTestId('explore-cleaning-c1')).not.toBeInTheDocument();
+    });
+
+    it('renders a tile per cleaning and launches its wizard on tap', () => {
+      const onRunCleaning = vi.fn();
+      render(() => (
+        <ExploreTray
+          onSelect={() => {}}
+          cleanings={() => [cleaning('c1', 'Daily Rinse')]}
+          onRunCleaning={onRunCleaning}
+        />
+      ));
+      const tile = screen.getByTestId('explore-cleaning-c1');
+      expect(tile).toHaveTextContent('Daily Rinse');
+      fireEvent.click(tile);
+      expect(onRunCleaning).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'c1' }),
+      );
+    });
+
+    it('stays enabled even when the ops are blocked (it opens a wizard)', () => {
+      render(() => (
+        <ExploreTray
+          onSelect={() => {}}
+          blockReason={() => 'heater-off'}
+          cleanings={() => [cleaning('c1', 'Daily Rinse')]}
+        />
+      ));
+      expect(screen.getByTestId('explore-steam')).toBeDisabled();
+      expect(screen.getByTestId('explore-cleaning-c1')).not.toBeDisabled();
+    });
+
+    it('highlights a due cleaning with the clock badge', () => {
+      render(() => (
+        <ExploreTray
+          onSelect={() => {}}
+          cleanings={() => [cleaning('c1', 'Daily Rinse')]}
+          dueCleaningIds={() => new Set(['c1'])}
+        />
+      ));
+      const tile = screen.getByTestId('explore-cleaning-c1');
+      expect(tile).toHaveAttribute('data-due', 'true');
+      expect(screen.getByTestId('explore-cleaning-c1-due')).toBeInTheDocument();
+    });
+
+    it('shows no due badge when not due', () => {
+      render(() => (
+        <ExploreTray
+          onSelect={() => {}}
+          cleanings={() => [cleaning('c1', 'Daily Rinse')]}
+          dueCleaningIds={() => new Set()}
+        />
+      ));
+      expect(screen.getByTestId('explore-cleaning-c1')).not.toHaveAttribute('data-due');
+      expect(screen.queryByTestId('explore-cleaning-c1-due')).not.toBeInTheDocument();
+    });
   });
 });

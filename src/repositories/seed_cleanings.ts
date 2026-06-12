@@ -49,6 +49,8 @@ export const SEED_CLEANINGS: Cleaning[] = [
     },
     // Friday afternoons by default — a common deep-clean slot.
     reminder: remind({ every: 1, unit: 'week', weekday: 5, atTime: '15:00' }),
+    // Off the Home quick-row by default — only the Daily Rinse rides there.
+    hidden: true,
   },
   {
     id: 'seed-clean-steam-wand',
@@ -60,6 +62,7 @@ export const SEED_CLEANINGS: Cleaning[] = [
         { id: 'seed-sw-soak', type: 'steamWandSoak' },
       ],
     },
+    hidden: true,
   },
   {
     id: 'seed-clean-descale',

@@ -46,8 +46,8 @@ html {
   overflow: hidden;
 }
 
-/* Left column: scrolling recipe picker on top, fixed Explore tray pinned
-   at the bottom. */
+/* Left column: scrolling recipe picker on top, the Explore/cleaning row
+   pinned at the bottom. */
 .home__left {
   display: flex;
   flex-direction: column;
@@ -75,14 +75,16 @@ html {
   }
 }
 
-/* ─── Explore tray (direct machine actions) ───────────────────────────
-   Slim, fixed row under the recipe picker: four ops you can run without a
-   recipe. Always the same place (bottom of the left column). */
+/* ─── Explore tray (direct machine actions + quick cleanings) ──────────
+   Slim row pinned at the bottom of the left column: four ops + your
+   Home-visible cleanings, each runnable directly. */
 .explore-tray {
   flex: none;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
 }
 
 .explore-tray__label {
@@ -92,14 +94,26 @@ html {
   color: var(--muted);
 }
 
+/* Flex (not a 4-col grid) so saved-cleaning tiles + a divider can sit on the
+   same row after the four ops. With only the four ops, flex:1 tiles fill the
+   width identically to the old grid. */
 .explore-tray__tiles {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  display: flex;
+  align-items: stretch;
   gap: 0.6rem;
+}
+
+/* Thin vertical rule separating the machine ops from the cleaning tiles. */
+.explore-tray__divider {
+  flex: 0 0 1px;
+  align-self: stretch;
+  background: var(--border);
 }
 
 .explore-tile {
   position: relative;
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -162,6 +176,15 @@ html {
 }
 .explore-tile[data-block-reason='heater-off'] .explore-tile__reason {
   background: var(--bad);
+}
+
+/* A due cleaning's tile — subtle accent tint + an accent clock badge. */
+.explore-tile[data-due='true'] {
+  border-color: var(--accent);
+  background: rgba(59, 130, 246, 0.12);
+}
+.explore-tile[data-due='true'] .explore-tile__reason {
+  background: var(--accent);
 }
 
 /* ─── Header ──────────────────────────────────────────────────────── */
@@ -568,6 +591,28 @@ html {
   width: 100%;
   /* Height is driven by uPlot (via the `height` prop); the container just
      wraps the canvas rather than clamping it to the compact default. */
+}
+
+/* The last-shot card grows to fill the sidebar's remaining height, with the
+   mini-chart expanding to use it (fills the otherwise-blank bottom-right). */
+.home__sidebar .last-shot {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.last-shot__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.last-shot__body .mini-chart {
+  flex: 1;
+  min-height: 0;
+}
+.last-shot__body > .muted {
+  margin: 0.25rem 0 0;
 }
 
 .live-shot-chart {

@@ -162,6 +162,10 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
   const dueCleanings = createMemo<Cleaning[]>(() =>
     (cleanings() ?? []).filter((c) => cleaningDue(c, { now: nowMs() }).due),
   );
+  // Non-hidden cleanings → the Home Explore-row quick-launch tiles.
+  const homeCleanings = createMemo<Cleaning[]>(() =>
+    (cleanings() ?? []).filter((c) => !c.hidden),
+  );
   // setTimeout delays cap at ~24.8 days; clamp + re-arm so longer gaps still fire.
   const MAX_TIMER_MS = 21 * 86_400_000;
   let reminderTimer: ReturnType<typeof setTimeout> | undefined;
@@ -599,6 +603,8 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
                 onMaintenance={onMaintenance}
                 dueCleanings={dueCleanings}
                 onCleaningPill={onCleaningPill}
+                exploreCleanings={homeCleanings}
+                onRunCleaning={onRunCleaning}
                 onSelectRecipe={onSelectRecipe}
                 onExplore={onExplore}
                 onSeeAllShots={onSeeAllShots}

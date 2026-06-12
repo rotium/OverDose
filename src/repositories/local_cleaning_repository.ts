@@ -2,11 +2,11 @@ import type { Cleaning } from '../domain';
 import type { CleaningRepository } from './cleaning_repository';
 import { SEED_CLEANINGS } from './seed_cleanings';
 
-// v3: the reminder model changed incompatibly (relative `cadence.byDays` →
-// `reminder` calendar grid). Bumping the key drops the old data and re-seeds
-// with model-B reminders. (v2 was the flat-kind → Clean-steps redesign.)
-const STORAGE_KEY = 'starter-skin.cleanings.v3';
-const SEEDED_FLAG = 'starter-skin.cleanings.seeded.v3';
+// v4: seed defaults changed (only Daily Rinse shows on Home; Weekly/Steam Wand
+// now hidden) — bump so existing dev installs re-seed the new defaults. (v3 was
+// the reminder calendar-grid model; v2 the flat-kind → Clean-steps redesign.)
+const STORAGE_KEY = 'starter-skin.cleanings.v4';
+const SEEDED_FLAG = 'starter-skin.cleanings.seeded.v4';
 
 /** Drop entries that don't match the current model (e.g. stale v1 data that
  *  flowed in via a gateway pull) so the UI never renders a malformed cleaning. */

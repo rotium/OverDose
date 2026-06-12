@@ -1,5 +1,8 @@
 import { For, Show, type Accessor, type Component } from 'solid-js';
+import type { Cleaning } from '../domain';
+import { CleaningKindIcon } from './CleaningKindIcon';
 import {
+  ClockIcon,
   CupIcon,
   PowerIcon,
   SteamIcon,
@@ -55,13 +58,23 @@ export interface ExploreTrayProps {
    *  icon explaining why. The brew tile is unaffected — its prep-screen
    *  Start does its own gating. */
   blockReason?: Accessor<ExploreBlockReason | null>;
+  /** Home-visible (non-hidden) cleanings, rendered after a divider as
+   *  quick-launch tiles. Tapping one opens its wizard directly (like Brew,
+   *  always enabled — readiness gating happens inside the wizard). */
+  cleanings?: Accessor<Cleaning[]>;
+  /** Ids of cleanings currently due — their tile gets the accent highlight
+   *  + a clock badge. */
+  dueCleaningIds?: Accessor<Set<string>>;
+  /** Launch a cleaning's wizard. */
+  onRunCleaning?: (c: Cleaning) => void;
 }
 
 export const ExploreTray: Component<ExploreTrayProps> = (p) => {
   const reason = (): ExploreBlockReason | null => p.blockReason?.() ?? null;
+  const cleanings = (): Cleaning[] => p.cleanings?.() ?? [];
+  const isDue = (id: string): boolean => p.dueCleaningIds?.().has(id) ?? false;
   return (
-    <section class="explore-tray" aria-label="Explore — run a machine action directly">
-      <span class="explore-tray__label">Explore</span>
+    <section class="explore-tray" aria-label="Run a machine action or cleaning directly">
       <div class="explore-tray__tiles">
         <For each={OPS}>
           {(o) => {
@@ -103,6 +116,37 @@ export const ExploreTray: Component<ExploreTrayProps> = (p) => {
             );
           }}
         </For>
+
+        {/* Saved cleanings you run regularly — same tile, after a divider.
+            Tapping opens the wizard directly; due ones glow + show a clock. */}
+        <Show when={cleanings().length > 0}>
+          <span class="explore-tray__divider" aria-hidden="true" />
+          <For each={cleanings()}>
+            {(c) => (
+              <button
+                type="button"
+                class="explore-tile"
+                data-due={isDue(c.id) ? 'true' : undefined}
+                data-testid={`explore-cleaning-${c.id}`}
+                onClick={() => p.onRunCleaning?.(c)}
+              >
+                <span class="explore-tile__icon" aria-hidden="true">
+                  <CleaningKindIcon kind={c.operation.kind} size={26} />
+                </span>
+                <span class="explore-tile__label">{c.name}</span>
+                <Show when={isDue(c.id)}>
+                  <span
+                    class="explore-tile__reason"
+                    aria-label="Due"
+                    data-testid={`explore-cleaning-${c.id}-due`}
+                  >
+                    <ClockIcon size={16} />
+                  </span>
+                </Show>
+              </button>
+            )}
+          </For>
+        </Show>
       </div>
     </section>
   );

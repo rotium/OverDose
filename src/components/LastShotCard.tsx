@@ -179,7 +179,7 @@ export const LastShotCard: Component<LastShotCardProps> = (p) => {
                   <span> · {shotDurationSec(displayedFull())}s</span>
                 </Show>
               </p>
-              <ShotMiniChart shot={displayedFull} />
+              <ShotMiniChart shot={displayedFull} fill />
               <p class="muted">{fmtAgo(s().timestamp, new Date(now()))}</p>
             </div>
           )}
