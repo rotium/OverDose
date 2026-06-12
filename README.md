@@ -30,6 +30,8 @@ recipe-driven brewing UI, designed for the tablet on your espresso bar.
 - Auto-stop steam by time (configurable per pitcher)
 - Two-level water warnings (soft warning + machine refill level)
 - Smooth live shot view
+- Guided cleaning routines with scheduled reminders
+- Optional audio cues (machine-ready, sleep/wake, water, cleaning-due)
 - Highly configurable
 
 ## Recipes
@@ -61,6 +63,35 @@ control between phases rather than racing an auto-progressing timer.
 For ad-hoc operations that don't deserve a saved recipe — warming a
 cup, a quick steam wand purge, hot water for tea — the **Explore**
 tray on the home screen runs the four machine operations directly.
+
+## Cleaning & maintenance
+
+Keeping the machine clean is part of the daily flow too, so OverDose
+treats a cleaning like a recipe — a routine you set up once, then run
+with step-by-step guidance. The **Maintenance** screen lists them and
+flags the ones that are due.
+
+<img src="docs/screenshots/cleaning-maintenance.png" alt="Maintenance — list of cleanings to run" width="500">
+
+A routine is a sequence of steps you arrange yourself: a group-head
+forward-flush (with or without detergent), a plain flush, steam-wand
+cleaning with Rinza, a quick steam purge, the steam-tip soak, the water
+tank, the uptake thimble. Sensible defaults ship ready to use.
+
+Run one and OverDose walks each step — what chemical goes where (and
+what must never go in the tank), what to do, and a live countdown for
+each machine run. Long soaks start a background timer and chime when
+they're ready.
+
+<img src="docs/screenshots/cleaning-daily-rinse-grouphead.png" alt="Cleaning wizard — group-head forward-flush step" width="360">
+
+<img src="docs/screenshots/cleaning-daily-rinse-flash.png" alt="Cleaning wizard — flush step" width="360">
+
+<img src="docs/screenshots/cleaning-weekly-clean-steam-wand.png" alt="Cleaning wizard — steam-wand step" width="360">
+
+Give a routine a schedule — every Friday afternoon, daily, the first of
+the month — and OverDose reminds you when it's due: a pill in the header
+(with a chime) and a one-tap tile on the home screen.
 
 ## Using OverDose
 
