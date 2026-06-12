@@ -23,7 +23,7 @@ export const SEED_CLEANINGS: Cleaning[] = [
       kind: 'clean',
       // Tip soak first so its ~1 h timer runs while you do the group cleaning.
       steps: [
-        { id: 'seed-daily-soak', type: 'steamWandSoak' },
+        { id: 'seed-daily-soak', type: 'steamWandSoak', minutes: 10 },
         { id: 'seed-daily-cs1', type: 'coffeeSide', withChemical: false },
         { id: 'seed-daily-flush1', type: 'flush', seconds: 5 },
         { id: 'seed-daily-cs2', type: 'coffeeSide', withChemical: false },
@@ -43,6 +43,7 @@ export const SEED_CLEANINGS: Cleaning[] = [
         { id: 'seed-weekly-cs2', type: 'coffeeSide', withChemical: false },
         { id: 'seed-weekly-flush2', type: 'flush', seconds: 5 },
         { id: 'seed-weekly-sw', type: 'steamWand', withChemical: true },
+        { id: 'seed-weekly-purge', type: 'steamPurge' },
         { id: 'seed-weekly-tank', type: 'waterTank' },
         { id: 'seed-weekly-thimble', type: 'thimble' },
       ],
@@ -59,6 +60,7 @@ export const SEED_CLEANINGS: Cleaning[] = [
       kind: 'clean',
       steps: [
         { id: 'seed-sw-sw', type: 'steamWand', withChemical: true },
+        { id: 'seed-sw-purge', type: 'steamPurge' },
         { id: 'seed-sw-soak', type: 'steamWandSoak' },
       ],
     },

@@ -2,11 +2,11 @@ import type { Cleaning } from '../domain';
 import type { CleaningRepository } from './cleaning_repository';
 import { SEED_CLEANINGS } from './seed_cleanings';
 
-// v4: seed defaults changed (only Daily Rinse shows on Home; Weekly/Steam Wand
-// now hidden) — bump so existing dev installs re-seed the new defaults. (v3 was
-// the reminder calendar-grid model; v2 the flat-kind → Clean-steps redesign.)
-const STORAGE_KEY = 'starter-skin.cleanings.v4';
-const SEEDED_FLAG = 'starter-skin.cleanings.seeded.v4';
+// v6: added a steam-purge step to the Steam Wand sequences. v5 tweaked Daily
+// soak/steam durations; v4 hid Weekly/Steam Wand from Home; v3 was the
+// calendar-grid reminder model; v2 the flat-kind → Clean-steps redesign.
+const STORAGE_KEY = 'starter-skin.cleanings.v6';
+const SEEDED_FLAG = 'starter-skin.cleanings.seeded.v6';
 
 /** Drop entries that don't match the current model (e.g. stale v1 data that
  *  flowed in via a gateway pull) so the UI never renders a malformed cleaning. */

@@ -260,122 +260,147 @@ export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
 
       <div class="settings__content cleaning-wizard__body">
         <Show when={timerActive()}>
-          <div class="cleaning-wizard__soak" data-testid="wizard-soak">
-            <Show when={timerRemainingSec() > 0} fallback={<>Soak ready — finish up below</>}>
-              Soaking… {formatMMSS(timerRemainingSec())} left — we’ll chime when it’s ready
-            </Show>
+          <div class="cleaning-wizard__soak-float">
+            <div class="cleaning-wizard__soak" data-testid="wizard-soak">
+              <Show when={timerRemainingSec() > 0} fallback={<>Soak ready — finish up below</>}>
+                Soaking… {formatMMSS(timerRemainingSec())} left — we’ll chime when it’s ready
+              </Show>
+            </div>
           </div>
         </Show>
         <Switch>
           <Match when={finished()}>
             <div class="cleaning-wizard__phase" data-testid="wizard-done">
-              <Show
-                when={finishLines.length > 0}
-                fallback={
-                  <>
-                    <h2>All done</h2>
-                    <p class="settings-help">"{p.cleaning.name}" complete.</p>
-                  </>
-                }
-              >
-                <h2>Finish up</h2>
+              <div class="cleaning-wizard__phase-title">
+                <h2 class="cleaning-wizard__title">
+                  <Show when={finishLines.length > 0} fallback={<>All done</>}>
+                    Finish up
+                  </Show>
+                </h2>
+              </div>
+              <div class="cleaning-wizard__phase-content">
                 <Show
-                  when={timerRemainingSec() > 0}
+                  when={finishLines.length > 0}
                   fallback={
-                    <p class="settings-help">The soaks are ready — finish these:</p>
+                    <p class="settings-help">"{p.cleaning.name}" complete.</p>
                   }
                 >
-                  <p class="cleaning-wizard__status" data-testid="wizard-finish-timer">
-                    Soaking… {formatMMSS(timerRemainingSec())} left. When it chimes:
-                  </p>
+                  <Show
+                    when={timerRemainingSec() > 0}
+                    fallback={
+                      <p class="settings-help">The soaks are ready — finish these:</p>
+                    }
+                  >
+                    <p class="cleaning-wizard__status" data-testid="wizard-finish-timer">
+                      Soaking… {formatMMSS(timerRemainingSec())} left. When it chimes:
+                    </p>
+                  </Show>
+                  <ul class="cleaning-wizard__lines" data-testid="wizard-finish-lines">
+                    <For each={finishLines}>{(l) => <li>{l}</li>}</For>
+                  </ul>
                 </Show>
-                <ul class="cleaning-wizard__lines" data-testid="wizard-finish-lines">
-                  <For each={finishLines}>{(l) => <li>{l}</li>}</For>
-                </ul>
-              </Show>
-              <button
-                type="button"
-                class="btn btn--primary"
-                data-testid="wizard-finish"
-                onClick={() => void complete()}
-              >
-                Done
-              </button>
+                <div class="cleaning-wizard__action">
+                  <button
+                    type="button"
+                    class="btn btn--primary cleaning-wizard__btn"
+                    data-testid="wizard-finish"
+                    onClick={() => void complete()}
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
             </div>
           </Match>
           <Match when={current()?.kind === 'instruction'}>
             <div class="cleaning-wizard__phase" data-testid="wizard-instruction">
-              <h2>{current()!.title}</h2>
-              <ul class="cleaning-wizard__lines">
-                <For each={current()!.lines}>{(l) => <li>{l}</li>}</For>
-              </ul>
-              <Show when={startsTimerOf(current())}>
-                {(secs) => (
-                  <p class="settings-help" data-testid="wizard-timer-hint">
-                    Leave it to soak — Next starts a ~{Math.round(secs() / 60)}-min
-                    timer and you can carry on; we’ll chime when it’s ready.
-                  </p>
-                )}
-              </Show>
-              <button
-                type="button"
-                class="btn btn--primary"
-                data-testid="wizard-next"
-                onClick={next}
-              >
-                {startsTimerOf(current())
-                  ? 'Start soak'
-                  : currentIdx() === phases.length - 1
-                    ? 'Finish'
-                    : 'Next'}
-              </button>
+              <div class="cleaning-wizard__phase-title">
+                <h2 class="cleaning-wizard__title">{current()!.title}</h2>
+              </div>
+              <div class="cleaning-wizard__phase-content">
+                <ul class="cleaning-wizard__lines">
+                  <For each={current()!.lines}>{(l) => <li>{l}</li>}</For>
+                </ul>
+                <Show when={startsTimerOf(current())}>
+                  {(secs) => (
+                    <p class="settings-help" data-testid="wizard-timer-hint">
+                      Leave it to soak — Next starts a ~{Math.round(secs() / 60)}-min
+                      timer and you can carry on; we’ll chime when it’s ready.
+                    </p>
+                  )}
+                </Show>
+                <div class="cleaning-wizard__action">
+                  <button
+                    type="button"
+                    class="btn btn--primary cleaning-wizard__btn"
+                    data-testid="wizard-next"
+                    onClick={next}
+                  >
+                    {startsTimerOf(current())
+                      ? 'Start soak'
+                      : currentIdx() === phases.length - 1
+                        ? 'Finish'
+                        : 'Next'}
+                  </button>
+                </div>
+              </div>
             </div>
           </Match>
           <Match when={current()?.kind === 'run'}>
             <div class="cleaning-wizard__phase" data-testid="wizard-run">
-              <h2>{current()!.title}</h2>
-              <ul class="cleaning-wizard__lines">
-                <For each={current()!.lines}>{(l) => <li>{l}</li>}</For>
-              </ul>
-              <Switch>
-                <Match when={status() === 'pending'}>
-                  <button
-                    type="button"
-                    class="btn btn--primary"
-                    data-testid="wizard-start"
-                    onClick={startRun}
-                  >
-                    Start
-                  </button>
-                </Match>
-                <Match when={status() === 'requested' || status() === 'running'}>
-                  <p class="cleaning-wizard__status" data-testid="wizard-running">
-                    <Show when={status() === 'running'} fallback={<>Starting…</>}>
-                      Running… {elapsedSec()}s
-                    </Show>
-                  </p>
-                  <Show when={status() === 'running' && progress() !== undefined}>
-                    <div
-                      class="cleaning-wizard__progress"
-                      data-testid="wizard-progress"
-                      role="progressbar"
-                    >
+              <div class="cleaning-wizard__phase-title">
+                <h2 class="cleaning-wizard__title">{current()!.title}</h2>
+              </div>
+              <div class="cleaning-wizard__phase-content">
+                <ul class="cleaning-wizard__lines">
+                  <For each={current()!.lines}>{(l) => <li>{l}</li>}</For>
+                </ul>
+                <div class="cleaning-wizard__phase-mid">
+                  <Show when={status() === 'requested' || status() === 'running'}>
+                    <p class="cleaning-wizard__status" data-testid="wizard-running">
+                      <Show when={status() === 'running'} fallback={<>Starting…</>}>
+                        Running… {elapsedSec()}s
+                      </Show>
+                    </p>
+                    <Show when={status() === 'running' && progress() !== undefined}>
                       <div
-                        class="cleaning-wizard__progress-fill"
-                        style={{ width: `${Math.round(progress()! * 100)}%` }}
-                      />
-                    </div>
+                        class="cleaning-wizard__progress"
+                        data-testid="wizard-progress"
+                        role="progressbar"
+                      >
+                        <div
+                          class="cleaning-wizard__progress-fill"
+                          style={{ width: `${Math.round(progress()! * 100)}%` }}
+                        />
+                      </div>
+                    </Show>
                   </Show>
-                  <button
-                    type="button"
-                    class="btn"
-                    data-testid="wizard-stop"
-                    onClick={stopRun}
+                </div>
+                <div class="cleaning-wizard__action">
+                  <Show
+                    when={status() === 'pending'}
+                    fallback={
+                      <button
+                        type="button"
+                        class="btn cleaning-wizard__btn"
+                        data-testid="wizard-stop"
+                        onClick={stopRun}
+                      >
+                        Stop
+                      </button>
+                    }
                   >
-                    Stop
-                  </button>
-                </Match>
-              </Switch>
+                    <button
+                      type="button"
+                      class="btn btn--primary cleaning-wizard__btn"
+                      data-testid="wizard-start"
+                      onClick={startRun}
+                    >
+                      Start
+                    </button>
+                  </Show>
+                </div>
+              </div>
             </div>
           </Match>
         </Switch>

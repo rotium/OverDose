@@ -51,6 +51,12 @@ describe('deriveStepPrep', () => {
     const p = deriveStepPrep({ id: 's', type: 'steamWandSoak' });
     expect(p.join(' ')).toMatch(/do not steam/i);
   });
+
+  it('steam purge tells you to wipe the wand with a rag', () => {
+    const p = deriveStepPrep({ id: 's', type: 'steamPurge' });
+    expect(p.join(' ')).toMatch(/purge/i);
+    expect(p.join(' ')).toMatch(/wipe.*rag/i);
+  });
 });
 
 describe('deriveDescalePrep', () => {

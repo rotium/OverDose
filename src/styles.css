@@ -1378,6 +1378,9 @@ html {
 .settings__content {
   flex: 1;
   overflow: auto;
+  /* Always reserve the scrollbar's gutter so it appearing/disappearing never
+     reflows the content (no horizontal jump when a page grows past one screen). */
+  scrollbar-gutter: stable;
   padding: 1.25rem 1.5rem;
   /* When a subsection opts into the `--fill` layout (currently only
      ProfilesSection), its picker manages its own internal scrolling per
@@ -2751,11 +2754,24 @@ html {
 
 /* Cleaning wizard (runtime) */
 .cleaning-wizard__body {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
+}
+
+/* The soak-timer pill floats over the top of the content (out of flow) so it
+   never pushes the title down when it appears/disappears. It sits above the
+   title, which is anchored a third of the way down. */
+.cleaning-wizard__soak-float {
+  position: absolute;
+  top: 0.75rem;
+  left: 0;
+  right: 0;
+  display: flex;
   justify-content: center;
-  gap: 1rem;
+  z-index: 5;
+  pointer-events: none;
 }
 
 .cleaning-wizard__soak {
@@ -2768,13 +2784,75 @@ html {
   font-variant-numeric: tabular-nums;
 }
 
+/* Stable layout that fills the screen: the title sits at the bottom of the top
+   third, the text/status/progress/button flow just below it. Fixed width (not
+   content-sized) so the "Running… Ns" counter and the filling bar can't reflow
+   the column; the reserved middle keeps the button from moving mid-run. */
 .cleaning-wizard__phase {
-  max-width: 30rem;
+  width: 30rem;
+  max-width: 100%;
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  align-items: stretch;
   text-align: center;
+}
+
+/* Top third — title anchored to its bottom edge. */
+.cleaning-wizard__phase-title {
+  flex: 0 0 33%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+/* Everything below the title, grouped just under it. */
+.cleaning-wizard__phase-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   align-items: center;
+  gap: 1.25rem;
+  padding-top: 1.25rem;
+}
+
+.cleaning-wizard__phase-mid {
+  /* Pinned just above the button (pushed down by margin-top:auto), so the
+     "Running…" text + progress bar always sit in the same spot. The reserved
+     min-height keeps the button from moving when they appear. */
+  margin-top: auto;
+  margin-bottom: 0.5rem;
+  min-height: 2.75rem;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.cleaning-wizard__title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+/* Button footer — pinned to the bottom (like the brew-prep .prep__action),
+   so the action button sits in the same place regardless of step content. */
+.cleaning-wizard__action {
+  margin-top: auto;
+  display: flex;
+  justify-content: center;
+  padding-top: 0.5rem;
+}
+
+/* Primary action button — matches the prep-screen "Start Brew/Steam" button. */
+.cleaning-wizard__btn {
+  font-size: 1.05rem;
+  font-weight: 600;
+  padding: 0.85rem 2.25rem;
+  min-width: 260px;
+  border-radius: 10px;
 }
 
 .cleaning-wizard__lines {

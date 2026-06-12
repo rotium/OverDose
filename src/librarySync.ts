@@ -104,10 +104,11 @@ export function createLibrarySync(opts: LibrarySyncOptions = {}): LibrarySync {
       write: (a) => pitchers.replaceAll(a as never[]),
     },
     {
-      // v4: seed defaults changed (Home-visible set) — a distinct gateway key
-      // avoids pulling stale-shaped cleanings back over the new seeds. (v3 was
-      // the calendar-grid reminder model; v2 the flat-kind → Clean-steps redesign.)
-      key: 'cleanings.v4',
+      // v6: steam-purge step added to seeds (a distinct gateway key avoids
+      // pulling stale-shaped cleanings back over the new seeds). v5 tweaked
+      // durations; v4 the Home-visible set; v3 the calendar-grid reminders;
+      // v2 the flat-kind → Clean-steps redesign.
+      key: 'cleanings.v6',
       read: () => cleanings.list() as Promise<unknown[]>,
       write: (a) => cleanings.replaceAll(a as never[]),
     },

@@ -18,6 +18,7 @@ import type {
 import {
   CLEAN_STEP_TYPES,
   DEFAULT_FLUSH_SECONDS,
+  DEFAULT_PURGE_SECONDS,
   DEFAULT_REMINDER,
   DEFAULT_STEAM_SECONDS,
   DEFAULT_THIMBLE_MIN,
@@ -371,6 +372,33 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                                     step={1}
                                     placeholder="s"
                                     ariaLabel="Steam seconds"
+                                    testId={`step-seconds-${s.id}`}
+                                    debounceMs={p.debounceMs}
+                                    class="step-field__input"
+                                  />
+                                  <span class="step-field__unit">s</span>
+                                </label>
+                              </Show>
+                              <Show when={s.type === 'steamPurge'}>
+                                <label class="recipe-editor__field">
+                                  <span class="recipe-editor__field-label">
+                                    Purge for
+                                  </span>
+                                  <DebouncedNumberField
+                                    value={
+                                      s.type === 'steamPurge'
+                                        ? s.seconds ?? DEFAULT_PURGE_SECONDS
+                                        : undefined
+                                    }
+                                    onCommit={(n) =>
+                                      updateStep(s.id, {
+                                        seconds: n ?? DEFAULT_PURGE_SECONDS,
+                                      })
+                                    }
+                                    min={1}
+                                    step={1}
+                                    placeholder="s"
+                                    ariaLabel="Purge seconds"
                                     testId={`step-seconds-${s.id}`}
                                     debounceMs={p.debounceMs}
                                     class="step-field__input"

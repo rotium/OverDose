@@ -1,6 +1,7 @@
 import type { Cleaning } from '../../domain';
 import {
   DEFAULT_FLUSH_SECONDS,
+  DEFAULT_PURGE_SECONDS,
   DEFAULT_STEAM_SECONDS,
   cleanStepLabel,
   deriveStepFinish,
@@ -98,6 +99,18 @@ export const buildWizard = (cleaning: Cleaning): WizardPhase[] => {
           lines: deriveStepPrep(s),
           op: { type: 'steam' },
           durationSec: s.seconds ?? DEFAULT_STEAM_SECONDS,
+        });
+        break;
+      case 'steamPurge':
+        // A short steam burst to clear the wand, then wipe.
+        phases.push({
+          id: `${s.id}-run`,
+          kind: 'run',
+          title: label,
+          target: 'steam',
+          lines: deriveStepPrep(s),
+          op: { type: 'steam' },
+          durationSec: s.seconds ?? DEFAULT_PURGE_SECONDS,
         });
         break;
       case 'steamWandSoak':

@@ -18,6 +18,7 @@ export type CleanStepType =
   | 'coffeeSide'
   | 'flush'
   | 'steamWand'
+  | 'steamPurge'
   | 'steamWandSoak'
   | 'waterTank'
   | 'thimble';
@@ -26,6 +27,7 @@ export type CleanStep =
   | { id: string; type: 'coffeeSide'; profileId?: string; withChemical?: boolean }
   | { id: string; type: 'flush'; seconds?: number }
   | { id: string; type: 'steamWand'; withChemical?: boolean; seconds?: number }
+  | { id: string; type: 'steamPurge'; seconds?: number } // short steam to clear the wand + wipe
   | { id: string; type: 'steamWandSoak'; minutes?: number } // soak tip + needle
   | { id: string; type: 'waterTank' } // wash the water tank
   | { id: string; type: 'thimble'; minutes?: number }; // soak uptake in citric
@@ -33,7 +35,9 @@ export type CleanStep =
 /** Default flush duration (s) — the wizard stops the flush after this. */
 export const DEFAULT_FLUSH_SECONDS = 5;
 /** Default steam duration (s) for a steam-wand run — wizard stops it after this. */
-export const DEFAULT_STEAM_SECONDS = 30;
+export const DEFAULT_STEAM_SECONDS = 60;
+/** Default duration (s) for a short steam purge — wizard stops it after this. */
+export const DEFAULT_PURGE_SECONDS = 5;
 /** Default soak-timer durations (min). */
 export const DEFAULT_TIP_SOAK_MIN = 60;
 export const DEFAULT_THIMBLE_MIN = 30;
@@ -125,6 +129,7 @@ export const CLEAN_STEP_TYPES: CleanStepType[] = [
   'coffeeSide',
   'flush',
   'steamWand',
+  'steamPurge',
   'steamWandSoak',
   'waterTank',
   'thimble',
@@ -138,6 +143,8 @@ export const cleanStepLabel = (type: CleanStepType): string => {
       return 'Flush';
     case 'steamWand':
       return 'Steam wand';
+    case 'steamPurge':
+      return 'Steam purge';
     case 'steamWandSoak':
       return 'Steam-tip soak';
     case 'waterTank':
@@ -163,6 +170,8 @@ export const newCleanStep = (type: CleanStepType): CleanStep => {
       return { id, type, withChemical: false };
     case 'steamWand':
       return { id, type, withChemical: false, seconds: DEFAULT_STEAM_SECONDS };
+    case 'steamPurge':
+      return { id, type, seconds: DEFAULT_PURGE_SECONDS };
     case 'flush':
       return { id, type, seconds: DEFAULT_FLUSH_SECONDS };
     case 'steamWandSoak':
@@ -186,7 +195,8 @@ export const operationSummary = (op: CleaningOperation): string => {
   for (const s of op.steps ?? []) {
     if (s.type === 'coffeeSide') add('Group head');
     else if (s.type === 'flush') add('Flush');
-    else if (s.type === 'steamWand' || s.type === 'steamWandSoak') add('Steam wand');
+    else if (s.type === 'steamWand' || s.type === 'steamPurge' || s.type === 'steamWandSoak')
+      add('Steam wand');
     else if (s.type === 'waterTank') add('Tank');
     else if (s.type === 'thimble') add('Thimble');
   }
@@ -204,19 +214,27 @@ export const deriveStepPrep = (step: CleanStep): string[] => {
         ? [
             'Insert the blind basket + ~3 g Cafiza.',
             '⚠ Never put detergent in the water tank.',
-            'Runs the forward-flush profile, then flush until clear.',
+            'Forward-flush rinse.',
           ]
         : ['Insert the blind basket (no detergent).', 'Forward-flush rinse.'];
     case 'flush':
-      return ['Plain hot-water rinse of the group.'];
+      return [
+        'Take the portafilter out.',
+        'Flushes the group head clean — wash the basket under the running water.',
+      ];
     case 'steamWand':
       return step.withChemical
         ? [
-            'Fill a jug: ~30 ml Rinza + 500 ml water. Submerge the steam tip.',
+            'Dissolve a Rinza tablet (~10 g) in a jug of water; submerge the steam tip.',
             '⚠ Rinza only in the jug — never the tank.',
-            'Steam to clear milk residue, then rinse with clean water.',
+            'Steam to clear milk residue.',
           ]
         : ['Fill a jug with clean water; submerge the tip.', 'Steam to flush the wand.'];
+    case 'steamPurge':
+      return [
+        'Point the steam wand at the drip tray.',
+        'Short steam to purge the Rinza, then wipe the wand with a clean, damp rag.',
+      ];
     // Soak/manual steps: prep shows only the "start" action (the deferred
     // finish is collected into the wizard's closing step — see deriveStepFinish).
     case 'steamWandSoak':

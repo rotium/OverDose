@@ -8,8 +8,8 @@ import type { Cleaning } from '../../domain';
 
 const seedRepo = (items: Cleaning[]): LocalCleaningRepository => {
   const s = new MemoryStorage();
-  s.setItem('starter-skin.cleanings.v4', JSON.stringify(items));
-  s.setItem('starter-skin.cleanings.seeded.v4', '1');
+  s.setItem('starter-skin.cleanings.v6', JSON.stringify(items));
+  s.setItem('starter-skin.cleanings.seeded.v6', '1');
   return new LocalCleaningRepository(s);
 };
 
