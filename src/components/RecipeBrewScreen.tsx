@@ -37,6 +37,7 @@ import {
   type GatewayShotSummary,
   type ProfileRecord,
   type ShotAnnotationsPatch,
+  type ShotPatch,
   type WorkflowUpdate,
 } from '../api';
 import { buildProfileCurve } from '../profile/curve';
@@ -152,6 +153,8 @@ export interface RecipeBrewScreenProps {
   showFlowSlider?: () => boolean;
   /** Saved default trace visibility (Settings), seeding the post-brew chart. */
   traceVisibility?: Accessor<TraceVisibility>;
+  /** Recent drinker names for the post-brew "For" autocomplete. */
+  fetchDrinkers?: () => Promise<string[]>;
   /** Single-profile fetcher used to render the brew step's prep card.
    *  Resolves to `null` on any failure (deleted, hidden, gateway offline)
    *  so the prep card degrades to a graceful "(missing profile)" hint
@@ -179,9 +182,9 @@ export interface RecipeBrewScreenProps {
   /** In-memory optimistic shot from the live accumulator — paints the
    *  result instantly while `/shots/latest` catches up. */
   optimisticShot?: Accessor<GatewayShotRecord | null>;
-  /** Persists post-shot annotations (rating, notes, corrected dose) from
-   *  the result screen. Defaults to `api.updateShotAnnotations`. */
-  updateShot?: (id: string, patch: ShotAnnotationsPatch) => Promise<void>;
+  /** Persists post-shot edits (annotations + drinker context) from the
+   *  result screen. Defaults to `api.updateShot`. */
+  updateShot?: (id: string, patch: ShotPatch) => Promise<void>;
   /** Auto-save debounce for the annotation capture (ms). Default 700;
    *  tests pass 0 for synchronous saves. */
   saveDebounceMs?: number;
@@ -654,6 +657,7 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
                   updateShot={p.updateShot}
                   saveDebounceMs={p.saveDebounceMs}
                   traceVisibility={p.traceVisibility}
+                  fetchDrinkers={p.fetchDrinkers}
                 />
               }
             >
@@ -1394,10 +1398,14 @@ const PostBrewView: Component<{
   fetchLatestShot?: () => Promise<GatewayShotSummary>;
   fetchShot?: (id: string) => Promise<GatewayShotRecord>;
   optimisticShot?: Accessor<GatewayShotRecord | null>;
-  updateShot?: (id: string, patch: ShotAnnotationsPatch) => Promise<void>;
+  updateShot?: (id: string, patch: ShotPatch) => Promise<void>;
   saveDebounceMs?: number;
   traceVisibility?: Accessor<TraceVisibility>;
+  fetchDrinkers?: () => Promise<string[]>;
 }> = (p) => {
+  const [drinkers] = createResource<string[]>(() =>
+    (p.fetchDrinkers ?? api.recentDrinkers)(),
+  );
   // Fetch the persisted espresso shot. Both fetchers resolve to null on
   // failure so a gateway hiccup degrades to the optimistic record (or an
   // empty state) rather than throwing.
@@ -1449,6 +1457,8 @@ const PostBrewView: Component<{
   const [enjoyment, setEnjoyment] = createSignal<number | null>(null);
   const [notes, setNotes] = createSignal('');
   const [actualDose, setActualDose] = createSignal<number | undefined>();
+  const [actualYield, setActualYield] = createSignal<number | undefined>();
+  const [drinker, setDrinker] = createSignal('');
   const [saveState, setSaveState] = createSignal<
     'idle' | 'saving' | 'saved' | 'error'
   >('idle');
@@ -1465,6 +1475,8 @@ const PostBrewView: Component<{
     setEnjoyment(typeof a?.enjoyment === 'number' ? a.enjoyment : null);
     setNotes(a?.espressoNotes ?? '');
     setActualDose(untrack(() => stats().doseG ?? undefined));
+    setActualYield(typeof a?.actualYield === 'number' ? a.actualYield : undefined);
+    setDrinker(s.workflow?.context?.drinkerName ?? '');
   });
 
   // Persist target: the *real* gateway id, and only once the gateway record
@@ -1480,23 +1492,30 @@ const PostBrewView: Component<{
   // only persist it once the user has actually edited it — otherwise a
   // rating-only save would write the target back as the measured actual.
   let doseTouched = false;
+  let yieldTouched = false;
 
   const doSave = async (): Promise<void> => {
     if (!pending) return;
     const id = saveTargetId();
     if (!id) return; // no target yet; stays pending, flushed on hand-off
     pending = false;
-    const patch = untrack<ShotAnnotationsPatch>(() => {
-      const out: ShotAnnotationsPatch = { espressoNotes: notes().trim() };
+    const patch = untrack<ShotPatch>(() => {
+      const ann: ShotAnnotationsPatch = { espressoNotes: notes().trim() };
       const e = enjoyment();
-      if (e != null) out.enjoyment = e;
+      if (e != null) ann.enjoyment = e;
       const d = actualDose();
-      if (doseTouched && d != null) out.actualDoseWeight = d;
+      if (doseTouched && d != null) ann.actualDoseWeight = d;
+      const y = actualYield();
+      if (yieldTouched && y != null) ann.actualYield = y;
+      const out: ShotPatch = { annotations: ann };
+      // Drinker → workflow.context. Only when set (never clear).
+      const dn = drinker().trim();
+      if (dn) out.workflow = { context: { drinkerName: dn } };
       return out;
     });
     setSaveState('saving');
     try {
-      await (p.updateShot ?? api.updateShotAnnotations)(id, patch);
+      await (p.updateShot ?? api.updateShot)(id, patch);
       setSaveState('saved');
     } catch {
       pending = true; // let a later edit retry
@@ -1546,6 +1565,18 @@ const PostBrewView: Component<{
         doseTouched = true;
         scheduleSave();
       }}
+      actualYield={actualYield}
+      onActualYield={(v) => {
+        setActualYield(v);
+        yieldTouched = true;
+        scheduleSave();
+      }}
+      drinker={drinker}
+      onDrinker={(v) => {
+        setDrinker(v);
+        scheduleSave();
+      }}
+      drinkerSuggestions={() => drinkers() ?? []}
       doseDebounceMs={p.saveDebounceMs}
       headerActions={
         <span

@@ -40,6 +40,8 @@ type Draft = {
   enjoyment: number | null;
   notes: string;
   dose: number | undefined;
+  yieldVal: number | undefined;
+  drinker: string;
   beanId: string | undefined;
   coffeeName: string | undefined;
   coffeeRoaster: string | undefined;
@@ -62,6 +64,9 @@ const seed = (s: GatewayShotSummary): Draft => {
         : null,
     notes: s.annotations?.espressoNotes ?? '',
     dose: shotDoseG(s) ?? undefined,
+    // Only the user-entered override; display falls back to the measured yield.
+    yieldVal: num(s.annotations?.actualYield),
+    drinker: s.workflow?.context?.drinkerName ?? '',
     beanId:
       typeof ctx?.extras?.['beanId'] === 'string'
         ? (ctx.extras['beanId'] as string)
@@ -103,6 +108,8 @@ export const ShotHistoryDetail: Component<{
   loadBeans?: () => Promise<Bean[]>;
   /** Saved default trace visibility (Settings), seeding the chart. */
   traceVisibility?: Accessor<TraceVisibility>;
+  /** Previously-used drinker names for the "For" autocomplete. */
+  drinkerSuggestions?: Accessor<string[]>;
 }> = (p) => {
   const [full] = createResource<GatewayShotRecord | null, string>(
     () => p.shot.id,
@@ -115,6 +122,8 @@ export const ShotHistoryDetail: Component<{
   const [enjoyment, setEnjoyment] = createSignal<number | null>(init.enjoyment);
   const [notes, setNotes] = createSignal(init.notes);
   const [dose, setDose] = createSignal<number | undefined>(init.dose);
+  const [yieldVal, setYieldVal] = createSignal<number | undefined>(init.yieldVal);
+  const [drinker, setDrinker] = createSignal(init.drinker);
   const [beanId, setBeanId] = createSignal<string | undefined>(init.beanId);
   const [coffeeName, setCoffeeName] = createSignal<string | undefined>(
     init.coffeeName,
@@ -141,6 +150,8 @@ export const ShotHistoryDetail: Component<{
     setEnjoyment(c.enjoyment);
     setNotes(c.notes);
     setDose(c.dose);
+    setYieldVal(c.yieldVal);
+    setDrinker(c.drinker);
     setBeanId(c.beanId);
     setCoffeeName(c.coffeeName);
     setCoffeeRoaster(c.coffeeRoaster);
@@ -168,9 +179,11 @@ export const ShotHistoryDetail: Component<{
     const e = enjoyment();
     if (e != null) ann.enjoyment = e;
     const d = dose();
-    // Only persist dose if the user actually changed it — otherwise a
-    // rating/notes edit would write the derived target dose back as "actual".
+    // Only persist dose/yield if the user actually changed them — otherwise a
+    // rating/notes edit would write the derived/measured values back as edits.
     if (d != null && d !== c.dose) ann.actualDoseWeight = d;
+    const y = yieldVal();
+    if (y != null && y !== c.yieldVal) ann.actualYield = y;
     patch.annotations = ann;
 
     // workflow.context — only the bean/grind we touched (gateway deep-merges,
@@ -188,6 +201,10 @@ export const ShotHistoryDetail: Component<{
     if (grind() !== c.grind) {
       ctx.grinderSetting = grind() != null ? String(grind()) : null;
     }
+    // Drinker: only write a non-empty value, and only when changed (never
+    // clear — the gateway can't reliably null a context field).
+    const dn = drinker().trim();
+    if (dn && dn !== c.drinker) ctx.drinkerName = dn;
     if (Object.keys(ctx).length > 0) patch.workflow = { context: ctx };
 
     setSaveState('saving');
@@ -197,6 +214,8 @@ export const ShotHistoryDetail: Component<{
         enjoyment: e ?? null,
         notes: notes(),
         dose: d,
+        yieldVal: y,
+        drinker: drinker(),
         beanId: beanId(),
         coffeeName: coffeeName(),
         coffeeRoaster: coffeeRoaster(),
@@ -213,6 +232,7 @@ export const ShotHistoryDetail: Component<{
           enjoyment: e,
           espressoNotes: notes().trim(),
           actualDoseWeight: d ?? p.shot.annotations?.actualDoseWeight ?? null,
+          actualYield: y ?? p.shot.annotations?.actualYield ?? null,
         },
         workflow: {
           ...p.shot.workflow,
@@ -221,6 +241,7 @@ export const ShotHistoryDetail: Component<{
             coffeeName: coffeeName(),
             coffeeRoaster: coffeeRoaster(),
             grinderSetting: grind(),
+            drinkerName: dn || p.shot.workflow?.context?.drinkerName,
             extras: beanId()
               ? { ...p.shot.workflow?.context?.extras, beanId: beanId() }
               : p.shot.workflow?.context?.extras,
@@ -328,6 +349,11 @@ export const ShotHistoryDetail: Component<{
         onNotes={setNotes}
         actualDose={dose}
         onActualDose={setDose}
+        actualYield={yieldVal}
+        onActualYield={setYieldVal}
+        drinker={drinker}
+        onDrinker={setDrinker}
+        drinkerSuggestions={p.drinkerSuggestions}
         doseDebounceMs={0}
         leadingLeft={coffeeSection}
         headerLeading={

@@ -21,7 +21,7 @@ import type {
   GatewayShotRecord,
   GatewayShotSummary,
   ProfileRecord,
-  ShotAnnotationsPatch,
+  ShotPatch,
 } from '../api';
 import type { WsStream } from '../streams';
 
@@ -84,7 +84,8 @@ const renderScreen = (
     optimisticShot?: GatewayShotRecord | null;
     fetchLatestShot?: () => Promise<GatewayShotSummary>;
     fetchShot?: (id: string) => Promise<GatewayShotRecord>;
-    updateShot?: (id: string, patch: ShotAnnotationsPatch) => Promise<void>;
+    updateShot?: (id: string, patch: ShotPatch) => Promise<void>;
+    fetchDrinkers?: () => Promise<string[]>;
     saveDebounceMs?: number;
     bundleOverride?: BrewBundle;
     isWaterCritical?: () => boolean;
@@ -128,7 +129,7 @@ const renderScreen = (
     opts.fetchShot ?? (() => Promise.reject(new Error('no shot')));
   const optimisticShot = () => opts.optimisticShot ?? null;
   const updateShot = vi.fn(
-    opts.updateShot ?? (async (_id: string, _patch: ShotAnnotationsPatch) => {}),
+    opts.updateShot ?? (async (_id: string, _patch: ShotPatch) => {}),
   );
   const updateShotSettings = vi.fn(
     opts.updateShotSettings ?? (async (_s: ShotSettingsSnapshot) => {}),
@@ -174,6 +175,7 @@ const renderScreen = (
         optimisticShot={optimisticShot}
         updateShot={updateShot}
         saveDebounceMs={opts.saveDebounceMs ?? 0}
+        fetchDrinkers={opts.fetchDrinkers ?? (() => Promise.resolve([]))}
       />
     </WithRepositories>
   ));
@@ -1434,8 +1436,9 @@ describe('RecipeBrewScreen', () => {
       );
       // Dose is now an inline-editable field, seeded from the derived dose.
       expect(screen.getByTestId('post-brew-dose-input')).toHaveValue(18);
-      // Yield = measured last scale weight 35.8; target shown separately.
-      expect(screen.getByTestId('post-brew-stat-yield')).toHaveTextContent('35.8');
+      // Yield is now inline-editable, seeded from the measured last scale
+      // weight (35.8); target still shown separately.
+      expect(screen.getByTestId('post-brew-yield-input')).toHaveValue(35.8);
       expect(
         screen.getByTestId('post-brew-stat-yield-target'),
       ).toHaveTextContent('target 36');
@@ -1554,13 +1557,19 @@ describe('RecipeBrewScreen', () => {
       await waitFor(() =>
         expect(env.updateShot).toHaveBeenCalledWith(
           'shot-real',
-          expect.objectContaining({ enjoyment: 80 }),
+          expect.objectContaining({
+            annotations: expect.objectContaining({ enjoyment: 80 }),
+          }),
         ),
       );
       // Rating-only save must not assert a measured dose it never captured.
       expect(env.updateShot).not.toHaveBeenCalledWith(
         'shot-real',
-        expect.objectContaining({ actualDoseWeight: expect.anything() }),
+        expect.objectContaining({
+          annotations: expect.objectContaining({
+            actualDoseWeight: expect.anything(),
+          }),
+        }),
       );
     });
 
@@ -1578,7 +1587,34 @@ describe('RecipeBrewScreen', () => {
       await waitFor(() =>
         expect(env.updateShot).toHaveBeenCalledWith(
           'shot-real',
-          expect.objectContaining({ espressoNotes: 'Bright, jammy' }),
+          expect.objectContaining({
+            annotations: expect.objectContaining({
+              espressoNotes: 'Bright, jammy',
+            }),
+          }),
+        ),
+      );
+    });
+
+    it('auto-saves the drinker to workflow.context', async () => {
+      const env = renderScreen({
+        routines: brewOnly(),
+        recipes: [sampleRecipe()],
+        fetchLatestShot: () => Promise.resolve(gatewaySummary()),
+      });
+      await driveToResult(env);
+
+      const drinker = await waitFor(() => screen.getByTestId('post-brew-drinker'));
+      fireEvent.input(drinker, { target: { value: 'Maya' } });
+
+      await waitFor(() =>
+        expect(env.updateShot).toHaveBeenCalledWith(
+          'shot-real',
+          expect.objectContaining({
+            workflow: {
+              context: expect.objectContaining({ drinkerName: 'Maya' }),
+            },
+          }),
         ),
       );
     });
@@ -1602,7 +1638,9 @@ describe('RecipeBrewScreen', () => {
       await waitFor(() =>
         expect(env.updateShot).toHaveBeenCalledWith(
           'shot-real',
-          expect.objectContaining({ actualDoseWeight: 18.4 }),
+          expect.objectContaining({
+            annotations: expect.objectContaining({ actualDoseWeight: 18.4 }),
+          }),
         ),
       );
     });

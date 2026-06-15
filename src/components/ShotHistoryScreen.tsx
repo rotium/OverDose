@@ -243,6 +243,11 @@ export const ShotHistoryScreen: Component<{
   const profileSuggestions = createMemo(() =>
     uniqSorted((profiles() ?? []).map((r) => r.profile.title ?? '')),
   );
+  // Drinker names already seen in the loaded shots — feeds the detail's "For"
+  // autocomplete without an extra fetch.
+  const drinkerSuggestions = createMemo(() =>
+    uniqSorted(items().map((s) => s.workflow?.context?.drinkerName ?? '')),
+  );
 
   const activeFilters = createMemo(() => {
     const out: Array<{ key: string; label: string; clear: () => void }> = [];
@@ -281,6 +286,7 @@ export const ShotHistoryScreen: Component<{
             onUpdated={onUpdated}
             onDeleted={onDeleted}
             traceVisibility={p.traceVisibility}
+            drinkerSuggestions={drinkerSuggestions}
             fetchShot={p.fetchShot}
             updateShot={p.updateShot}
             deleteShot={p.deleteShot}

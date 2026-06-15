@@ -124,6 +124,8 @@ export interface WorkflowContextSnapshot {
   targetDoseWeight?: number;
   /** Final-stop weight in grams. 0 (or missing) means no auto-stop. */
   targetYield?: number;
+  /** Who the beverage is for (free text). */
+  drinkerName?: string;
   /** Free-form bag; OverDose stashes the live `beanId` here. */
   extras?: Record<string, unknown> | null;
 }
@@ -282,6 +284,20 @@ export const api = {
     if (params.profileTitle) q.set('profileTitle', params.profileTitle);
     if (params.grinderModel) q.set('grinderModel', params.grinderModel);
     return fetchJson<GatewayShotsPage>(`/api/v1/shots?${q.toString()}`);
+  },
+
+  /** Distinct drinker names from recent shots — for the "For" field's
+   *  autocomplete. Light (summaries only); resolves to [] on failure. */
+  recentDrinkers: async (): Promise<string[]> => {
+    try {
+      const page = await api.shotsList({ limit: 100 });
+      const names = page.items
+        .map((s) => s.workflow?.context?.drinkerName?.trim())
+        .filter((n): n is string => !!n);
+      return [...new Set(names)].sort((a, b) => a.localeCompare(b));
+    } catch {
+      return [];
+    }
   },
 
   /** Permanently delete a recorded shot (`DELETE /api/v1/shots/{id}`). */
@@ -448,6 +464,8 @@ export interface WorkflowContextUpdate {
    *  resolved bean — see the bean shot-binding rule. `null` clears. */
   coffeeName?: string | null;
   coffeeRoaster?: string | null;
+  /** Who the beverage is for. `null` clears. */
+  drinkerName?: string | null;
   /** Free-form context bag. OverDose stashes `beanId` here so its own shot
    *  history can resolve the live bean (rename-safe), since the gateway has
    *  no beanId field on WorkflowContext (only beanBatchId). */

@@ -21,6 +21,7 @@ import {
   type TraceVisibility,
 } from '../prefs';
 import { DebouncedNumberField } from './settings/sections/library/DebouncedNumberField';
+import { AutocompleteInput } from './settings/sections/library/AutocompleteInput';
 
 export const fmtStat = (
   n: number | null | undefined,
@@ -110,7 +111,16 @@ export const ShotReview: Component<{
   onNotes: (v: string) => void;
   actualDose: Accessor<number | undefined>;
   onActualDose: (v: number | undefined) => void;
-  /** Debounce for the dose field's commit (host decides; 0 = immediate). */
+  /** Measured yield override (g). Editable; falls back to the derived yield
+   *  for display when unset. */
+  actualYield: Accessor<number | undefined>;
+  onActualYield: (v: number | undefined) => void;
+  /** Who the beverage is for (free text). */
+  drinker: Accessor<string>;
+  onDrinker: (v: string) => void;
+  /** Previously-used drinker names, for the "For" field's autocomplete. */
+  drinkerSuggestions?: Accessor<string[]>;
+  /** Debounce for the number fields' commit (host decides; 0 = immediate). */
   doseDebounceMs?: number;
   /** Two-column layout with the chart on the right (history detail). When
    *  false/omitted, the chart sits full-width below (post-brew). */
@@ -191,7 +201,24 @@ export const ShotReview: Component<{
             : undefined
         }
       >
-        {fmtStat(stats().yieldG, 1, ' g')}
+        <Show
+          when={p.editable()}
+          fallback={fmtStat(p.actualYield() ?? stats().yieldG, 1, ' g')}
+        >
+          <span class="rstat__edit">
+            <DebouncedNumberField
+              value={p.actualYield() ?? stats().yieldG ?? undefined}
+              onCommit={(v) => p.onActualYield(v)}
+              min={0}
+              step={0.1}
+              ariaLabel="Actual yield, grams"
+              testId={tid('yield-input')}
+              class="rstat__input"
+              debounceMs={p.doseDebounceMs}
+            />
+            <span class="rstat__unit">g</span>
+          </span>
+        </Show>
       </ReviewStat>
       <ReviewStat label="Time" testId={tid('time')}>
         {fmtStat(stats().durationSec, 0, ' s')}
@@ -262,6 +289,30 @@ export const ShotReview: Component<{
           </Show>
         </div>
       </div>
+      {/* Who the beverage is for — only shown read-only when it has a value. */}
+      <Show when={p.editable() || p.drinker().trim()}>
+        <label class="review-field shot-review__for">
+          <span class="review-field__label">For</span>
+          <Show
+            when={p.editable()}
+            fallback={
+              <span class="shot-field__value" data-testid={tid('drinker-value')}>
+                {p.drinker()}
+              </span>
+            }
+          >
+            <AutocompleteInput
+              value={p.drinker()}
+              suggestions={p.drinkerSuggestions?.() ?? []}
+              onInput={p.onDrinker}
+              placeholder="Who's it for?"
+              ariaLabel="Drinker name"
+              testId={tid('drinker')}
+              class="shot-filters__input"
+            />
+          </Show>
+        </label>
+      </Show>
     </div>
   );
 

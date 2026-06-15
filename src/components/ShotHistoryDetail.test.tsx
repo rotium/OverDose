@@ -30,6 +30,7 @@ const setup = (over: {
   deleteShot?: (id: string) => Promise<void>;
   onDeleted?: (id: string) => void;
   traceVisibility?: TraceVisibility;
+  drinkerSuggestions?: string[];
 } = {}) => {
   const onBack = vi.fn();
   const onDeleted = over.onDeleted ?? vi.fn();
@@ -46,6 +47,9 @@ const setup = (over: {
       loadBean={() => Promise.resolve(bean)}
       loadBeans={() => Promise.resolve([bean])}
       traceVisibility={over.traceVisibility ? () => over.traceVisibility! : undefined}
+      drinkerSuggestions={
+        over.drinkerSuggestions ? () => over.drinkerSuggestions! : undefined
+      }
     />
   ));
   return { onBack, onDeleted, updateShot, deleteShot };
@@ -168,6 +172,71 @@ describe('ShotHistoryDetail', () => {
     expect(screen.getByTestId('shot-detail-legend-pressure')).toHaveAttribute(
       'aria-pressed',
       'true',
+    );
+  });
+
+  it('Save writes an edited yield to annotations.actualYield', async () => {
+    const { updateShot } = setup();
+    fireEvent.click(screen.getByTestId('shot-detail-edit'));
+    const y = screen.getByTestId('shot-detail-yield-input');
+    fireEvent.input(y, { target: { value: '40' } });
+    fireEvent.blur(y);
+    fireEvent.click(screen.getByTestId('shot-detail-save'));
+    await waitFor(() =>
+      expect(updateShot).toHaveBeenCalledWith(
+        'shot-1',
+        expect.objectContaining({
+          annotations: expect.objectContaining({ actualYield: 40 }),
+        }),
+      ),
+    );
+  });
+
+  it('Save writes a drinker to workflow.context and shows it read-only', async () => {
+    const { updateShot } = setup();
+    fireEvent.click(screen.getByTestId('shot-detail-edit'));
+    fireEvent.input(screen.getByTestId('shot-detail-drinker'), {
+      target: { value: 'Maya' },
+    });
+    fireEvent.click(screen.getByTestId('shot-detail-save'));
+    await waitFor(() =>
+      expect(updateShot).toHaveBeenCalledWith(
+        'shot-1',
+        expect.objectContaining({
+          workflow: { context: expect.objectContaining({ drinkerName: 'Maya' }) },
+        }),
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('shot-detail-drinker-value')).toHaveTextContent(
+        'Maya',
+      ),
+    );
+  });
+
+  it('suggests previously-used drinkers in the For field', async () => {
+    setup({ drinkerSuggestions: ['Maya', 'Sam'] });
+    fireEvent.click(screen.getByTestId('shot-detail-edit'));
+    fireEvent.input(screen.getByTestId('shot-detail-drinker'), {
+      target: { value: 'Ma' },
+    });
+    expect(
+      await screen.findByTestId('shot-detail-drinker-option-0'),
+    ).toHaveTextContent('Maya');
+  });
+
+  it('does not write a drinker when left empty', async () => {
+    const { updateShot } = setup();
+    fireEvent.click(screen.getByTestId('shot-detail-edit'));
+    fireEvent.input(screen.getByTestId('shot-detail-notes'), {
+      target: { value: 'just notes' },
+    });
+    fireEvent.click(screen.getByTestId('shot-detail-save'));
+    await waitFor(() => expect(updateShot).toHaveBeenCalled());
+    // No drinker typed → no workflow.context written at all.
+    expect(updateShot).not.toHaveBeenCalledWith(
+      'shot-1',
+      expect.objectContaining({ workflow: expect.anything() }),
     );
   });
 
