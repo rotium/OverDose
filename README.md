@@ -30,6 +30,7 @@ recipe-driven brewing UI, designed for the tablet on your espresso bar.
 - Auto-stop steam by time (configurable per pitcher)
 - Two-level water warnings (soft warning + machine refill level)
 - Smooth live shot view
+- Searchable shot history — review past shots, edit their details, replay the curve
 - Guided cleaning routines with scheduled reminders
 - Optional audio cues (machine-ready, sleep/wake, water, cleaning-due)
 - Highly configurable
@@ -63,6 +64,22 @@ control between phases rather than racing an auto-progressing timer.
 For ad-hoc operations that don't deserve a saved recipe — warming a
 cup, a quick steam wand purge, hot water for tea — the **Explore**
 tray on the home screen runs the four machine operations directly.
+
+## Shot history
+
+Every shot is saved, so you can look back. The **Shots** screen lists
+them grouped by day, with a search box and bean/profile filters to find
+a particular one.
+
+<img src="docs/screenshots/shots-history-list.png" alt="Shot history — shots grouped by day with search and filters" width="500">
+
+Open a shot to replay its curve — pressure, flow, temperature and weight,
+with the profile's target lines overlaid — next to the numbers (dose,
+yield, time, peak pressure and flow, in-cup volume). You can also fill in
+or fix what was logged after the fact: rating, tasting notes, the bean and
+grind, the actual dose and yield, and who the drink was for.
+
+<img src="docs/screenshots/shots-history-shot-view.png" alt="Shot history — single shot view with its curve and editable details" width="500">
 
 ## Cleaning & maintenance
 
