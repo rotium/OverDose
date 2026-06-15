@@ -2,8 +2,10 @@ import {
   Show,
   createResource,
   createSignal,
+  type Accessor,
   type Component,
 } from 'solid-js';
+import type { TraceVisibility } from '../prefs';
 import {
   api,
   type Bean,
@@ -99,6 +101,8 @@ export const ShotHistoryDetail: Component<{
   loadBean?: (id: string) => Promise<Bean | null>;
   /** Bean list for the picker (injected in tests). */
   loadBeans?: () => Promise<Bean[]>;
+  /** Saved default trace visibility (Settings), seeding the chart. */
+  traceVisibility?: Accessor<TraceVisibility>;
 }> = (p) => {
   const [full] = createResource<GatewayShotRecord | null, string>(
     () => p.shot.id,
@@ -313,6 +317,7 @@ export const ShotHistoryDetail: Component<{
       <ShotReview
         testIdPrefix="shot-detail"
         chartSide={true}
+        defaultVisibility={p.traceVisibility}
         summary={summary}
         full={() => full() ?? null}
         loading={() => full.loading}

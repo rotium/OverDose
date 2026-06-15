@@ -9,6 +9,7 @@ import {
   type Component,
 } from 'solid-js';
 import type { GatewayShotRecord, GatewayShotSummary } from '../api';
+import type { TraceVisibility } from '../prefs';
 import { ShotMiniChart } from './ShotMiniChart';
 import {
   shotDoseG,
@@ -58,6 +59,9 @@ export interface LastShotCardProps {
    * the gateway version takes over.
    */
   optimisticShot?: Accessor<GatewayShotRecord | null>;
+  /** Saved default trace visibility (Settings) so the mini chart matches the
+   *  user's configured traces. Omitted → all traces show. */
+  traceVisibility?: Accessor<TraceVisibility>;
 }
 
 /**
@@ -179,7 +183,11 @@ export const LastShotCard: Component<LastShotCardProps> = (p) => {
                   <span> · {shotDurationSec(displayedFull())}s</span>
                 </Show>
               </p>
-              <ShotMiniChart shot={displayedFull} fill />
+              <ShotMiniChart
+                shot={displayedFull}
+                fill
+                visibility={p.traceVisibility}
+              />
               <p class="muted">{fmtAgo(s().timestamp, new Date(now()))}</p>
             </div>
           )}

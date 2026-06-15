@@ -108,6 +108,21 @@ describe('LiveShotAccumulator', () => {
       });
     });
 
+    it('freeze() carries per-sample target setpoints into the measurements', () => {
+      inRoot(() => {
+        const acc = createLiveShotAccumulator();
+        acc.start(null);
+        acc.append(
+          frame({ tMs: 0, targetPressure: 9, targetFlow: 2, targetMixTemperature: 93 }),
+        );
+        acc.freeze();
+        const m = acc.frozenShot()!.measurements[0]!.machine;
+        expect(m.targetPressure).toBe(9);
+        expect(m.targetFlow).toBe(2);
+        expect(m.targetMixTemperature).toBe(93);
+      });
+    });
+
     it('freeze() stamps per-sample substate (so the summary can window counted volume)', () => {
       inRoot(() => {
         const acc = createLiveShotAccumulator();

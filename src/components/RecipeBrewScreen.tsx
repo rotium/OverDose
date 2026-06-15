@@ -42,7 +42,7 @@ import {
 import { buildProfileCurve } from '../profile/curve';
 import { deriveShotStats } from '../shotStats';
 import { ShotReview } from './ShotReview';
-import { type AutoStopMode } from '../prefs';
+import { type AutoStopMode, type TraceVisibility } from '../prefs';
 import {
   autoStopLabel,
   autoStopUnavailableReason,
@@ -150,6 +150,8 @@ export interface RecipeBrewScreenProps {
    *  "Show steam-flow slider during steaming" pref. Default false; flow is
    *  still applied from the pitcher either way, just not editable here. */
   showFlowSlider?: () => boolean;
+  /** Saved default trace visibility (Settings), seeding the post-brew chart. */
+  traceVisibility?: Accessor<TraceVisibility>;
   /** Single-profile fetcher used to render the brew step's prep card.
    *  Resolves to `null` on any failure (deleted, hidden, gateway offline)
    *  so the prep card degrades to a graceful "(missing profile)" hint
@@ -651,6 +653,7 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
                   optimisticShot={p.optimisticShot}
                   updateShot={p.updateShot}
                   saveDebounceMs={p.saveDebounceMs}
+                  traceVisibility={p.traceVisibility}
                 />
               }
             >
@@ -1393,6 +1396,7 @@ const PostBrewView: Component<{
   optimisticShot?: Accessor<GatewayShotRecord | null>;
   updateShot?: (id: string, patch: ShotAnnotationsPatch) => Promise<void>;
   saveDebounceMs?: number;
+  traceVisibility?: Accessor<TraceVisibility>;
 }> = (p) => {
   // Fetch the persisted espresso shot. Both fetchers resolve to null on
   // failure so a gateway hiccup degrades to the optimistic record (or an
@@ -1525,6 +1529,7 @@ const PostBrewView: Component<{
       full={displayedFull}
       loading={() => summary.loading}
       editable={() => true}
+      defaultVisibility={p.traceVisibility}
       enjoyment={enjoyment}
       onEnjoyment={(v) => {
         setEnjoyment(v);

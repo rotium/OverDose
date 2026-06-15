@@ -7,8 +7,10 @@ import {
   createSignal,
   on,
   onCleanup,
+  type Accessor,
   type Component,
 } from 'solid-js';
+import type { TraceVisibility } from '../prefs';
 import {
   api,
   type Bean,
@@ -127,6 +129,8 @@ export const ShotHistoryScreen: Component<{
   deleteShot?: (id: string) => Promise<void>;
   fetchBeans?: () => Promise<Bean[]>;
   fetchProfiles?: () => Promise<ProfileRecord[]>;
+  /** Saved default trace visibility (Settings), seeding the detail chart. */
+  traceVisibility?: Accessor<TraceVisibility>;
 }> = (p) => {
   // ── Query state ──
   const [searchInput, setSearchInput] = createSignal('');
@@ -276,6 +280,7 @@ export const ShotHistoryScreen: Component<{
             onBack={() => setSelected(null)}
             onUpdated={onUpdated}
             onDeleted={onDeleted}
+            traceVisibility={p.traceVisibility}
             fetchShot={p.fetchShot}
             updateShot={p.updateShot}
             deleteShot={p.deleteShot}

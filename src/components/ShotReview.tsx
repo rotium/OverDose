@@ -43,8 +43,8 @@ export const fmtEst = (
 };
 
 /** Legend trace declarations for the shot chart — mirrors the live view's
- *  legend (minus the dashed-targets entry, which the frozen record can't
- *  supply). Colours come from `chartTraces.ts` so they never drift. */
+ *  legend; the dashed-targets master toggle is appended after these.
+ *  Colours come from `chartTraces.ts` so they never drift. */
 const RESULT_LEGEND: Array<{
   key: TraceKey;
   name: string;
@@ -115,6 +115,10 @@ export const ShotReview: Component<{
   /** Two-column layout with the chart on the right (history detail). When
    *  false/omitted, the chart sits full-width below (post-brew). */
   chartSide?: boolean;
+  /** Saved default trace visibility (the user's Settings). Seeds the chart's
+   *  starting show/hide; legend toggles stay session-local. Falls back to
+   *  all-on when omitted. */
+  defaultVisibility?: Accessor<TraceVisibility>;
   /** Hide the headline's subtitle (e.g. when the coffee moves into a
    *  left-column section instead of the header). */
   hideSubtitle?: boolean;
@@ -137,10 +141,12 @@ export const ShotReview: Component<{
   const displayDose = (): number | null | undefined =>
     p.actualDose() ?? stats().doseG;
 
-  // Per-session trace visibility for the legend show/hide. Starts all-on,
-  // independent of the live view's prefs to keep the review self-contained.
-  const [visibility, setVisibility] =
-    createSignal<TraceVisibility>(DEFAULT_TRACE_VISIBILITY);
+  // Per-session trace visibility for the legend show/hide. Seeded from the
+  // user's saved defaults (Settings) so the chart matches what they configured;
+  // legend toggles here stay session-local and don't persist back.
+  const [visibility, setVisibility] = createSignal<TraceVisibility>(
+    p.defaultVisibility?.() ?? DEFAULT_TRACE_VISIBILITY,
+  );
   const toggleTrace = (key: TraceKey): void => {
     setVisibility({ ...visibility(), [key]: !visibility()[key] });
   };
@@ -335,6 +341,21 @@ export const ShotReview: Component<{
             );
           }}
         </For>
+        {/* Master toggle for the dashed setpoint overlays. */}
+        <li>
+          <button
+            type="button"
+            class="legend-item legend-item--note"
+            classList={{ 'legend-item--hidden': !visibility().targets }}
+            aria-pressed={visibility().targets}
+            aria-label="Toggle target traces"
+            data-testid={tid('legend-targets')}
+            onClick={() => toggleTrace('targets')}
+          >
+            <span class="legend-swatch legend-swatch--dashed" aria-hidden="true" />
+            <span class="legend-label">targets</span>
+          </button>
+        </li>
       </ul>
       <div class="shot-review__chart" data-testid={tid('chart')}>
         <ShotMiniChart

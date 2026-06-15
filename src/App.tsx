@@ -588,7 +588,12 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
        >
        <Show
          when={!historyOpen()}
-         fallback={<ShotHistoryScreen onClose={onCloseHistory} />}
+         fallback={
+          <ShotHistoryScreen
+            onClose={onCloseHistory}
+            traceVisibility={prefs.traceVisibility}
+          />
+        }
        >
         <Switch
           fallback={
@@ -631,6 +636,7 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
               requestState={api.requestState}
               shotSettingsStream={() => p.streams.shotSettings}
               showFlowSlider={() => prefs.showSteamFlowSlider()}
+              traceVisibility={prefs.traceVisibility}
               fetchLatestShot={api.shotsLatest}
               fetchShot={api.shotById}
               optimisticShot={optimisticShot}
@@ -654,6 +660,7 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
                 requestState={api.requestState}
                 shotSettingsStream={() => p.streams.shotSettings}
                 showFlowSlider={() => prefs.showSteamFlowSlider()}
+                traceVisibility={prefs.traceVisibility}
                 fetchLatestShot={api.shotsLatest}
                 fetchShot={api.shotById}
                 optimisticShot={optimisticShot}
@@ -672,6 +679,7 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
               requestState={api.requestState}
               shotSettingsStream={() => p.streams.shotSettings}
               showFlowSlider={() => prefs.showSteamFlowSlider()}
+              traceVisibility={prefs.traceVisibility}
               fetchLatestShot={api.shotsLatest}
               fetchShot={api.shotById}
               optimisticShot={optimisticShot}

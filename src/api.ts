@@ -62,6 +62,11 @@ export interface GatewayShotMeasurement {
     pressure: number;
     mixTemperature: number;
     groupTemperature: number;
+    /** Per-sample setpoints (what the profile asked for), for the dashed
+     *  target overlays on the shot chart. Optional: absent on older records. */
+    targetFlow?: number;
+    targetPressure?: number;
+    targetMixTemperature?: number;
     /** Active profile-step index at this sample. The gateway persists it
      *  per sample; we use it to window volume by step (counted volume).
      *  Optional: absent on older records and on the optimistic in-memory

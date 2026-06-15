@@ -18,9 +18,9 @@ import { TRACE_COLOR, TRACE_TRANSFORM } from './chartTraces';
  *
  * Renders the same five solid traces as the live chart (pressure, flow,
  * weight flow, weight ÷10, mix temp ÷10) with the same colours via the
- * shared `chartTraces.ts` module. Historical shot records don't carry
- * `target*` fields, so the chart omits the dashed targets the live chart
- * includes.
+ * shared `chartTraces.ts` module, plus the dashed target overlays
+ * (target pressure/flow/mix-temp) when the record carries the per-sample
+ * setpoints — older records that don't simply render no dashed lines.
  *
  * Size + chrome are configurable: LastShotCard uses the compact default
  * (100px, no axes); the post-brew result screen renders it taller with
@@ -28,13 +28,63 @@ import { TRACE_COLOR, TRACE_TRANSFORM } from './chartTraces';
  * (same show/hide UX as the live view). The legend itself lives in the
  * consumer — this component only applies the visibility to the series.
  */
-const SERIES: { idx: number; key: keyof TraceVisibility }[] = [
-  { idx: 1, key: 'pressure' },
-  { idx: 2, key: 'flow' },
-  { idx: 3, key: 'weight' },
-  { idx: 4, key: 'mixTemp' },
-  { idx: 5, key: 'weightFlow' },
-];
+
+// Which TraceVisibility flags gate each uPlot series index (1-based; 0 is x).
+// Dashed targets (6-8) show only when their primary AND the `targets` master
+// are on — mirrors the live chart's resolveSeriesVisibility.
+export const seriesShow = (
+  v: TraceVisibility,
+): Record<number, boolean> => ({
+  1: v.pressure,
+  2: v.flow,
+  3: v.weight,
+  4: v.mixTemp,
+  5: v.weightFlow,
+  6: v.pressure && v.targets,
+  7: v.flow && v.targets,
+  8: v.mixTemp && v.targets,
+});
+
+// Missing setpoints (older records) → NaN so uPlot draws a gap, not a
+// misleading flat line at 0.
+const target = (n: number | undefined, f: (x: number) => number): number =>
+  n == null ? NaN : f(n);
+
+/**
+ * Walk a record's measurements once into uPlot-shaped AlignedData: 9 arrays —
+ * time, the five solid traces, then the three dashed setpoint overlays. Pure;
+ * exported for testing.
+ */
+export const buildShotChartData = (
+  rec: GatewayShotRecord,
+): uPlot.AlignedData => {
+  if (!rec.measurements.length) {
+    return [[], [], [], [], [], [], [], [], []];
+  }
+  const t0 = Date.parse(rec.measurements[0]!.machine.timestamp) / 1000;
+  const ts: number[] = [];
+  const pressure: number[] = [];
+  const flow: number[] = [];
+  const weight: number[] = [];
+  const mix: number[] = [];
+  const weightFlow: number[] = [];
+  const tPressure: number[] = [];
+  const tFlow: number[] = [];
+  const tMix: number[] = [];
+  for (const m of rec.measurements) {
+    ts.push(Date.parse(m.machine.timestamp) / 1000 - t0);
+    pressure.push(TRACE_TRANSFORM.pressure(m.machine.pressure));
+    flow.push(TRACE_TRANSFORM.flow(m.machine.flow));
+    weight.push(m.scale ? TRACE_TRANSFORM.weight(m.scale.weight) : NaN);
+    mix.push(TRACE_TRANSFORM.mixTemperature(m.machine.mixTemperature));
+    const wf = m.scale?.weightFlow;
+    weightFlow.push(wf != null ? TRACE_TRANSFORM.weightFlow(wf) : NaN);
+    tPressure.push(target(m.machine.targetPressure, TRACE_TRANSFORM.pressure));
+    tFlow.push(target(m.machine.targetFlow, TRACE_TRANSFORM.flow));
+    tMix.push(target(m.machine.targetMixTemperature, TRACE_TRANSFORM.mixTemperature));
+  }
+  return [ts, pressure, flow, weight, mix, weightFlow, tPressure, tFlow, tMix];
+};
 
 export const ShotMiniChart: Component<{
   shot: Accessor<GatewayShotRecord | null>;
@@ -56,34 +106,6 @@ export const ShotMiniChart: Component<{
   // height when filling, else the fixed prop.
   const chartHeight = (): number =>
     p.fill ? container.clientHeight || 240 : (p.height ?? 100);
-
-  /**
-   * Walk the measurements once and build a uPlot-shaped AlignedData with
-   * the same five traces + transforms as the live chart. Skips frames
-   * where the value is missing (rare; happens when scale was offline).
-   */
-  const buildData = (rec: GatewayShotRecord): uPlot.AlignedData => {
-    if (!rec.measurements.length) return [[], [], [], [], [], []];
-    const t0 = Date.parse(rec.measurements[0]!.machine.timestamp) / 1000;
-    const ts: number[] = [];
-    const pressure: number[] = [];
-    const flow: number[] = [];
-    const weight: number[] = [];
-    const mix: number[] = [];
-    const weightFlow: number[] = [];
-    for (const m of rec.measurements) {
-      ts.push(Date.parse(m.machine.timestamp) / 1000 - t0);
-      pressure.push(TRACE_TRANSFORM.pressure(m.machine.pressure));
-      flow.push(TRACE_TRANSFORM.flow(m.machine.flow));
-      weight.push(
-        m.scale ? TRACE_TRANSFORM.weight(m.scale.weight) : NaN,
-      );
-      mix.push(TRACE_TRANSFORM.mixTemperature(m.machine.mixTemperature));
-      const wf = m.scale?.weightFlow;
-      weightFlow.push(wf != null ? TRACE_TRANSFORM.weightFlow(wf) : NaN);
-    }
-    return [ts, pressure, flow, weight, mix, weightFlow];
-  };
 
   onMount(() => {
     const axisStroke = '#9aa0aa';
@@ -119,9 +141,13 @@ export const ShotMiniChart: Component<{
         { stroke: TRACE_COLOR.weight, width: 1.5, points: { show: false } },
         { stroke: TRACE_COLOR.mixTemperature, width: 1.5, points: { show: false } },
         { stroke: TRACE_COLOR.weightFlow, width: 1.5, points: { show: false } },
+        // Dashed setpoint overlays — same colour as their primary trace.
+        { stroke: TRACE_COLOR.pressure, width: 1, dash: [5, 4], points: { show: false } },
+        { stroke: TRACE_COLOR.flow, width: 1, dash: [5, 4], points: { show: false } },
+        { stroke: TRACE_COLOR.mixTemperature, width: 1, dash: [5, 4], points: { show: false } },
       ],
     };
-    chart = new uPlot(opts, [[], [], [], [], [], []], container);
+    chart = new uPlot(opts, [[], [], [], [], [], [], [], [], []], container);
 
     const ro = new ResizeObserver(([entry]) => {
       if (!entry) return;
@@ -141,7 +167,7 @@ export const ShotMiniChart: Component<{
   createEffect(() => {
     const rec = p.shot();
     if (!rec || !chart) return;
-    chart.setData(buildData(rec));
+    chart.setData(buildShotChartData(rec));
   });
 
   // Apply per-trace visibility (legend show/hide) — same setSeries
@@ -149,7 +175,10 @@ export const ShotMiniChart: Component<{
   createEffect(() => {
     const v = p.visibility?.();
     if (!chart || !v) return;
-    for (const s of SERIES) chart.setSeries(s.idx, { show: v[s.key] });
+    const show = seriesShow(v);
+    for (const idx of Object.keys(show)) {
+      chart.setSeries(Number(idx), { show: show[Number(idx)] });
+    }
   });
 
   return (

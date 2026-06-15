@@ -216,6 +216,9 @@ export function createLiveShotAccumulator(): LiveShotAccumulator {
           flow: flow[i]!,
           pressure: pressure[i]!,
           mixTemperature: mixTemperature[i]!,
+          targetFlow: targetFlow[i]!,
+          targetPressure: targetPressure[i]!,
+          targetMixTemperature: targetMixTemperature[i]!,
           // groupTemperature isn't recorded in the live buffers today —
           // the WS frame has it but mini-chart doesn't use it. Add a
           // dedicated buffer later if a downstream consumer wants it.

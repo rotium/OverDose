@@ -233,6 +233,7 @@ export const Home: Component<HomeProps> = (p) => {
             onSeeAll={p.onSeeAllShots}
             refreshKey={shotCompletedTick}
             optimisticShot={p.optimisticShot}
+            traceVisibility={prefs.traceVisibility}
           />
         </aside>
       </main>

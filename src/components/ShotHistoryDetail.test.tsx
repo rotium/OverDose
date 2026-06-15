@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
 import type { Bean, GatewayShotSummary, ShotPatch } from '../api';
+import { DEFAULT_TRACE_VISIBILITY, type TraceVisibility } from '../prefs';
 
 vi.mock('./ShotMiniChart', () => ({
   ShotMiniChart: () => <div data-testid="shot-mini-chart-stub" />,
@@ -28,6 +29,7 @@ const setup = (over: {
   updateShot?: (id: string, p: ShotPatch) => Promise<void>;
   deleteShot?: (id: string) => Promise<void>;
   onDeleted?: (id: string) => void;
+  traceVisibility?: TraceVisibility;
 } = {}) => {
   const onBack = vi.fn();
   const onDeleted = over.onDeleted ?? vi.fn();
@@ -43,6 +45,7 @@ const setup = (over: {
       deleteShot={deleteShot}
       loadBean={() => Promise.resolve(bean)}
       loadBeans={() => Promise.resolve([bean])}
+      traceVisibility={over.traceVisibility ? () => over.traceVisibility! : undefined}
     />
   ));
   return { onBack, onDeleted, updateShot, deleteShot };
@@ -133,6 +136,38 @@ describe('ShotHistoryDetail', () => {
           },
         }),
       ),
+    );
+  });
+
+  it('shows the dashed-targets legend toggle, on by default and togglable', () => {
+    setup();
+    const btn = screen.getByTestId('shot-detail-legend-targets');
+    expect(btn).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(btn);
+    expect(btn).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('seeds the chart legend from the saved default trace visibility', () => {
+    setup({
+      traceVisibility: {
+        ...DEFAULT_TRACE_VISIBILITY,
+        weightFlow: false,
+        targets: false,
+      },
+    });
+    // Both start hidden because Settings had them off.
+    expect(screen.getByTestId('shot-detail-legend-weightFlow')).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    expect(screen.getByTestId('shot-detail-legend-targets')).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    // A trace left on stays on.
+    expect(screen.getByTestId('shot-detail-legend-pressure')).toHaveAttribute(
+      'aria-pressed',
+      'true',
     );
   });
 
