@@ -80,6 +80,31 @@ export interface GatewayShotRecord extends GatewayShotSummary {
   measurements: GatewayShotMeasurement[];
 }
 
+/** A page of shot summaries from `GET /api/v1/shots` (no measurements). */
+export interface GatewayShotsPage {
+  items: GatewayShotSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+/**
+ * Query for the paginated shots list. The gateway sorts by `timestamp` only;
+ * the name-based filters (`coffeeName`/`profileTitle`/`grinderModel`) and the
+ * free-text `search` are what OverDose's history filters map onto — no UUID
+ * resolution needed. Omitted fields are left unset (no filter).
+ */
+export interface ShotListParams {
+  limit?: number;
+  offset?: number;
+  search?: string;
+  coffeeName?: string;
+  coffeeRoaster?: string;
+  profileTitle?: string;
+  grinderModel?: string;
+  order?: 'asc' | 'desc';
+}
+
 /**
  * Workflow context as the gateway returns it from `GET /api/v1/workflow`.
  * Mirrors reaprime's `WorkflowContext`; we type only what the live brew UI
@@ -88,11 +113,14 @@ export interface GatewayShotRecord extends GatewayShotSummary {
  */
 export interface WorkflowContextSnapshot {
   coffeeName?: string;
+  coffeeRoaster?: string;
   grinderModel?: string;
   grinderSetting?: number;
   targetDoseWeight?: number;
   /** Final-stop weight in grams. 0 (or missing) means no auto-stop. */
   targetYield?: number;
+  /** Free-form bag; OverDose stashes the live `beanId` here. */
+  extras?: Record<string, unknown> | null;
 }
 
 /**
@@ -110,6 +138,9 @@ export interface ProfileStepSnapshot {
 /** Profile envelope from the current workflow. */
 export interface ProfileSnapshot {
   title: string;
+  /** "espresso" | "filter" | … — used as the row's brew label for ad-hoc
+   *  shots that have no recipe/profile title. */
+  beverage_type?: string;
   steps?: ProfileStepSnapshot[];
   /** Volume stop target (mL) baked into the profile. Surfaced on the
    *  post-brew summary as the target alongside the actual dispensed
@@ -230,6 +261,30 @@ export const api = {
   /** Latest shot summary (no measurements — fast). */
   shotsLatest: () => fetchJson<GatewayShotSummary>('/api/v1/shots/latest'),
 
+  /**
+   * Paginated shot history (`GET /api/v1/shots`). Summaries only (no
+   * measurements) so a page stays light. Sorted by timestamp; `order`
+   * defaults to newest-first. Filters map straight to query params.
+   */
+  shotsList: (params: ShotListParams = {}) => {
+    const q = new URLSearchParams();
+    q.set('limit', String(params.limit ?? 20));
+    q.set('offset', String(params.offset ?? 0));
+    q.set('order', params.order ?? 'desc');
+    if (params.search) q.set('search', params.search);
+    if (params.coffeeName) q.set('coffeeName', params.coffeeName);
+    if (params.coffeeRoaster) q.set('coffeeRoaster', params.coffeeRoaster);
+    if (params.profileTitle) q.set('profileTitle', params.profileTitle);
+    if (params.grinderModel) q.set('grinderModel', params.grinderModel);
+    return fetchJson<GatewayShotsPage>(`/api/v1/shots?${q.toString()}`);
+  },
+
+  /** Permanently delete a recorded shot (`DELETE /api/v1/shots/{id}`). */
+  deleteShot: (id: string) =>
+    fetchEmpty(`/api/v1/shots/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+
   /** Full shot record including measurements (for the mini chart). */
   shotById: (id: string) =>
     fetchJson<GatewayShotRecord>(`/api/v1/shots/${encodeURIComponent(id)}`),
@@ -244,6 +299,19 @@ export const api = {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ annotations }),
+    }),
+
+  /**
+   * Partial shot update — deep-merged by the gateway. Beyond annotations this
+   * can also patch `workflow.context` (coffee/bean/grind), which the
+   * shots-history detail uses to re-associate a bean or fix the grind on a
+   * recorded shot. Other context/measurement fields are preserved.
+   */
+  updateShot: (id: string, patch: ShotPatch) =>
+    fetchEmpty(`/api/v1/shots/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
     }),
 
   /**
@@ -386,6 +454,12 @@ export interface WorkflowUpdate {
   name?: string;
   profile?: Profile;
   context?: WorkflowContextUpdate;
+}
+
+/** Partial body for `PUT /api/v1/shots/{id}` (deep-merged by the gateway). */
+export interface ShotPatch {
+  annotations?: ShotAnnotationsPatch;
+  workflow?: WorkflowUpdate;
 }
 
 /**

@@ -35,7 +35,10 @@ export const buildExploreBrewBundle = (
   };
   const recipe: Recipe = {
     id: EXPLORE_BREW_RECIPE_ID,
-    name: 'Espresso',
+    // No recipe name — an ad-hoc Explore brew isn't a saved recipe. Empty so
+    // it isn't persisted as the shot's `workflow.name`; the shot is then
+    // identified by its profile (in the brew header and shots history).
+    name: '',
     routineId: routine.id,
     doseGrams:
       typeof ctx?.targetDoseWeight === 'number' ? ctx.targetDoseWeight : undefined,

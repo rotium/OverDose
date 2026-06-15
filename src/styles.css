@@ -1963,6 +1963,9 @@ html {
   padding: 0.75rem 1.25rem;
   border-top: 1px solid var(--border);
   background: var(--bg-elev);
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
 }
 
 /* ─── Profile picker ──────────────────────────────────────────────── */
@@ -4326,3 +4329,397 @@ html {
   resize: vertical;
 }
 
+
+/* ─── Shots history ───────────────────────────────────────────────── */
+
+.shot-history {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 1rem;
+  gap: 0.75rem;
+  min-height: 0;
+}
+
+.shot-history__head {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.shot-history__title {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.shot-history__count {
+  margin-left: auto;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.shot-history__toolbar {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.shot-history__search {
+  flex: 1;
+  min-width: 0;
+  padding: 0.55rem 0.75rem;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--fg);
+  font-size: 0.95rem;
+}
+
+.shot-history__search:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.shot-history__filters-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+
+.shot-history__badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.shot-history__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--bg-elev);
+  color: var(--fg);
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.chip:hover {
+  border-color: var(--accent);
+}
+
+.shot-history__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.shot-history__empty {
+  display: grid;
+  place-items: center;
+  padding: 3rem 1rem;
+}
+
+.shot-history__day-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 0 0 0.4rem;
+  font-size: 0.74rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.shot-history__day-count {
+  font-variant-numeric: tabular-nums;
+}
+
+.shot-history__rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.shot-row {
+  width: 100%;
+  display: grid;
+  /* time · rating · recipe/profile · bean/roaster · metric · chevron */
+  grid-template-columns: auto auto minmax(0, 1fr) minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 1.1rem;
+  padding: 0.6rem 0.85rem;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--fg);
+  text-align: left;
+  cursor: pointer;
+}
+
+.shot-row:hover {
+  border-color: var(--border-strong);
+}
+
+.shot-row__rating {
+  display: inline-flex;
+}
+
+/* The two identity columns: primary value over a muted second line. */
+.shot-row__col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.shot-row__primary {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shot-row__secondary {
+  font-size: 0.8rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shot-row__yield,
+.shot-row__time {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-2);
+  white-space: nowrap;
+}
+
+.shot-row__chev {
+  color: var(--muted);
+}
+
+.shot-history__sentinel {
+  height: 1px;
+}
+
+.shot-history__more {
+  align-self: center;
+}
+
+/* Filters dialog */
+.shot-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  /* The dialog body is padding:0 (pickers pad themselves), so inset the
+     fields from the dialog edges here. */
+  padding: 1.1rem 1.25rem;
+}
+
+.shot-filters__field {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.3rem;
+}
+
+.shot-filters__label {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* Matches the form-field input used elsewhere (e.g. the bean editor) so the
+   filter inputs share the app's field look & feel. */
+.shot-filters__input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  font: inherit;
+}
+.shot-filters__input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* Shot detail chrome (review mode) */
+.shot-detail__back {
+  margin-right: auto;
+}
+
+/* Action cluster at the bottom of the editable left column. Buttons share
+   the row equally and wrap if the column is narrow. */
+.shot-detail__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 0.4rem;
+}
+
+/* Equal width + height, icon-left with a consistent gap. */
+.shot-detail__btn {
+  flex: 1 1 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-width: 5.5rem;
+  height: 2.4rem;
+  padding: 0 0.9rem;
+}
+
+.shot-detail__saved {
+  color: #4caf50;
+  font-size: 0.82rem;
+}
+
+.shot-detail__delete {
+  color: #ef5350;
+}
+
+.shot-delete-confirm__shot {
+  margin: 0;
+  padding: 1.1rem 1.25rem;
+  line-height: 1.5;
+}
+
+/* Read-only notes (history detail, view mode) */
+.post-brew__notes-ro {
+  margin: 0;
+  white-space: pre-wrap;
+  color: var(--fg);
+}
+
+/* History detail: data/rate/notes/Delete in a left column, chart on the
+   right (the post-brew result keeps its chart-below layout instead). */
+.shot-review__split {
+  display: grid;
+  grid-template-columns: minmax(200px, 280px) 1fr;
+  column-gap: 2rem;
+  align-items: start;
+}
+
+.shot-review__left {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  min-width: 0;
+}
+
+.shot-review__right {
+  min-width: 0;
+}
+
+/* In the side layout the chart fills the taller right column. */
+.shot-review__split .shot-review__chart {
+  height: clamp(280px, 60vh, 560px);
+}
+
+/* A left-column field: label on top, value (view) or control (edit) below.
+   Shared by Coffee + Grind so view and edit read identically, matching the
+   Dose / Rate / Notes fields. */
+.shot-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.shot-field__value {
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Secondary line under a field's value — e.g. the roaster beneath the coffee
+   name (roaster is metadata of the coffee, not its own field). */
+.shot-field__sub {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.shot-coffee__bean {
+  width: 100%;
+  text-align: left;
+}
+
+/* History detail right column: profile caption above the curve, read-only
+   facts in a compact grid beneath it. */
+.shot-review__chart-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin-bottom: 0.4rem;
+}
+
+.shot-review__facts {
+  margin: 0.9rem 0 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.7rem 1.4rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Facts stack label-over-value, left-aligned — so a value never butts up
+   against the next column's label (the right-aligned rail layout doesn't
+   suit a multi-column grid). */
+.shot-review__facts .rstat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.shot-review__facts .rstat__value,
+.shot-review__facts .rstat__sub {
+  text-align: left;
+  font-size: 0.98rem;
+}
+.shot-review__facts .rstat__sub {
+  font-size: 0.68rem;
+}
+
+/* Left column = a consistent stack of label-over-value fields. The Dose
+   stat drops its right-aligned rail layout to match Coffee / Rate / Notes. */
+.shot-review__left .shot-review__stats .rstat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.shot-review__left .shot-review__stats .rstat__value,
+.shot-review__left .shot-review__stats .rstat__sub {
+  text-align: left;
+}
+/* Dose + grind share the dashed number-input look, left-aligned in the rail. */
+.shot-review__left .rstat__input {
+  text-align: left;
+}
+
+/* Opt-in: let a short dialog's content (e.g. an autocomplete dropdown) escape
+   the card/body clipping. Only safe for non-scrolling dialogs. */
+.picker-dialog--overflow,
+.picker-dialog--overflow .picker-dialog__body {
+  overflow: visible;
+}

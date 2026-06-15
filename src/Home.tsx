@@ -29,7 +29,7 @@ import {
 import type { WsStatus } from './streams';
 import { createWsStream, type WsStream } from './streams';
 import { useUserPrefs } from './UserPrefsContext';
-import { isWaterBlocked, waterSeverity, type WaterSeverity } from './water';
+import { type WaterSeverity } from './water';
 
 /**
  * Home — the entry screen. Composes the live data streams + the injected
@@ -50,6 +50,13 @@ export interface HomeProps {
   scaleStream: () => WsStream<ScaleMessage>;
   shotSettingsStream: () => WsStream<ShotSettingsSnapshot>;
   waterLevelsStream: () => WsStream<WaterLevelsSnapshot>;
+  /**
+   * Committed, hysteretic water severity — the single source of truth shared
+   * across the app (created in AppBody). Drives the header pill, status banner,
+   * and ExploreTray tile lock. Raw `waterLevelsStream` is still used for the
+   * numeric/bar displays. Defaulted in tests to a plain accessor.
+   */
+  waterSeverity: Accessor<WaterSeverity>;
   /** Allows tests to swap REST. */
   fetchLatestShot: () => ReturnType<typeof api.shotsLatest>;
   fetchShot: (id: string) => ReturnType<typeof api.shotById>;
@@ -101,14 +108,10 @@ export const Home: Component<HomeProps> = (p) => {
     () => new Set((p.dueCleanings?.() ?? []).map((c) => c.id)),
   );
 
-  // Single source of truth for the water-alert UI. Before any frame arrives
-  // we say 'normal' — a missing snapshot shouldn't pretend the tank is empty.
-  const severity = (): WaterSeverity => {
-    const w = waterLevels.latest();
-    return w
-      ? waterSeverity(w.currentLevel, prefs.waterWarnMm(), w.refillLevel)
-      : 'normal';
-  };
+  // Water-alert severity comes from the app-wide hysteretic source (prop), so
+  // the header pill, status banner, and tile lock never disagree. Raw
+  // `waterLevels` is still used below for the numeric/bar readouts.
+  const severity = p.waterSeverity;
 
   // Mirrors streamline.js: button shows "Sleep" (moon) when awake, "Awake"
   // (sun) when sleeping; clicking toggles between machine states.
@@ -178,10 +181,7 @@ export const Home: Component<HomeProps> = (p) => {
   // water-critical when both apply (heater is the more fundamental block).
   const exploreBlockReason = (): ExploreBlockReason | null => {
     if (heaterOff()) return 'heater-off';
-    const w = waterLevels.latest();
-    if (w && isWaterBlocked(w.currentLevel, w.refillLevel)) {
-      return 'water-critical';
-    }
+    if (severity() === 'critical') return 'water-critical';
     return null;
   };
 
@@ -224,6 +224,7 @@ export const Home: Component<HomeProps> = (p) => {
             scale={scale.latest}
             shotSettings={shotSettings.latest}
             waterLevels={waterLevels.latest}
+            waterSeverity={severity}
             onSteamToggle={handleSteamToggle}
           />
           <LastShotCard

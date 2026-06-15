@@ -8,7 +8,7 @@ import {
   type WaterLevelsSnapshot,
 } from '../snapshot';
 import { useUserPrefs } from '../UserPrefsContext';
-import { mmToMl, waterPct, waterSeverity } from '../water';
+import { mmToMl, waterPct, type WaterSeverity } from '../water';
 import type { WaterUnit } from '../prefs';
 import {
   PowerIcon,
@@ -58,6 +58,12 @@ export interface StatusPanelProps {
   scale: Accessor<ScaleMessage | null>;
   shotSettings: Accessor<ShotSettingsSnapshot | null>;
   waterLevels: Accessor<WaterLevelsSnapshot | null>;
+  /**
+   * Committed (hysteretic) water severity — shared app-wide source. Drives the
+   * row color and the critical banner. `waterLevels` is still used for the raw
+   * numeric/bar readouts.
+   */
+  waterSeverity: Accessor<WaterSeverity>;
   onSteamToggle: (next: boolean) => void;
 }
 
@@ -65,10 +71,6 @@ export const StatusPanel: Component<StatusPanelProps> = (p) => {
   const prefs = useUserPrefs();
   const steamOn = () => (p.shotSettings()?.steamSetting ?? 0) > 0;
   const scaleData = () => dataFrame(p.scale());
-  // Critical = the machine's reported refill level (same water frame). 0 when
-  // unknown → fail-open (no critical) until the machine reports a level.
-  const sev = (mm: number) =>
-    waterSeverity(mm, prefs.waterWarnMm(), p.waterLevels()?.refillLevel ?? 0);
 
   return (
     <section class="card status">
@@ -114,21 +116,21 @@ export const StatusPanel: Component<StatusPanelProps> = (p) => {
           </button>
         </dd>
 
-        <dt data-severity={p.waterLevels() ? sev(p.waterLevels()!.currentLevel) : 'normal'}>
+        <dt data-severity={p.waterSeverity()}>
           <WaterDropIcon size={16} />
           <span>Water</span>
         </dt>
         <dd
           data-testid="status-water"
-          data-severity={p.waterLevels() ? sev(p.waterLevels()!.currentLevel) : 'normal'}
+          data-severity={p.waterSeverity()}
         >
           <Show when={p.waterLevels()} fallback={<span class="muted">—</span>}>
             {(w) => {
-              // Getter, not const — Solid only re-runs this function-child
-              // when the outer Show's truthy/falsy flips, so capturing the
-              // severity value once would stick at its first-seen state
-              // (bug: banner stayed visible after refilling past critical).
-              const rowSev = () => sev(w().currentLevel);
+              // Getter, not const — Solid only re-runs this function-child when
+              // the outer Show's truthy/falsy flips, so reading the severity
+              // accessor through a getter keeps it reactive (capturing the
+              // value once would stick at its first-seen state).
+              const rowSev = p.waterSeverity;
               return (
                 <span class="status__row status__row--wrap">
                   <span>{formatWaterLevel(w().currentLevel, prefs.waterUnit())}</span>

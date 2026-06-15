@@ -11,7 +11,6 @@ import {
   untrack,
   type Accessor,
   type Component,
-  type JSX,
 } from 'solid-js';
 import {
   formatStepType,
@@ -40,17 +39,10 @@ import {
   type ShotAnnotationsPatch,
   type WorkflowUpdate,
 } from '../api';
-import { ShotRatingFace } from './ShotRatingFace';
 import { buildProfileCurve } from '../profile/curve';
-import { ShotMiniChart } from './ShotMiniChart';
 import { deriveShotStats } from '../shotStats';
-import { TRACE_COLOR } from './chartTraces';
-import {
-  DEFAULT_TRACE_VISIBILITY,
-  type AutoStopMode,
-  type TraceKey,
-  type TraceVisibility,
-} from '../prefs';
+import { ShotReview } from './ShotReview';
+import { type AutoStopMode } from '../prefs';
 import {
   autoStopLabel,
   autoStopUnavailableReason,
@@ -606,7 +598,12 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
 
   return (
     <main class="brew-screen" data-testid="recipe-brew-screen">
-      <BrewHeader recipe={recipe} routine={routine} onExit={p.onExit} />
+      <BrewHeader
+        recipe={recipe}
+        routine={routine}
+        profileTitle={() => profile()?.profile?.title}
+        onExit={p.onExit}
+      />
 
       <Switch>
         <Match when={bundle.loading}>
@@ -700,6 +697,8 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
 const BrewHeader: Component<{
   recipe: Accessor<Recipe | null | undefined>;
   routine: Accessor<Routine | null | undefined>;
+  /** Shown when the recipe has no name (ad-hoc Explore brew). */
+  profileTitle?: Accessor<string | undefined>;
   onExit: () => void;
 }> = (p) => (
   <header class="brew-screen__header">
@@ -717,7 +716,7 @@ const BrewHeader: Component<{
         class="brew-screen__recipe-name"
         data-testid="brew-recipe-name"
       >
-        {p.recipe()?.name ?? '…'}
+        {p.recipe()?.name || p.profileTitle?.() || '…'}
       </span>
       <span
         class="brew-screen__routine-name"
@@ -1380,49 +1379,11 @@ const SteamParamSlider: Component<{
   </div>
 );
 
-const fmtStat = (
-  n: number | null | undefined,
-  digits: number,
-  unit: string,
-): string =>
-  n === null || n === undefined || Number.isNaN(n)
-    ? '—'
-    : `${n.toFixed(digits)}${unit}`;
-
-/** Estimate-tagged variant of {@link fmtStat} — prefixes `~` when a value
- *  is present (e.g. the no-scale "In cup" volume, which is flow-derived). */
-const fmtEst = (
-  n: number | null | undefined,
-  digits: number,
-  unit: string,
-): string => {
-  const v = fmtStat(n, digits, unit);
-  return v === '—' ? v : `~${v}`;
-};
-
-/** Legend trace declarations for the post-brew chart — mirrors the live
- *  view's legend (minus the dashed-targets entry, which the frozen record
- *  can't supply). Colours come from `chartTraces.ts` so they never drift. */
-const RESULT_LEGEND: Array<{
-  key: TraceKey;
-  name: string;
-  color: string;
-  suffix?: string;
-}> = [
-  { key: 'pressure', name: 'pressure', color: TRACE_COLOR.pressure },
-  { key: 'flow', name: 'flow', color: TRACE_COLOR.flow },
-  { key: 'weightFlow', name: 'weight flow', color: TRACE_COLOR.weightFlow },
-  { key: 'weight', name: 'weight', color: TRACE_COLOR.weight, suffix: '÷10' },
-  { key: 'mixTemp', name: 'mix temp', color: TRACE_COLOR.mixTemperature, suffix: '÷10' },
-];
-
 /**
- * Post-brew result — mirrors the LiveEspressoView skeleton (header with a
- * hero timer, clickable trace legend, big filling chart, readouts row) so
- * the result reads as a natural continuation of the live view. The step
- * bar is hidden at this stage (handled by the parent) to give the chart
- * room. No dashed targets (the frozen record doesn't carry per-frame
- * target data — deferred).
+ * Post-brew result — the shared {@link ShotReview} in its always-editable
+ * "live" mode, wired to the optimistic→gateway hand-off and debounced
+ * auto-save. The step bar is hidden at this stage (handled by the parent)
+ * to give the chart room.
  */
 const PostBrewView: Component<{
   onDone: () => void;
@@ -1479,16 +1440,6 @@ const PostBrewView: Component<{
   const stats = createMemo(() =>
     deriveShotStats(displayedSummary(), displayedFull()),
   );
-  const hasShot = (): boolean => displayedSummary() !== null;
-
-  // Per-session trace visibility for the legend show/hide. Starts all-on
-  // (DEFAULT_TRACE_VISIBILITY) — independent of the live view's prefs to
-  // keep the result self-contained.
-  const [visibility, setVisibility] =
-    createSignal<TraceVisibility>(DEFAULT_TRACE_VISIBILITY);
-  const toggleTrace = (key: TraceKey): void => {
-    setVisibility({ ...visibility(), [key]: !visibility()[key] });
-  };
 
   // ── Post-shot annotation capture (rating · notes · corrected dose) ──
   const [enjoyment, setEnjoyment] = createSignal<number | null>(null);
@@ -1569,259 +1520,63 @@ const PostBrewView: Component<{
   onCleanup(() => clearTimeout(saveTimer));
 
   return (
-    <section class="shot-review" data-testid="post-brew-view">
-      <div class="shot-review__scroll">
-        <Show
-          when={hasShot()}
-          fallback={
-            <div class="post-brew__empty">
-              <p class="prep__no-params" data-testid="post-brew-empty">
-                <Show when={summary.loading} fallback="No shot data recorded.">
-                  Loading shot…
-                </Show>
-              </p>
-            </div>
-          }
+    <ShotReview
+      summary={displayedSummary}
+      full={displayedFull}
+      loading={() => summary.loading}
+      editable={() => true}
+      enjoyment={enjoyment}
+      onEnjoyment={(v) => {
+        setEnjoyment(v);
+        scheduleSave();
+      }}
+      notes={notes}
+      onNotes={(v) => {
+        setNotes(v);
+        scheduleSave();
+      }}
+      actualDose={actualDose}
+      onActualDose={(v) => {
+        setActualDose(v);
+        doseTouched = true;
+        scheduleSave();
+      }}
+      doseDebounceMs={p.saveDebounceMs}
+      headerActions={
+        <span
+          class="post-brew__save"
+          data-testid="post-brew-save-state"
+          data-state={saveState()}
+          aria-live="polite"
         >
-          <header class="shot-review__head">
-            <div class="shot-review__title">
-              <span
-                class="shot-review__profile"
-                data-testid="post-brew-headline"
-              >
-                {stats().headline}
-              </span>
-              <Show when={stats().subtitle}>
-                <span
-                  class="shot-review__subtitle"
-                  data-testid="post-brew-subtitle"
-                >
-                  {stats().subtitle}
-                </span>
-              </Show>
-            </div>
-            <span
-              class="post-brew__save"
-              data-testid="post-brew-save-state"
-              data-state={saveState()}
-              aria-live="polite"
-            >
-              <Switch>
-                <Match when={saveState() === 'saving'}>Saving…</Match>
-                <Match when={saveState() === 'saved'}>Saved ✓</Match>
-                <Match when={saveState() === 'error'}>Couldn’t save</Match>
-              </Switch>
-            </span>
-          </header>
-
-          {/* Data · Rate · Notes — three columns; the chart sits below. */}
-          <div class="shot-review__cols" data-testid="post-brew-capture">
-            <dl class="shot-review__stats" data-testid="post-brew-stats">
-              <ReviewStat label="Dose" testId="post-brew-stat-dose">
-                <span class="rstat__edit">
-                  <DebouncedNumberField
-                    value={actualDose()}
-                    onCommit={(v) => {
-                      setActualDose(v);
-                      doseTouched = true;
-                      scheduleSave();
-                    }}
-                    min={0}
-                    step={0.1}
-                    ariaLabel="Actual dose, grams"
-                    testId="post-brew-dose-input"
-                    class="rstat__input"
-                    debounceMs={p.saveDebounceMs}
-                  />
-                  <span class="rstat__unit">g</span>
-                </span>
-              </ReviewStat>
-              <ReviewStat
-                label="Yield"
-                testId="post-brew-stat-yield"
-                sub={
-                  stats().targetYieldG != null
-                    ? `target ${fmtStat(stats().targetYieldG, 1, ' g')}`
-                    : undefined
-                }
-              >
-                {fmtStat(stats().yieldG, 1, ' g')}
-              </ReviewStat>
-              <ReviewStat label="Time" testId="post-brew-time">
-                {fmtStat(stats().durationSec, 0, ' s')}
-              </ReviewStat>
-              <ReviewStat label="Peak P" testId="post-brew-stat-peak-pressure">
-                {fmtStat(stats().peakPressureBar, 1, ' bar')}
-              </ReviewStat>
-              <ReviewStat label="Peak flow" testId="post-brew-stat-peak-flow">
-                {fmtStat(stats().peakFlowMlS, 1, ' mL/s')}
-              </ReviewStat>
-              <ReviewStat
-                label="Water"
-                testId="post-brew-stat-volume"
-                sub={
-                  stats().targetVolumeMl != null
-                    ? `target ${fmtStat(stats().targetVolumeMl, 0, ' mL')}`
-                    : undefined
-                }
-              >
-                {fmtStat(stats().volumeMl, 0, ' mL')}
-              </ReviewStat>
-              <Show when={stats().volumeCountStart != null}>
-                <ReviewStat
-                  label="In cup"
-                  testId="post-brew-stat-counted-volume"
-                  sub={`from step ${stats().volumeCountStart}`}
-                >
-                  {fmtEst(stats().countedVolumeMl, 0, ' mL')}
-                </ReviewStat>
-              </Show>
-            </dl>
-
-            {/* Divider: objective shot data (left) vs. user feedback (right). */}
-            <div class="shot-review__divider" aria-hidden="true" />
-
-            <div class="review-col review-col--rate">
-              <span class="review-field__label">Rate</span>
-              <div class="rating">
-                <ShotRatingFace value={enjoyment()} />
-                <input
-                  type="range"
-                  class="rating__slider"
-                  min="0"
-                  max="100"
-                  step="1"
-                  value={enjoyment() ?? 50}
-                  classList={{ 'rating__slider--unset': enjoyment() == null }}
-                  aria-label="Enjoyment rating, 0 to 100"
-                  data-testid="post-brew-rating"
-                  onInput={(e) => {
-                    setEnjoyment(Number(e.currentTarget.value));
-                    scheduleSave();
-                  }}
-                />
-                <div class="rating__value" data-testid="post-brew-rating-value">
-                  <Show when={enjoyment() != null} fallback="Drag to rate">
-                    <span class="rating__num">{enjoyment()}</span>
-                    <span class="rating__den"> / 100</span>
-                  </Show>
-                </div>
-              </div>
-            </div>
-
-            <div class="review-col review-col--notes">
-              <label class="review-field">
-                <span class="review-field__label">Notes</span>
-                <textarea
-                  class="post-brew__notes"
-                  rows="4"
-                  placeholder="Bright, jammy, a little sharp on the finish…"
-                  data-testid="post-brew-notes"
-                  value={notes()}
-                  onInput={(e) => {
-                    setNotes(e.currentTarget.value);
-                    scheduleSave();
-                  }}
-                />
-              </label>
-              <button
-                type="button"
-                class="btn shot-review__viz"
-                data-testid="post-brew-visualizer"
-                disabled
-                title="Coming soon"
-              >
-                Upload to Visualizer
-              </button>
-            </div>
-          </div>
-
-          {/* Supporting curve — full width, below the data; grows with the
-              scroll area. */}
-          <div class="shot-review__chart-wrap">
-            <ul
-              class="live-view__legend shot-review__legend"
-              aria-label="Chart legend"
-              data-testid="post-brew-legend"
-            >
-              <For each={RESULT_LEGEND}>
-                {(item) => {
-                  const isOn = createMemo(() => visibility()[item.key]);
-                  return (
-                    <li>
-                      <button
-                        type="button"
-                        class="legend-item"
-                        classList={{ 'legend-item--hidden': !isOn() }}
-                        aria-pressed={isOn()}
-                        aria-label={`Toggle ${item.name} trace`}
-                        data-testid={`post-brew-legend-${item.key}`}
-                        onClick={() => toggleTrace(item.key)}
-                      >
-                        <span
-                          class="legend-swatch"
-                          style={{ background: item.color }}
-                          aria-hidden="true"
-                        />
-                        <span class="legend-label">{item.name}</span>
-                        <Show when={item.suffix}>
-                          <span class="legend-suffix">{item.suffix}</span>
-                        </Show>
-                      </button>
-                    </li>
-                  );
-                }}
-              </For>
-            </ul>
-            <div class="shot-review__chart" data-testid="post-brew-chart">
-              <ShotMiniChart
-                shot={displayedFull}
-                fill={true}
-                showAxes={true}
-                visibility={visibility}
-              />
-            </div>
-          </div>
-        </Show>
-      </div>
-
-      <footer class="prep__action prep__action--row post-brew__actions">
-        <button
-          type="button"
-          class="btn prep__secondary"
-          data-testid="post-brew-brew-again"
-          onClick={p.onBrewAgain}
-        >
-          Brew again
-        </button>
-        <button
-          type="button"
-          class="btn btn--primary prep__start"
-          data-testid="post-brew-done"
-          onClick={p.onDone}
-        >
-          Done
-        </button>
-      </footer>
-    </section>
+          <Switch>
+            <Match when={saveState() === 'saving'}>Saving…</Match>
+            <Match when={saveState() === 'saved'}>Saved ✓</Match>
+            <Match when={saveState() === 'error'}>Couldn’t save</Match>
+          </Switch>
+        </span>
+      }
+      footer={
+        <footer class="prep__action prep__action--row post-brew__actions">
+          <button
+            type="button"
+            class="btn prep__secondary"
+            data-testid="post-brew-brew-again"
+            onClick={p.onBrewAgain}
+          >
+            Brew again
+          </button>
+          <button
+            type="button"
+            class="btn btn--primary prep__start"
+            data-testid="post-brew-done"
+            onClick={p.onDone}
+          >
+            Done
+          </button>
+        </footer>
+      }
+    />
   );
 };
 
-/** A compact stat row on the Shot Review rail: a small label with its value
- *  (string or custom content, e.g. the editable dose field) and an optional
- *  muted target sub-line — actual and target shown as separate values, never
- *  an `actual/target` fraction (per the agreed result-screen treatment). */
-const ReviewStat: Component<{
-  label: string;
-  testId: string;
-  sub?: string;
-  children: JSX.Element;
-}> = (p) => (
-  <div class="rstat" data-testid={p.testId}>
-    <dt class="rstat__label">{p.label}</dt>
-    <dd class="rstat__value">{p.children}</dd>
-    <Show when={p.sub}>
-      <dd class="rstat__sub" data-testid={`${p.testId}-target`}>{p.sub}</dd>
-    </Show>
-  </div>
-);

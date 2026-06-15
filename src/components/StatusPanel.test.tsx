@@ -11,6 +11,13 @@ import type {
   ShotSettingsSnapshot,
   WaterLevelsSnapshot,
 } from '../snapshot';
+import { waterSeverity, type WaterSeverity } from '../water';
+
+// StatusPanel is a dumb display of a committed severity (the app derives it
+// once, hysteretically, in AppBody). For these display tests we feed severity
+// straight from the level via the pure helper — no hysteresis in play.
+const sevOf = (w: WaterLevelsSnapshot | null): WaterSeverity =>
+  w ? waterSeverity(w.currentLevel, 5, w.refillLevel ?? 0) : 'normal';
 
 const machineSample = (over: Partial<MachineSnapshot> = {}): MachineSnapshot => ({
   timestamp: '2026-05-22T08:00:00Z',
@@ -65,6 +72,7 @@ const setup = (init: Inputs = {}) => {
         scale={scale}
         shotSettings={shotSettings}
         waterLevels={waterLevels}
+        waterSeverity={() => sevOf(waterLevels())}
         onSteamToggle={onSteamToggle}
       />
     </WithPrefs>
@@ -102,6 +110,7 @@ describe('StatusPanel', () => {
             scale={scale}
             shotSettings={shotSettings}
             waterLevels={waterLevels}
+            waterSeverity={() => sevOf(waterLevels())}
             onSteamToggle={vi.fn()}
           />
         </UserPrefsProvider>

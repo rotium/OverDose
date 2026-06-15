@@ -1,0 +1,158 @@
+import { describe, expect, it, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
+import type { Bean, GatewayShotSummary, ShotPatch } from '../api';
+
+vi.mock('./ShotMiniChart', () => ({
+  ShotMiniChart: () => <div data-testid="shot-mini-chart-stub" />,
+}));
+
+import { ShotHistoryDetail } from './ShotHistoryDetail';
+
+const shot: GatewayShotSummary = {
+  id: 'shot-1',
+  timestamp: '2026-06-14T09:14:00Z',
+  workflow: {
+    profile: { title: 'Decent Default' },
+    context: { coffeeName: 'Ethiopia Guji', targetDoseWeight: 18 },
+  },
+  annotations: { enjoyment: 70, espressoNotes: 'Bright' },
+};
+
+const bean: Bean = {
+  id: 'b1',
+  roaster: 'Onyx',
+  name: 'Geisha',
+} as Bean;
+
+const setup = (over: {
+  updateShot?: (id: string, p: ShotPatch) => Promise<void>;
+  deleteShot?: (id: string) => Promise<void>;
+  onDeleted?: (id: string) => void;
+} = {}) => {
+  const onBack = vi.fn();
+  const onDeleted = over.onDeleted ?? vi.fn();
+  const updateShot = over.updateShot ?? vi.fn(() => Promise.resolve());
+  const deleteShot = over.deleteShot ?? vi.fn(() => Promise.resolve());
+  render(() => (
+    <ShotHistoryDetail
+      shot={shot}
+      onBack={onBack}
+      onDeleted={onDeleted}
+      fetchShot={(id) => Promise.resolve({ ...shot, id, measurements: [] })}
+      updateShot={updateShot}
+      deleteShot={deleteShot}
+      loadBean={() => Promise.resolve(bean)}
+      loadBeans={() => Promise.resolve([bean])}
+    />
+  ));
+  return { onBack, onDeleted, updateShot, deleteShot };
+};
+
+describe('ShotHistoryDetail', () => {
+  it('is read-only until Edit (coffee shown, no inputs, no Delete)', () => {
+    setup();
+    expect(screen.getByTestId('shot-detail-edit')).toBeInTheDocument();
+    expect(screen.getByTestId('shot-detail-coffee')).toHaveTextContent(
+      'Ethiopia Guji',
+    );
+    expect(screen.queryByTestId('shot-detail-notes')).toBeNull();
+    expect(screen.queryByTestId('shot-detail-rating')).toBeNull();
+    expect(screen.queryByTestId('shot-detail-delete')).toBeNull();
+  });
+
+  it('Edit reveals inputs, the bean control, and Delete', () => {
+    setup();
+    fireEvent.click(screen.getByTestId('shot-detail-edit'));
+    expect(screen.getByTestId('shot-detail-notes')).toBeInTheDocument();
+    expect(screen.getByTestId('shot-detail-rating')).toBeInTheDocument();
+    expect(screen.getByTestId('shot-detail-bean')).toBeInTheDocument();
+    expect(screen.getByTestId('shot-detail-grind')).toBeInTheDocument();
+    expect(screen.getByTestId('shot-detail-delete')).toBeInTheDocument();
+  });
+
+  it('Save persists edited annotations under {annotations} and returns to read-only', async () => {
+    const { updateShot } = setup();
+    fireEvent.click(screen.getByTestId('shot-detail-edit'));
+    fireEvent.input(screen.getByTestId('shot-detail-notes'), {
+      target: { value: 'Sour, grind finer' },
+    });
+    fireEvent.click(screen.getByTestId('shot-detail-save'));
+    await waitFor(() =>
+      expect(updateShot).toHaveBeenCalledWith(
+        'shot-1',
+        expect.objectContaining({
+          annotations: expect.objectContaining({
+            espressoNotes: 'Sour, grind finer',
+          }),
+        }),
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('shot-detail-edit')).toBeInTheDocument(),
+    );
+  });
+
+  it('Save writes a changed grind to workflow.context', async () => {
+    const { updateShot } = setup();
+    fireEvent.click(screen.getByTestId('shot-detail-edit'));
+    const grind = screen.getByTestId('shot-detail-grind');
+    fireEvent.input(grind, { target: { value: '5' } });
+    fireEvent.blur(grind);
+    fireEvent.click(screen.getByTestId('shot-detail-save'));
+    await waitFor(() =>
+      expect(updateShot).toHaveBeenCalledWith(
+        'shot-1',
+        expect.objectContaining({
+          workflow: { context: expect.objectContaining({ grinderSetting: '5' }) },
+        }),
+      ),
+    );
+  });
+
+  it('re-picking a bean writes the coffee trio to workflow.context', async () => {
+    const { updateShot } = setup();
+    fireEvent.click(screen.getByTestId('shot-detail-edit'));
+    fireEvent.click(screen.getByTestId('shot-detail-bean'));
+    fireEvent.click(await screen.findByTestId('bean-pick-b1'));
+    await waitFor(() =>
+      expect(screen.getByTestId('shot-detail-bean')).toHaveTextContent(
+        'Onyx · Geisha',
+      ),
+    );
+    fireEvent.click(screen.getByTestId('shot-detail-save'));
+    await waitFor(() =>
+      expect(updateShot).toHaveBeenCalledWith(
+        'shot-1',
+        expect.objectContaining({
+          workflow: {
+            context: expect.objectContaining({
+              coffeeName: 'Geisha',
+              coffeeRoaster: 'Onyx',
+              extras: { beanId: 'b1' },
+            }),
+          },
+        }),
+      ),
+    );
+  });
+
+  it('Cancel discards edits without persisting', () => {
+    const { updateShot } = setup();
+    fireEvent.click(screen.getByTestId('shot-detail-edit'));
+    fireEvent.input(screen.getByTestId('shot-detail-notes'), {
+      target: { value: 'changed' },
+    });
+    fireEvent.click(screen.getByTestId('shot-detail-cancel'));
+    expect(updateShot).not.toHaveBeenCalled();
+    expect(screen.getByTestId('shot-detail-edit')).toBeInTheDocument();
+  });
+
+  it('Delete (from edit mode) confirms, calls deleteShot, and reports back', async () => {
+    const { deleteShot, onDeleted } = setup();
+    fireEvent.click(screen.getByTestId('shot-detail-edit'));
+    fireEvent.click(screen.getByTestId('shot-detail-delete'));
+    fireEvent.click(await screen.findByTestId('shot-delete-go'));
+    await waitFor(() => expect(deleteShot).toHaveBeenCalledWith('shot-1'));
+    await waitFor(() => expect(onDeleted).toHaveBeenCalledWith('shot-1'));
+  });
+});

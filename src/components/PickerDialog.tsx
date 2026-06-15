@@ -56,6 +56,10 @@ export interface PickerDialogProps {
    *  click never throws away the user's preview-in-progress. The
    *  parent stays explicitly modal. */
   dismissibleOnBackdrop?: boolean;
+  /** Let content overflow the dialog (e.g. an autocomplete dropdown in a
+   *  short, non-scrolling dialog). Off by default — master-detail pickers
+   *  rely on `overflow: hidden` for their own internal scrolling. */
+  overflowVisible?: boolean;
   children?: JSX.Element;
 }
 
@@ -135,6 +139,7 @@ export const PickerDialog: Component<PickerDialogProps> = (p) => {
         >
         <div
           class="picker-dialog"
+          classList={{ 'picker-dialog--overflow': !!p.overflowVisible }}
           data-state={animatingOut() ? 'closing' : 'open'}
           data-testid={testId()}
           role="dialog"

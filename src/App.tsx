@@ -25,6 +25,7 @@ import { SleepOverlay, SLEEP_DARKEN_MS } from './components/SleepOverlay';
 import { playCue } from './sound';
 import { Settings } from './components/settings/Settings';
 import { Maintenance } from './components/maintenance/Maintenance';
+import { ShotHistoryScreen } from './components/ShotHistoryScreen';
 import { CleaningWizard } from './components/maintenance/CleaningWizard';
 import type { ExploreOp } from './components/ExploreTray';
 import {
@@ -41,7 +42,7 @@ import { RepositoriesProvider } from './RepositoriesContext';
 import { UserPrefsProvider, useUserPrefs } from './UserPrefsContext';
 import { setDebugLogging as setDebugLoggingEnabled, dlog } from './debugLog';
 import { deriveActivity } from './machineActivity';
-import { isWaterBlocked, waterSeverity, type WaterSeverity } from './water';
+import { createWaterSeverity, type WaterSeverity } from './water';
 import type { Recipe, Cleaning } from './domain';
 import { cleaningDue, dueOccurrence, nextOccurrence } from './domain';
 import {
@@ -89,8 +90,6 @@ const onUpdateShotSettings = (settings: ShotSettingsSnapshot) =>
     console.warn('updateShotSettings failed', e),
   );
 
-const onSeeAllShots = () => console.info('see all shots — TODO: route to history');
-
 /**
  * Streams are constructed once at the App level and shared between Home (the
  * status panel, last-shot refresh trigger) and LiveShotProvider (live brew
@@ -109,16 +108,16 @@ interface AppStreams {
 const AppBody: Component<{ streams: AppStreams }> = (p) => {
   const live = useLiveShot();
   const prefs = useUserPrefs();
-  // Water-critical state — shared by the prep-screen Start gate (here)
-  // and the ExploreTray's direct-op tile lock (computed independently
-  // inside Home, since Home consumes the same stream directly). Critical
-  // is the machine's own refill level, reported in the same water frame —
-  // so the gate matches when the DE1 itself considers the tank too low.
-  const isWaterCritical = (): boolean => {
-    const w = p.streams.waterLevels.latest();
-    if (!w) return false;
-    return isWaterBlocked(w.currentLevel, w.refillLevel);
-  };
+  // Single committed water severity for the whole app — hysteretic, so sensor
+  // jitter near a threshold can't flip alerts off and back on. Shared by the
+  // prep-screen Start gate (here), the audio cue, and every Home consumer
+  // (header pill, status banner, ExploreTray tile lock) via the prop below, so
+  // they always agree. Critical tracks the machine's own refill level.
+  const waterSev = createWaterSeverity(
+    () => p.streams.waterLevels.latest(),
+    () => prefs.waterWarnMm(),
+  );
+  const isWaterCritical = (): boolean => waterSev() === 'critical';
   // Settings overlay is a single-screen swap today (no router). The header's
   // menu button opens it; back / × close it. A future menu drawer would
   // wrap this in a richer navigator.
@@ -132,6 +131,12 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
   const [maintenanceOpen, setMaintenanceOpen] = createSignal(false);
   const onMaintenance = () => setMaintenanceOpen(true);
   const onCloseMaintenance = () => setMaintenanceOpen(false);
+
+  // Shots-history overlay — full-bleed peer of Settings/Maintenance, opened
+  // from the Home Last-Shot card's "→ all".
+  const [historyOpen, setHistoryOpen] = createSignal(false);
+  const onSeeAllShots = () => setHistoryOpen(true);
+  const onCloseHistory = () => setHistoryOpen(false);
 
   // Cleaning runtime (the wizard) — launched from Maintenance → Run. Covers
   // the screen while active; exit/complete returns to Maintenance.
@@ -523,10 +528,7 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
     s === 'critical' ? 2 : s === 'warn' ? 1 : 0;
   let prevWaterSev: WaterSeverity | undefined;
   createEffect(() => {
-    const w = p.streams.waterLevels.latest();
-    const sev: WaterSeverity = w
-      ? waterSeverity(w.currentLevel, prefs.waterWarnMm(), w.refillLevel ?? 0)
-      : 'normal';
+    const sev = waterSev();
     const prev = prevWaterSev;
     prevWaterSev = sev;
     if (prev === undefined || waterRank(sev) <= waterRank(prev)) return;
@@ -584,6 +586,10 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
            />
          }
        >
+       <Show
+         when={!historyOpen()}
+         fallback={<ShotHistoryScreen onClose={onCloseHistory} />}
+       >
         <Switch
           fallback={
             <div class="home-host" inert={homeInert()} data-testid="home-host">
@@ -594,6 +600,7 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
                 scaleStream={() => p.streams.scale}
                 shotSettingsStream={() => p.streams.shotSettings}
                 waterLevelsStream={() => p.streams.waterLevels}
+                waterSeverity={waterSev}
                 fetchLatestShot={api.shotsLatest}
                 fetchShot={api.shotById}
                 onSleep={onSleep}
@@ -671,6 +678,7 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
             />
           </Match>
         </Switch>
+       </Show>
        </Show>
       </Show>
       </Show>

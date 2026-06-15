@@ -24,6 +24,13 @@ describe('buildExploreBrewBundle', () => {
     expect(routine?.steps[0].type).toBe('brew');
   });
 
+  it('gives the ad-hoc recipe no name (so it is not persisted as the shot recipe)', () => {
+    // An Explore brew isn't a saved recipe — an empty name keeps it out of the
+    // shot's workflow.name, so the shot is labelled by its profile/type instead
+    // of a placeholder like "Espresso".
+    expect(buildExploreBrewBundle(null, []).recipe?.name).toBe('');
+  });
+
   it('seeds dose + yield from the current workflow context', () => {
     const wf: WorkflowSnapshot = {
       profile: { title: 'Gentle and sweet' },

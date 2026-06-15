@@ -23,6 +23,13 @@ import type {
   WaterLevelsSnapshot,
 } from './snapshot';
 import type { WsStream } from './streams';
+import { waterSeverity, type WaterSeverity } from './water';
+
+// Home now receives a committed severity from the app (created hysteretically
+// in AppBody). These tests use static water stubs, so deriving severity from
+// the level via the pure helper matches the old in-component behaviour.
+const sevOf = (w: WaterLevelsSnapshot | null | undefined): WaterSeverity =>
+  w ? waterSeverity(w.currentLevel, 5, w.refillLevel ?? 0) : 'normal';
 import type { GatewayShotRecord, GatewayShotSummary } from './api';
 
 const sampleRecipe: Recipe = {
@@ -93,6 +100,7 @@ const buildHome = (overrides: Partial<{
       scaleStream={() => mkStream<ScaleMessage>(stubs.scaleMsg ?? null)}
       shotSettingsStream={() => mkStream<ShotSettingsSnapshot>(stubs.settings ?? null)}
       waterLevelsStream={() => mkStream<WaterLevelsSnapshot>(stubs.water ?? null)}
+      waterSeverity={() => sevOf(stubs.water)}
       fetchLatestShot={() => Promise.resolve(summary)}
       fetchShot={() => Promise.resolve(fullRecord)}
       onSleep={overrides.onSleep ?? vi.fn()}
@@ -330,6 +338,7 @@ describe('Home', () => {
           latest: createSignal<WaterLevelsSnapshot | null>(null)[0],
           status: createSignal<'open'>('open')[0],
         })}
+        waterSeverity={() => 'normal'}
         fetchLatestShot={fetchLatestShot}
         fetchShot={() => Promise.resolve(fullRecord)}
         onSleep={vi.fn()}
