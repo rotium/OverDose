@@ -20,11 +20,7 @@ import {
   type ShotListParams,
   type ShotPatch,
 } from '../api';
-import {
-  shotDoseG,
-  shotTargetYieldG,
-  shotYieldG,
-} from '../shotStats';
+import { shotDoseG, shotYieldG } from '../shotStats';
 import { ShotRatingFace } from './ShotRatingFace';
 import { PickerDialog } from './PickerDialog';
 import { AutocompleteInput } from './settings/sections/library/AutocompleteInput';
@@ -32,8 +28,10 @@ import { ShotHistoryDetail } from './ShotHistoryDetail';
 
 const PAGE = 20;
 
+// Blank (not "—") for a missing value, so the dose→yield pair can show one
+// side empty while keeping the arrow.
 const fmtG = (n: number | null | undefined): string =>
-  n == null || Number.isNaN(n) ? '—' : `${n.toFixed(1)} g`;
+  n == null || Number.isNaN(n) ? '' : `${n.toFixed(1)} g`;
 
 const fmtClock = (iso: string): string => {
   const d = new Date(iso);
@@ -260,8 +258,11 @@ export const ShotHistoryScreen: Component<{
     setProfile('');
   };
 
+  // Only a real recorded yield (the gateway stamps the measured final weight
+  // into annotations.actualYield) — no target fallback, so a no-scale shot
+  // shows just the dose rather than a target masquerading as the result.
   const rowYield = (s: GatewayShotSummary): number | null =>
-    shotYieldG(s, null) ?? shotTargetYieldG(s);
+    shotYieldG(s, null);
 
   const onUpdated = (shot: GatewayShotSummary): void => {
     setItems((prev) => prev.map((s) => (s.id === shot.id ? shot : s)));
@@ -429,7 +430,15 @@ export const ShotHistoryScreen: Component<{
                               </Show>
                             </span>
                             <span class="shot-row__yield">
-                              {fmtG(shotDoseG(s))} → {fmtG(rowYield(s))}
+                              {/* Keep "dose → yield"; blank a missing side.
+                                  Drop the arrow only when both are missing. */}
+                              <Show
+                                when={
+                                  shotDoseG(s) != null || rowYield(s) != null
+                                }
+                              >
+                                {fmtG(shotDoseG(s))} → {fmtG(rowYield(s))}
+                              </Show>
                             </span>
                             <span class="shot-row__chev" aria-hidden="true">
                               ›

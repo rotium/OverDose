@@ -4466,8 +4466,11 @@ html {
 .shot-row {
   width: 100%;
   display: grid;
-  /* time · rating · recipe/profile · bean/roaster · metric · chevron */
-  grid-template-columns: auto auto minmax(0, 1fr) minmax(0, 1fr) auto auto;
+  /* time · rating · recipe/profile · bean/roaster · metric · chevron.
+     The metric is a FIXED track (not auto) — otherwise a blank yield shrinks
+     it per-row, shifting the flexible bean column out of alignment. The two
+     1fr columns then get identical remaining width across every row. */
+  grid-template-columns: auto auto minmax(0, 1fr) minmax(0, 1fr) 9rem auto;
   align-items: center;
   gap: 1.1rem;
   padding: 0.6rem 0.85rem;

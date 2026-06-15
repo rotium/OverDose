@@ -17,6 +17,7 @@ const mk = (
     coffee?: string;
     grinder?: string;
     enjoyment?: number;
+    actualYield?: number;
   } = {},
 ): GatewayShotSummary => ({
   id,
@@ -32,7 +33,14 @@ const mk = (
     },
   },
   annotations:
-    over.enjoyment !== undefined ? { enjoyment: over.enjoyment } : undefined,
+    over.enjoyment !== undefined || over.actualYield !== undefined
+      ? {
+          ...(over.enjoyment !== undefined ? { enjoyment: over.enjoyment } : {}),
+          ...(over.actualYield !== undefined
+            ? { actualYield: over.actualYield }
+            : {}),
+        }
+      : undefined,
 });
 
 const today = new Date();
@@ -241,13 +249,34 @@ describe('ShotHistoryScreen', () => {
       Array.from(row.querySelectorAll('.shot-row__col'));
 
     it('recipe shot: recipe primary + profile muted; bean and dose→yield', async () => {
-      const [brew, bean] = cols(await rowOf(mk('a', iso(9), { enjoyment: 80 })));
+      const [brew, bean] = cols(
+        await rowOf(mk('a', iso(9), { enjoyment: 80, actualYield: 36 })),
+      );
       expect(brew).toHaveTextContent('Morning'); // recipe
       expect(brew).toHaveTextContent('Decent Default'); // profile, muted
       expect(bean).toHaveTextContent('Ethiopia Guji');
       const row = screen.getByTestId('shot-row');
-      expect(row).toHaveTextContent('18.0 g');
-      expect(row).toHaveTextContent('36.0 g');
+      expect(row).toHaveTextContent('18.0 g'); // dose
+      expect(row).toHaveTextContent('36.0 g'); // real recorded yield
+    });
+
+    it('keeps the arrow but blanks the yield when none is recorded', async () => {
+      // No actualYield → no measured result; must not fall back to the target,
+      // but the "dose →" pairing (with the arrow) stays.
+      const row = await rowOf(mk('a', iso(9)));
+      const metric = row.querySelector('.shot-row__yield')!;
+      expect(metric).toHaveTextContent('18.0 g'); // dose
+      expect(metric).toHaveTextContent('→'); // arrow kept
+      expect(metric).not.toHaveTextContent('36'); // target yield not shown
+    });
+
+    it('drops the arrow entirely when neither dose nor yield is present', async () => {
+      const row = await rowOf({
+        id: 'x',
+        timestamp: iso(9),
+        workflow: { profile: { title: 'P' }, context: {} },
+      });
+      expect(row.querySelector('.shot-row__yield')).not.toHaveTextContent('→');
     });
 
     it('bean column shows the roaster as a muted second line', async () => {
