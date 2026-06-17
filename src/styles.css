@@ -4859,21 +4859,27 @@ html {
   display: flex;
   align-items: baseline;
   gap: 0.2rem;
-  padding: 0.05rem 0.4rem;
-  border-radius: 0.35rem;
-  background: var(--flag-color);
-  color: #0a0a0a;
+  padding: 0 0.2rem;
+  border-radius: 0.3rem;
+  /* Footprint over chrome: the trace-coloured digits carry a dark halo for
+     legibility, and the chip is only faintly tinted — so the curve stays
+     visible around the label instead of being walled off by a solid pill. */
+  background: rgba(10, 10, 10, 0.35);
+  color: var(--flag-color);
   font-variant-numeric: tabular-nums;
   font-size: 0.85rem;
   font-weight: 700;
   line-height: 1.3;
   white-space: nowrap;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  text-shadow:
+    0 0 2px #000,
+    0 0 3px #000,
+    0 1px 1px #000;
 }
 .chart-flag__unit {
   font-size: 0.65rem;
   font-weight: 600;
-  opacity: 0.75;
+  opacity: 0.8;
 }
 .chart-flag__dot {
   position: absolute;
