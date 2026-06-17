@@ -237,6 +237,62 @@ export const ShotMiniChart: Component<{
   const FLAG_HYSTERESIS = 28;
   const FLAG_GAP = 22; // min vertical spacing between de-collided pills
 
+  // Vertical-position tween: chips (and their leaders' pill-end) ease toward
+  // the trace value, so a big jump glides instead of teleporting. Horizontal
+  // follow and the on-curve dot stay instant — the column stays locked to the
+  // finger and the dot stays truthful on the line while the label catches up.
+  const FLAG_TAU = 35; // ms time-constant → ~90ms settle, frame-rate independent
+  // A horizontal cursor jump beyond this (a tap far from the last position, vs.
+  // a continuous drag) snaps the flags to the new height instead of easing —
+  // otherwise they'd slide in from the previous, unrelated Y ("from nowhere").
+  const FLAG_JUMP_PX = 80;
+  const flagAnim = new Map<number, { curY: number; targetY: number; active: boolean }>();
+  let flagRaf: number | null = null;
+  let flagRafTs: number | null = null;
+  let lastCursorX: number | null = null;
+
+  const writeFlagY = (series: number, y: number): void => {
+    const els = flagEls.get(series);
+    if (!els) return;
+    els.pill.style.top = `${y}px`;
+    els.line.setAttribute('y2', `${y}`);
+  };
+
+  const stepFlagAnim = (ts: number): void => {
+    flagRaf = null;
+    const dt = flagRafTs == null ? 16 : Math.min(64, ts - flagRafTs);
+    flagRafTs = ts;
+    const alpha = 1 - Math.exp(-dt / FLAG_TAU);
+    let moving = false;
+    for (const [series, st] of flagAnim) {
+      if (!st.active) continue;
+      const diff = st.targetY - st.curY;
+      if (Math.abs(diff) < 0.5) {
+        if (st.curY !== st.targetY) {
+          st.curY = st.targetY;
+          writeFlagY(series, st.curY);
+        }
+        continue;
+      }
+      st.curY += diff * alpha;
+      writeFlagY(series, st.curY);
+      moving = true;
+    }
+    if (moving) flagRaf = requestAnimationFrame(stepFlagAnim);
+    else flagRafTs = null;
+  };
+
+  const ensureFlagAnim = (): void => {
+    if (flagRaf != null) return;
+    for (const st of flagAnim.values()) {
+      if (st.active && Math.abs(st.targetY - st.curY) >= 0.5) {
+        flagRafTs = null;
+        flagRaf = requestAnimationFrame(stepFlagAnim);
+        return;
+      }
+    }
+  };
+
   const buildFlags = (): void => {
     const layer = document.createElement('div');
     layer.className = 'chart-flags';
@@ -275,10 +331,12 @@ export const ShotMiniChart: Component<{
   };
 
   const hideAllFlags = (): void => {
-    for (const { pill, dot, line } of flagEls.values()) {
-      pill.style.display = 'none';
-      dot.style.display = 'none';
-      line.style.display = 'none';
+    for (const [series, els] of flagEls) {
+      els.pill.style.display = 'none';
+      els.dot.style.display = 'none';
+      els.line.style.display = 'none';
+      const st = flagAnim.get(series);
+      if (st) st.active = false;
     }
   };
 
@@ -288,6 +346,7 @@ export const ShotMiniChart: Component<{
     if (!u || !flagEls.size) return;
     const t = u.data[0]?.[idx ?? -1];
     if (idx == null || t == null) {
+      lastCursorX = null;
       hideAllFlags();
       return;
     }
@@ -297,6 +356,9 @@ export const ShotMiniChart: Component<{
     const plotTop = over.offsetTop;
     const plotW = over.offsetWidth;
     const cursorX = plotLeft + u.valToPos(t, 'x');
+    // Discontinuous horizontal jump (a far tap) → snap; a continuous drag eases.
+    const jump = lastCursorX == null || Math.abs(cursorX - lastCursorX) > FLAG_JUMP_PX;
+    lastCursorX = cursorX;
 
     // Park the column on the side of the cursor with room; stay there until the
     // other side is clearly better, so it doesn't flip-flop mid-scrub.
@@ -314,6 +376,8 @@ export const ShotMiniChart: Component<{
         els.pill.style.display = 'none';
         els.dot.style.display = 'none';
         els.line.style.display = 'none';
+        const st = flagAnim.get(spec.series);
+        if (st) st.active = false;
         continue;
       }
       const curveY = plotTop + u.valToPos(plotted, 'y');
@@ -331,19 +395,26 @@ export const ShotMiniChart: Component<{
       els.num.textContent = a.real.toFixed(a.spec.digits);
       els.pill.style.display = '';
       els.pill.style.left = `${nearX}px`;
-      els.pill.style.top = `${a.flagY}px`;
       els.pill.style.transform =
         flagSide === 'right' ? 'translateY(-50%)' : 'translate(-100%, -50%)';
       els.dot.style.display = '';
       els.dot.style.left = `${cursorX}px`;
       els.dot.style.top = `${a.curveY}px`;
-      // Faded leader from the on-curve dot to the offset pill's near edge.
+      // Faded leader from the on-curve dot (instant) to the pill's near edge.
       els.line.style.display = '';
       els.line.setAttribute('x1', `${cursorX}`);
       els.line.setAttribute('y1', `${a.curveY}`);
       els.line.setAttribute('x2', `${nearX}`);
-      els.line.setAttribute('y2', `${a.flagY}`);
+      // Vertical (pill.top + leader y2) eases toward flagY; snap on (re)appear
+      // so a returning flag doesn't slide in from a stale position.
+      let st = flagAnim.get(a.spec.series);
+      if (!st || !st.active || jump) st = { curY: a.flagY, targetY: a.flagY, active: true };
+      else st.targetY = a.flagY;
+      st.active = true;
+      flagAnim.set(a.spec.series, st);
+      writeFlagY(a.spec.series, st.curY);
     }
+    ensureFlagAnim();
   };
   // Resolve the height uPlot should draw at: the container's measured
   // height when filling, else the fixed prop.
@@ -423,7 +494,12 @@ export const ShotMiniChart: Component<{
     };
     chart = new uPlot(opts, [[], [], [], [], [], [], [], [], []], container);
 
-    if (p.cursorFlags) buildFlags();
+    if (p.cursorFlags) {
+      buildFlags();
+      onCleanup(() => {
+        if (flagRaf != null) cancelAnimationFrame(flagRaf);
+      });
+    }
 
     // Touch fix: uPlot tracks the cursor off `mousemove`, which a touch drag
     // never fires — so the crosshair "triggers but doesn't follow" on the
