@@ -223,13 +223,34 @@ export const ShotMiniChart: Component<{
     { series: 4, visKey: 'mixTemp', color: TRACE_COLOR.mixTemperature, unit: '°C', digits: 0, toReal: (n) => n * 10 },
     { series: 5, visKey: 'weightFlow', color: TRACE_COLOR.weightFlow, unit: 'g/s', digits: 1, toReal: (n) => n },
   ];
-  const flagEls = new Map<number, { pill: HTMLDivElement; num: HTMLSpanElement; dot: HTMLDivElement }>();
+  const SVG_NS = 'http://www.w3.org/2000/svg' as const;
+  const flagEls = new Map<
+    number,
+    { pill: HTMLDivElement; num: HTMLSpanElement; dot: HTMLDivElement; line: SVGLineElement }
+  >();
   let lastFlagIdx: number | null = null;
+  // Which side of the cursor the value column rides on. Sticky (hysteresis) so
+  // it doesn't flip-flop while scrubbing past the threshold near the edge.
+  let flagSide: 'left' | 'right' = 'right';
+  const FLAG_OFFSET = 26; // px gap from cursor to the column's near edge
+  const FLAG_RESERVE = 104; // room a side needs before the column flips
+  const FLAG_HYSTERESIS = 28;
+  const FLAG_GAP = 22; // min vertical spacing between de-collided pills
 
   const buildFlags = (): void => {
     const layer = document.createElement('div');
     layer.className = 'chart-flags';
+    // Leader lines share one SVG, added first so the pills/dots paint above.
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('class', 'chart-flags__leaders');
+    layer.append(svg);
     for (const spec of FLAG_SPECS) {
+      const line = document.createElementNS(SVG_NS, 'line');
+      line.setAttribute('class', 'chart-flag__leader');
+      line.setAttribute('stroke', spec.color);
+      line.style.display = 'none';
+      svg.append(line);
+
       const pill = document.createElement('div');
       pill.className = 'chart-flag';
       pill.style.setProperty('--flag-color', spec.color);
@@ -240,21 +261,24 @@ export const ShotMiniChart: Component<{
       unit.className = 'chart-flag__unit';
       unit.textContent = spec.unit;
       pill.append(num, unit);
+
       const dot = document.createElement('div');
       dot.className = 'chart-flag__dot';
       dot.style.setProperty('--flag-color', spec.color);
       dot.style.display = 'none';
+
       layer.append(dot, pill);
-      flagEls.set(spec.series, { pill, num, dot });
+      flagEls.set(spec.series, { pill, num, dot, line });
     }
     container.style.position = 'relative';
     container.append(layer);
   };
 
   const hideAllFlags = (): void => {
-    for (const { pill, dot } of flagEls.values()) {
+    for (const { pill, dot, line } of flagEls.values()) {
       pill.style.display = 'none';
       dot.style.display = 'none';
+      line.style.display = 'none';
     }
   };
 
@@ -273,7 +297,13 @@ export const ShotMiniChart: Component<{
     const plotTop = over.offsetTop;
     const plotW = over.offsetWidth;
     const cursorX = plotLeft + u.valToPos(t, 'x');
-    const rightInset = Math.max(0, container.clientWidth - (plotLeft + plotW));
+
+    // Park the column on the side of the cursor with room; stay there until the
+    // other side is clearly better, so it doesn't flip-flop mid-scrub.
+    const roomRight = plotLeft + plotW - cursorX;
+    if (flagSide === 'right' && roomRight < FLAG_RESERVE) flagSide = 'left';
+    else if (flagSide === 'left' && roomRight > FLAG_RESERVE + FLAG_HYSTERESIS) flagSide = 'right';
+    const nearX = flagSide === 'right' ? cursorX + FLAG_OFFSET : cursorX - FLAG_OFFSET;
 
     // Collect the visible, finite traces; the rest hide.
     const active: Array<{ spec: FlagSpec; curveY: number; flagY: number; real: number }> = [];
@@ -283,6 +313,7 @@ export const ShotMiniChart: Component<{
       if (!v[spec.visKey] || plotted == null || !Number.isFinite(plotted)) {
         els.pill.style.display = 'none';
         els.dot.style.display = 'none';
+        els.line.style.display = 'none';
         continue;
       }
       const curveY = plotTop + u.valToPos(plotted, 'y');
@@ -290,21 +321,28 @@ export const ShotMiniChart: Component<{
     }
     // Vertical de-collision: walk top→bottom, push overlapping pills down.
     active.sort((a, b) => a.curveY - b.curveY);
-    const GAP = 22;
     let prev = -Infinity;
     for (const a of active) {
-      if (a.flagY < prev + GAP) a.flagY = prev + GAP;
+      if (a.flagY < prev + FLAG_GAP) a.flagY = prev + FLAG_GAP;
       prev = a.flagY;
     }
     for (const a of active) {
       const els = flagEls.get(a.spec.series)!;
       els.num.textContent = a.real.toFixed(a.spec.digits);
       els.pill.style.display = '';
+      els.pill.style.left = `${nearX}px`;
       els.pill.style.top = `${a.flagY}px`;
-      els.pill.style.right = `${rightInset}px`;
+      els.pill.style.transform =
+        flagSide === 'right' ? 'translateY(-50%)' : 'translate(-100%, -50%)';
       els.dot.style.display = '';
       els.dot.style.left = `${cursorX}px`;
       els.dot.style.top = `${a.curveY}px`;
+      // Faded leader from the on-curve dot to the offset pill's near edge.
+      els.line.style.display = '';
+      els.line.setAttribute('x1', `${cursorX}`);
+      els.line.setAttribute('y1', `${a.curveY}`);
+      els.line.setAttribute('x2', `${nearX}`);
+      els.line.setAttribute('y2', `${a.flagY}`);
     }
   };
   // Resolve the height uPlot should draw at: the container's measured

@@ -4830,14 +4830,28 @@ html {
   font-weight: 600;
 }
 
-/* On-chart value flags (full-mode crosshair): a colour-matched pill docked at
-   the plot's right edge at each trace's height, plus an on-curve dot at the
-   cursor. The layer is inert so it never intercepts the scrub gesture. */
+/* On-chart value flags (full-mode crosshair): colour-matched pills riding a
+   de-collided column just to one side of the cursor, each tied back to its
+   on-curve dot by a faded leader. The layer is inert so it never intercepts
+   the scrub gesture. */
 .chart-flags {
   position: absolute;
   inset: 0;
   pointer-events: none;
   z-index: 3;
+}
+.chart-flags__leaders {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.chart-flag__leader {
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  opacity: 0.5;
 }
 .chart-flag {
   position: absolute;
