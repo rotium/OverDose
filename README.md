@@ -81,6 +81,15 @@ grind, the actual dose and yield, and who the drink was for.
 
 <img src="docs/screenshots/shots-history-shot-view.png" alt="Shot history — single shot view with its curve and editable details" width="500">
 
+Tap the chart to open it full-screen and scrub it. Drag a crosshair across
+the shot and each trace reads out right where it sits — pressure, flow,
+temperature and weight ride their own curves as value flags, the time sits at
+the foot of the crosshair, and the step you're in lights up. Toggle individual
+traces from the legend. (Same enlarged view opens from the home screen's last
+shot.)
+
+<img src="docs/screenshots/full-mode-chart.png" alt="Full-screen shot chart with a scrubbable crosshair, per-trace value flags, and the active step highlighted" width="500">
+
 ## Cleaning & maintenance
 
 Keeping the machine clean is part of the daily flow too, so OverDose
