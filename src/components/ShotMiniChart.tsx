@@ -250,6 +250,9 @@ export const ShotMiniChart: Component<{
   let flagRaf: number | null = null;
   let flagRafTs: number | null = null;
   let lastCursorX: number | null = null;
+  // Time isn't a trace value — it's the x-position itself — so it rides the
+  // foot of the crosshair (by the time axis) rather than sitting in a flag.
+  let timeLabelEl: HTMLDivElement | undefined;
 
   const writeFlagY = (series: number, y: number): void => {
     const els = flagEls.get(series);
@@ -326,6 +329,11 @@ export const ShotMiniChart: Component<{
       layer.append(dot, pill);
       flagEls.set(spec.series, { pill, num, dot, line });
     }
+    const time = document.createElement('div');
+    time.className = 'chart-time';
+    time.style.display = 'none';
+    layer.append(time);
+    timeLabelEl = time;
     container.style.position = 'relative';
     container.append(layer);
   };
@@ -338,6 +346,7 @@ export const ShotMiniChart: Component<{
       const st = flagAnim.get(series);
       if (st) st.active = false;
     }
+    if (timeLabelEl) timeLabelEl.style.display = 'none';
   };
 
   const updateFlags = (idx: number | null): void => {
@@ -355,6 +364,7 @@ export const ShotMiniChart: Component<{
     const plotLeft = over.offsetLeft;
     const plotTop = over.offsetTop;
     const plotW = over.offsetWidth;
+    const plotH = over.offsetHeight;
     const cursorX = plotLeft + u.valToPos(t, 'x');
     // Discontinuous horizontal jump (a far tap) → snap; a continuous drag eases.
     const jump = lastCursorX == null || Math.abs(cursorX - lastCursorX) > FLAG_JUMP_PX;
@@ -413,6 +423,20 @@ export const ShotMiniChart: Component<{
       st.active = true;
       flagAnim.set(a.spec.series, st);
       writeFlagY(a.spec.series, st.curY);
+    }
+
+    // Time label: foot of the crosshair, in the time-axis strip, tracking the
+    // cursor horizontally (clamped so it never clips at the plot edges).
+    if (timeLabelEl) {
+      timeLabelEl.textContent = `${t.toFixed(1)} s`;
+      const half = 24;
+      const cx = Math.max(plotLeft + half, Math.min(plotLeft + plotW - half, cursorX));
+      // Sit the chip exactly on the tick-number row. uPlot draws those near the
+      // top of the axis strip (not its centre), so anchor the chip's centre a
+      // small fixed distance below the plot rather than at the strip midpoint.
+      timeLabelEl.style.left = `${cx}px`;
+      timeLabelEl.style.top = `${plotTop + plotH + 20}px`;
+      timeLabelEl.style.display = '';
     }
     ensureFlagAnim();
   };

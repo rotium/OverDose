@@ -13,9 +13,6 @@ import { ShotMiniChart } from './ShotMiniChart';
 import { ShotChartLegend } from './ShotChartLegend';
 import { deriveShotStats, shotReadoutAt } from '../shotStats';
 
-const g = (n: number | null, digits: number, unit: string): string =>
-  n == null ? '—' : `${n.toFixed(digits)}${unit}`;
-
 /**
  * Full-mode chart review — a full-screen overlay with the shot curve enlarged,
  * the legend toggles, and a scrubbable crosshair driving a readout strip
@@ -109,15 +106,9 @@ export const ShotChartOverlay: Component<{
               />
             </div>
 
-            {/* Per-trace values ride the curves as right-edge flags; only the
-                non-trace facts (time + active step) live in a fixed footer. */}
+            {/* Per-trace values ride the curves as flags and time rides the
+                crosshair foot; only the active step lives in a fixed footer. */}
             <div class="shot-chart-overlay__footer" data-testid="shot-full-readout">
-              <span class="shot-chart-overlay__foot-item">
-                <span class="shot-chart-overlay__foot-label">Time</span>
-                <span class="shot-chart-overlay__foot-value">
-                  {g(readout()?.timeSec ?? null, 1, ' s')}
-                </span>
-              </span>
               <Show when={readout()?.stepName}>
                 <span class="shot-chart-overlay__foot-item">
                   <span class="shot-chart-overlay__foot-label">Step</span>

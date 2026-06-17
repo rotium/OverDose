@@ -4891,6 +4891,24 @@ html {
   border: 2px solid var(--bg-elev);
 }
 
+/* Time rides the foot of the crosshair (in the time-axis strip), centred on
+   the cursor — a neutral chip, since time belongs to the x-position, not a
+   trace. */
+.chart-time {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  padding: 0 0.35rem;
+  border-radius: 0.3rem;
+  background: var(--bg-elev);
+  border: 1px solid var(--border-strong);
+  color: #ededed;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
 /* The chart fills the remaining height. */
 .shot-chart-overlay__chart {
   flex: 1 1 auto;
