@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo dev) vite build",
     "preview": "vite preview",
+    "deploy:tablet": "bash scripts/deploy-tablet.sh",
     "test": "vitest run",
     "test:watch": "vitest"
   },

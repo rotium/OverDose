@@ -1,0 +1,83 @@
+name: Dev release
+
+# Rolling "dev build" pre-release for testing unreleased work on a real machine.
+#
+# Build + publish happen here (no PAT — uses the workflow's own GITHUB_TOKEN).
+# Triggering the gateway to install is a separate LOCAL step (npm run
+# deploy:tablet), because a GitHub runner can't reach a tablet on a private /
+# IoT network.
+#
+# Cut a dev build by pushing the dev branch:
+#     git push origin HEAD:dev
+# or run it manually from the Actions tab (workflow_dispatch).
+#
+# It publishes/overwrites a single pre-release tagged `dev-build` (tag kept
+# distinct from the `dev` branch to avoid ambiguous-ref warnings), with one
+# asset `overdose-dev.zip`. The version is auto-derived as the next patch above
+# the latest stable release, suffixed `-dev` — nothing to bump by hand.
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: write # gh release create/edit/upload
+
+concurrency:
+  group: dev-release
+  cancel-in-progress: true
+
+jobs:
+  dev-release:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # Next patch above the latest STABLE release, suffixed -dev. The
+      # /releases/latest endpoint excludes pre-releases, so the rolling
+      # dev-build release is ignored here. e.g. latest v0.0.6 -> 0.0.7-dev.
+      - name: Compute dev version
+        id: ver
+        run: |
+          set -euo pipefail
+          latest="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" -q .tag_name 2>/dev/null || echo v0.0.0)"
+          v="${latest#v}"
+          IFS=. read -r MA MI PA <<< "$v"
+          echo "version=${MA:-0}.${MI:-0}.$(( ${PA:-0} + 1 ))-dev" >> "$GITHUB_OUTPUT"
+
+      # Bake the version into the bundle (the About screen also shows the commit
+      # hash separately, so provenance is covered).
+      - name: Build
+        run: OVERDOSE_VERSION="${{ steps.ver.outputs.version }}" npm run build
+
+      # Stamp the same version into the served manifest, then zip the dist
+      # CONTENTS (index.html at the zip root, as the gateway expects).
+      - name: Package
+        run: |
+          set -euo pipefail
+          jq --arg v "${{ steps.ver.outputs.version }}" '.version = $v' dist/manifest.json > dist/manifest.tmp
+          mv dist/manifest.tmp dist/manifest.json
+          ( cd dist && zip -r ../overdose-dev.zip . )
+
+      # Publish to the single rolling pre-release, overwriting the asset. The
+      # SHA-stamped notes are written LAST (after the upload), so a poller that
+      # sees the commit SHA in the notes knows the new asset is already up.
+      - name: Publish rolling dev-build pre-release
+        run: |
+          set -euo pipefail
+          TITLE="OverDose ${{ steps.ver.outputs.version }}"
+          NOTES="Rolling dev build, overwritten on each push to the dev branch. Built from ${GITHUB_SHA:0:7}."
+          gh release view dev-build >/dev/null 2>&1 \
+            || gh release create dev-build --prerelease --title "$TITLE" --notes "initializing…"
+          gh release upload dev-build overdose-dev.zip --clobber
+          gh release edit dev-build --prerelease --title "$TITLE" --notes "$NOTES"
