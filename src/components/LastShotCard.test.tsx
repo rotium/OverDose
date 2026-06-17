@@ -4,12 +4,12 @@ import { createSignal } from 'solid-js';
 
 // Stub the chart: jsdom has no canvas, and the chart's rendering is not what
 // these tests cover. We still surface the `visibility` prop (as JSON) and tag
-// the overlay's instance (it's the one passed `onHover`) so the tests can
+// the overlay's instance (it's the one passed `cursorFlags`) so the tests can
 // assert the tile chart and the full-mode overlay carry independent traces.
 vi.mock('./ShotMiniChart', () => ({
-  ShotMiniChart: (props: { visibility?: () => unknown; onHover?: unknown }) => (
+  ShotMiniChart: (props: { visibility?: () => unknown; cursorFlags?: unknown }) => (
     <div
-      data-testid={props.onHover ? 'overlay-mini-chart' : 'tile-mini-chart'}
+      data-testid={props.cursorFlags ? 'overlay-mini-chart' : 'tile-mini-chart'}
       data-vis={JSON.stringify(props.visibility?.() ?? null)}
     />
   ),
@@ -345,7 +345,6 @@ describe('LastShotCard', () => {
 
       fireEvent.click(screen.getByTestId('last-shot-chart-expand'));
       expect(screen.getByTestId('shot-chart-overlay')).toBeInTheDocument();
-      expect(screen.getByTestId('shot-full-readout')).toBeInTheDocument();
 
       fireEvent.click(screen.getByTestId('shot-chart-overlay-close'));
       await waitFor(() =>

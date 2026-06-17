@@ -1,7 +1,6 @@
 import {
   Show,
   createEffect,
-  createSignal,
   onCleanup,
   type Accessor,
   type Component,
@@ -11,14 +10,14 @@ import type { GatewayShotRecord } from '../api';
 import type { TraceKey, TraceVisibility } from '../prefs';
 import { ShotMiniChart } from './ShotMiniChart';
 import { ShotChartLegend } from './ShotChartLegend';
-import { deriveShotStats, shotReadoutAt } from '../shotStats';
 
 /**
- * Full-mode chart review — a full-screen overlay with the shot curve enlarged,
- * the legend toggles, and a scrubbable crosshair driving a readout strip
- * (time + pressure/flow/temp/weight + current step). Touch-first: drag to move
- * the crosshair. Close with ✕, the backdrop, or Escape. Visibility is shared
- * with the inline review (same signal + toggle), so changes track in both.
+ * Full-mode chart review — a full-screen overlay with the shot curve enlarged
+ * and the legend toggles. A scrubbable crosshair drives the on-chart readouts:
+ * each trace's value rides its curve as a flag, time rides the crosshair foot,
+ * and the current profile step is highlighted among the boundary labels.
+ * Touch-first: drag to move the crosshair. Close with ✕, the backdrop, or
+ * Escape. Visibility is shared with the inline review, so changes track in both.
  */
 export const ShotChartOverlay: Component<{
   open: boolean;
@@ -28,27 +27,6 @@ export const ShotChartOverlay: Component<{
   visibility: Accessor<TraceVisibility>;
   onToggle: (key: TraceKey) => void;
 }> = (p) => {
-  const [hoverIdx, setHoverIdx] = createSignal<number | null>(null);
-
-  // Readout follows the crosshair; with no hover, fall back to the shot's
-  // end-of-shot summary so the strip always shows something meaningful.
-  const readout = () => {
-    const rec = p.shot();
-    if (!rec) return null;
-    const live = shotReadoutAt(rec, hoverIdx());
-    if (live) return { ...live, live: true };
-    const s = deriveShotStats(rec, rec);
-    return {
-      timeSec: s.durationSec ?? 0,
-      pressure: null,
-      flow: null,
-      mixTemp: null,
-      weight: s.yieldG,
-      stepName: null,
-      live: false,
-    };
-  };
-
   const onKey = (e: KeyboardEvent): void => {
     if (e.key === 'Escape' && p.open) {
       e.preventDefault();
@@ -102,19 +80,7 @@ export const ShotChartOverlay: Component<{
                 cursorFlags
                 stepBoundaries
                 visibility={p.visibility}
-                onHover={setHoverIdx}
               />
-            </div>
-
-            {/* Per-trace values ride the curves as flags and time rides the
-                crosshair foot; only the active step lives in a fixed footer. */}
-            <div class="shot-chart-overlay__footer" data-testid="shot-full-readout">
-              <Show when={readout()?.stepName}>
-                <span class="shot-chart-overlay__foot-item">
-                  <span class="shot-chart-overlay__foot-label">Step</span>
-                  <span class="shot-chart-overlay__foot-value">{readout()!.stepName}</span>
-                </span>
-              </Show>
             </div>
           </div>
         </div>

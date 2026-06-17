@@ -16,6 +16,13 @@ import {
   type TraceVisibility,
 } from '../prefs';
 import { TRACE_COLOR, TRACE_TRANSFORM } from './chartTraces';
+import {
+  STEP_OVERSHOOT,
+  stepLabelFontPx,
+  setStepLabelFont,
+  drawStepLine,
+  drawStepChip,
+} from './chartSteps';
 
 /**
  * Streaming uPlot chart for the live brew drawer. Hot path bypasses Solid
@@ -135,22 +142,17 @@ export const drawStepBoundaries = (
   // trace barely poking through the bounds. The bottom extension reaches
   // into the x-axis tick area — that anchors the boundary to the time
   // axis, which reinforces "this is a divider, not a series".
-  const overshoot = 16;
-  const top = u.bbox.top - overshoot;
-  const bottom = u.bbox.top + u.bbox.height + overshoot;
+  const top = u.bbox.top - STEP_OVERSHOOT;
+  const bottom = u.bbox.top + u.bbox.height + STEP_OVERSHOOT;
+  const plotRight = u.bbox.left + u.bbox.width;
+  const dpr = window.devicePixelRatio || 1;
+  const fontPx = stepLabelFontPx(dpr);
+  // The step currently brewing (latest sample's frame) is the active one —
+  // drawn as the filled "selected pill", matching the review chart's cursor.
+  const activeFrame = pf[n - 1];
 
   ctx.save();
-
-  // Neutral chrome — white-ish, dashed. Deliberately decoupled from any
-  // data-trace colour so the eye never mistakes a boundary line for a
-  // series. Lines + labels share the same hue so they read as one piece
-  // of annotation, not two competing things.
-  const LINE = 'rgba(255, 255, 255, 0.5)';
-  const LABEL_BG = 'rgba(20, 20, 20, 0.85)';
-  const LABEL_FG = 'rgba(255, 255, 255, 0.95)';
-
-  ctx.font = '11px ui-sans-serif, system-ui, sans-serif';
-  ctx.textBaseline = 'top';
+  setStepLabelFont(ctx, fontPx);
 
   for (let i = 1; i < n; i++) {
     if (pf[i] === pf[i - 1]) continue;
@@ -158,43 +160,11 @@ export const drawStepBoundaries = (
     const xVal = tMs[i]! / 1000;
     const xPos = Math.round(u.valToPos(xVal, X_SCALE, true)) + 0.5;
 
-    // Line
-    ctx.strokeStyle = LINE;
-    ctx.lineWidth = 1;
-    ctx.setLineDash([5, 4]);
-    ctx.beginPath();
-    ctx.moveTo(xPos, top);
-    ctx.lineTo(xPos, bottom);
-    ctx.stroke();
+    drawStepLine(ctx, xPos, top, bottom);
 
-    // Label — step name (when profile available)
     const stepName = profile?.steps?.[pf[i]!]?.name;
     if (stepName) {
-      ctx.setLineDash([]);
-      const padX = 4;
-      const padY = 2;
-      const labelW = ctx.measureText(stepName).width;
-      const labelH = 13;
-      const labelX = xPos + 4;
-      const labelY = top + 4;
-
-      // Clamp into the plot area so labels at the rightmost transitions
-      // don't bleed off the canvas.
-      const right = u.bbox.left + u.bbox.width;
-      const finalX = Math.min(labelX, right - labelW - padX * 2 - 1);
-
-      // Opaque pill behind the text so traces don't bleed through.
-      ctx.fillStyle = LABEL_BG;
-      ctx.fillRect(
-        finalX - padX,
-        labelY - padY,
-        labelW + padX * 2,
-        labelH + padY * 2,
-      );
-
-      ctx.fillStyle = LABEL_FG;
-      ctx.textAlign = 'left';
-      ctx.fillText(stepName, finalX, labelY);
+      drawStepChip(ctx, xPos, top, plotRight, stepName, fontPx, dpr, pf[i] === activeFrame);
     }
   }
 

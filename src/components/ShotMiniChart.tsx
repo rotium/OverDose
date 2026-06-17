@@ -10,6 +10,13 @@ import {
 import type { GatewayShotRecord, ProfileSnapshot } from '../api';
 import { DEFAULT_TRACE_VISIBILITY, type TraceKey, type TraceVisibility } from '../prefs';
 import { TRACE_COLOR, TRACE_TRANSFORM } from './chartTraces';
+import {
+  STEP_OVERSHOOT,
+  stepLabelFontPx,
+  setStepLabelFont,
+  drawStepLine,
+  drawStepChip,
+} from './chartSteps';
 
 export interface StepBoundary {
   /** Seconds from shot start where the profile step changed. */
@@ -42,52 +49,44 @@ export const shotStepBoundaries = (rec: GatewayShotRecord): StepBoundary[] => {
 };
 
 /**
- * Draw the dashed vertical step-boundary lines (+ step-name labels) in a uPlot
+ * Draw the dashed vertical step-boundary lines (+ step-name chips) in a uPlot
  * `draw` hook — the frozen-shot counterpart to LiveShotChart.drawStepBoundaries.
+ * Chip/line rendering is shared via `chartSteps.ts` so both views match.
  */
 const drawShotStepBoundaries = (
   u: uPlot,
   boundaries: StepBoundary[],
   profile: ProfileSnapshot | null,
   withLabels: boolean,
+  /** Cursor mode only: the step frame under the crosshair, drawn as the active
+   *  "selected pill". Undefined → no active step (every chip a ghost chip). */
+  activeFrame?: number,
 ): void => {
   if (!boundaries.length) return;
   const ctx = u.ctx;
-  const overshoot = 16;
-  const top = u.bbox.top - overshoot;
-  const bottom = u.bbox.top + u.bbox.height + overshoot;
-  const LINE = 'rgba(255, 255, 255, 0.5)';
-  const LABEL_BG = 'rgba(20, 20, 20, 0.85)';
-  const LABEL_FG = 'rgba(255, 255, 255, 0.95)';
+  const top = u.bbox.top - STEP_OVERSHOOT;
+  const bottom = u.bbox.top + u.bbox.height + STEP_OVERSHOOT;
+  const plotRight = u.bbox.left + u.bbox.width;
+  const dpr = window.devicePixelRatio || 1;
+  const fontPx = stepLabelFontPx(dpr);
 
   ctx.save();
-  ctx.font = '11px ui-sans-serif, system-ui, sans-serif';
-  ctx.textBaseline = 'top';
+  setStepLabelFont(ctx, fontPx);
   for (const b of boundaries) {
     const xPos = Math.round(u.valToPos(b.xSec, 'x', true)) + 0.5;
-    ctx.strokeStyle = LINE;
-    ctx.lineWidth = 1;
-    ctx.setLineDash([5, 4]);
-    ctx.beginPath();
-    ctx.moveTo(xPos, top);
-    ctx.lineTo(xPos, bottom);
-    ctx.stroke();
-
+    drawStepLine(ctx, xPos, top, bottom);
     const stepName = withLabels ? profile?.steps?.[b.frame]?.name : undefined;
     if (stepName) {
-      ctx.setLineDash([]);
-      const padX = 4;
-      const padY = 2;
-      const labelW = ctx.measureText(stepName).width;
-      const labelH = 13;
-      const right = u.bbox.left + u.bbox.width;
-      const finalX = Math.min(xPos + 4, right - labelW - padX * 2 - 1);
-      const labelY = top + 4;
-      ctx.fillStyle = LABEL_BG;
-      ctx.fillRect(finalX - padX, labelY - padY, labelW + padX * 2, labelH + padY * 2);
-      ctx.fillStyle = LABEL_FG;
-      ctx.textAlign = 'left';
-      ctx.fillText(stepName, finalX, labelY);
+      drawStepChip(
+        ctx,
+        xPos,
+        top,
+        plotRight,
+        stepName,
+        fontPx,
+        dpr,
+        activeFrame !== undefined && b.frame === activeFrame,
+      );
     }
   }
   ctx.restore();
@@ -253,6 +252,9 @@ export const ShotMiniChart: Component<{
   // Time isn't a trace value — it's the x-position itself — so it rides the
   // foot of the crosshair (by the time axis) rather than sitting in a flag.
   let timeLabelEl: HTMLDivElement | undefined;
+  // Step the crosshair is currently in. Drives the active-step highlight on the
+  // canvas labels; null when not scrubbing (every label at full weight).
+  let activeStepFrame: number | null = null;
 
   const writeFlagY = (series: number, y: number): void => {
     const els = flagEls.get(series);
@@ -356,8 +358,19 @@ export const ShotMiniChart: Component<{
     const t = u.data[0]?.[idx ?? -1];
     if (idx == null || t == null) {
       lastCursorX = null;
+      if (activeStepFrame !== null) {
+        activeStepFrame = null;
+        u.redraw();
+      }
       hideAllFlags();
       return;
+    }
+    // Active-step highlight: redraw the labels only when the step actually
+    // changes (a handful of times per scrub), not on every cursor move.
+    const frame = p.shot()?.measurements?.[idx]?.machine.profileFrame ?? null;
+    if (frame !== activeStepFrame) {
+      activeStepFrame = frame;
+      u.redraw();
     }
     const v = p.visibility?.() ?? DEFAULT_TRACE_VISIBILITY;
     const over = u.over;
@@ -507,6 +520,7 @@ export const ShotMiniChart: Component<{
                       stepBounds,
                       stepProfile,
                       p.showAxes ?? false,
+                      activeStepFrame ?? undefined,
                     );
                   }
                 },

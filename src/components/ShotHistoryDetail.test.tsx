@@ -258,7 +258,6 @@ describe('ShotHistoryDetail', () => {
     expect(screen.queryByTestId('shot-chart-overlay')).toBeNull();
     fireEvent.click(screen.getByTestId('shot-detail-chart-expand'));
     expect(screen.getByTestId('shot-chart-overlay')).toBeInTheDocument();
-    expect(screen.getByTestId('shot-full-readout')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('shot-chart-overlay-close'));
     await waitFor(() =>
       expect(screen.queryByTestId('shot-chart-overlay')).toBeNull(),

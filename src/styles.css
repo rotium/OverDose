@@ -4806,30 +4806,6 @@ html {
   font-weight: 700;
 }
 
-/* Footer — the non-trace facts (time + active step); per-trace values live
-   on the chart as right-edge flags instead of a strip here. */
-.shot-chart-overlay__footer {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem 2rem;
-  font-variant-numeric: tabular-nums;
-}
-.shot-chart-overlay__foot-item {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.5rem;
-}
-.shot-chart-overlay__foot-label {
-  font-size: 0.7rem;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-.shot-chart-overlay__foot-value {
-  font-size: 1.05rem;
-  font-weight: 600;
-}
-
 /* On-chart value flags (full-mode crosshair): colour-matched pills riding a
    de-collided column just to one side of the cursor, each tied back to its
    on-curve dot by a faded leader. The layer is inert so it never intercepts
