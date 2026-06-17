@@ -5,25 +5,48 @@ import {
   type Component,
   type JSX,
 } from 'solid-js';
+import {
+  openKeypad,
+  closeKeypad,
+  type KeypadController,
+} from '../../../../numericKeypad';
 
 export interface DebouncedNumberFieldProps {
   value: number | undefined;
   onCommit: (value: number | undefined) => void;
   placeholder?: string;
   min?: number;
+  max?: number;
   step?: number;
   ariaLabel?: string;
   testId?: string;
   /** Debounce window in ms. Default 500; tests pass 0 for sync commits. */
   debounceMs?: number;
+  /** Render inline −/+ steppers around the field (for roomy editor rows).
+   *  Default false — compact/inline fields stay keypad-only. */
+  steppers?: boolean;
   class?: string;
   style?: JSX.CSSProperties;
 }
+
+/** Decimal places in a number's string form (`0.1` → 1, `5` → 0). */
+const decimals = (n: number): number => {
+  const s = String(n);
+  const i = s.indexOf('.');
+  return i < 0 ? 0 : s.length - i - 1;
+};
 
 /**
  * Number input that maintains a local string while typing and writes the
  * parsed value through `onCommit` on a debounce. Blur flushes immediately,
  * so navigating away never strands an unsaved edit.
+ *
+ * Entry is via the in-app {@link NumericKeypad}, not the OS keyboard: the
+ * input carries `inputmode="none"` so the soft keyboard never opens (it would
+ * cover half the screen in the gateway WebView), and on focus the field
+ * registers a controller with the global pad. A hardware keyboard still works
+ * (desktop dev). Optional inline steppers nudge by `step` (with hold-to-repeat)
+ * and clamp to `min`/`max`.
  *
  * External value changes (e.g. a repository refetch) snap the local value
  * iff the input is not focused — that way a save round-trip mid-type
@@ -39,6 +62,8 @@ export const DebouncedNumberField: Component<DebouncedNumberFieldProps> = (
   );
   let timer: ReturnType<typeof setTimeout> | undefined;
   let focused = false;
+  let inputEl: HTMLInputElement | undefined;
+  let controller: KeypadController | undefined;
 
   createEffect(() => {
     const v = p.value;
@@ -77,32 +102,125 @@ export const DebouncedNumberField: Component<DebouncedNumberFieldProps> = (
     p.onCommit(parse(raw));
   };
 
-  onCleanup(clearTimer);
+  // ── Steppers (−/+) ─────────────────────────────────────────────────────
+  const nudge = (dir: 1 | -1) => {
+    const stepv = p.step ?? 1;
+    const base = parse(local()) ?? p.min ?? 0;
+    let next = base + dir * stepv;
+    const dec = Math.max(decimals(stepv), decimals(base));
+    next = Number(next.toFixed(dec));
+    if (p.min !== undefined) next = Math.max(p.min, next);
+    if (p.max !== undefined) next = Math.min(p.max, next);
+    const s = String(next);
+    setLocal(s);
+    schedule(s);
+  };
 
-  return (
+  // Hold-to-repeat: accelerating recursive timeout (no standing interval),
+  // started on pointer-down and cleared on release.
+  let repeatTimer: ReturnType<typeof setTimeout> | undefined;
+  const stopRepeat = () => {
+    if (repeatTimer !== undefined) {
+      clearTimeout(repeatTimer);
+      repeatTimer = undefined;
+    }
+  };
+  const startRepeat = (dir: 1 | -1) => {
+    nudge(dir);
+    let delay = 400;
+    const tick = () => {
+      nudge(dir);
+      delay = Math.max(60, delay - 40);
+      repeatTimer = setTimeout(tick, delay);
+    };
+    repeatTimer = setTimeout(tick, delay);
+  };
+
+  onCleanup(() => {
+    clearTimer();
+    stopRepeat();
+    closeKeypad(controller);
+  });
+
+  const handleFocus = () => {
+    focused = true;
+    controller = {
+      label: p.ariaLabel,
+      fractional: p.step === undefined || p.step < 1,
+      anchorEl: inputEl!,
+      value: () => local(),
+      setValue: (next) => {
+        setLocal(next);
+        schedule(next);
+      },
+      commit: () => flush(local()),
+    };
+    openKeypad(controller);
+  };
+
+  const handleBlur = (raw: string) => {
+    focused = false;
+    flush(raw);
+    // Defer the close: if focus moved to another number field, that field's
+    // focus handler has already taken the pad over, so closeKeypad() no-ops.
+    const mine = controller;
+    queueMicrotask(() => closeKeypad(mine));
+  };
+
+  const field = (
     <input
-      type="number"
-      inputmode="decimal"
+      ref={inputEl}
+      type="text"
+      inputmode="none"
       class={p.class}
       style={p.style}
       value={local()}
       placeholder={p.placeholder}
-      min={p.min}
-      step={p.step}
       aria-label={p.ariaLabel}
       data-testid={p.testId}
-      onFocus={() => {
-        focused = true;
-      }}
-      onBlur={(e) => {
-        focused = false;
-        flush(e.currentTarget.value);
-      }}
+      onFocus={handleFocus}
+      onBlur={(e) => handleBlur(e.currentTarget.value)}
       onInput={(e) => {
         const raw = e.currentTarget.value;
         setLocal(raw);
         schedule(raw);
       }}
     />
+  );
+
+  if (!p.steppers) return field;
+
+  return (
+    <span class="numfield">
+      <button
+        type="button"
+        class="numfield__step"
+        aria-label="Decrease"
+        onPointerDown={(e) => {
+          e.preventDefault();
+          startRepeat(-1);
+        }}
+        onPointerUp={stopRepeat}
+        onPointerLeave={stopRepeat}
+        onPointerCancel={stopRepeat}
+      >
+        −
+      </button>
+      {field}
+      <button
+        type="button"
+        class="numfield__step"
+        aria-label="Increase"
+        onPointerDown={(e) => {
+          e.preventDefault();
+          startRepeat(1);
+        }}
+        onPointerUp={stopRepeat}
+        onPointerLeave={stopRepeat}
+        onPointerCancel={stopRepeat}
+      >
+        +
+      </button>
+    </span>
   );
 };

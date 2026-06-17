@@ -362,7 +362,8 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
                       placeholder="g"
                       min={0}
                       step={0.1}
-                      ariaLabel="Dose-in weight (grams)"
+                      steppers
+                      ariaLabel="Dose"
                       testId="recipe-dose-input"
                       debounceMs={p.debounceMs}
                       class="step-field__input"
@@ -378,6 +379,7 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
                       onCommit={handleGrinderSettingCommit}
                       placeholder="—"
                       step={0.1}
+                      steppers
                       ariaLabel="Grinder setting"
                       testId="recipe-grinder-setting-input"
                       debounceMs={p.debounceMs}
@@ -394,7 +396,8 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
                       placeholder="g"
                       min={0}
                       step={0.1}
-                      ariaLabel="Target yield (grams)"
+                      steppers
+                      ariaLabel="Target yield"
                       testId="recipe-target-yield-input"
                       debounceMs={p.debounceMs}
                       class="step-field__input"
@@ -411,7 +414,8 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
                       placeholder="mL"
                       min={0}
                       step={1}
-                      ariaLabel="Target volume (millilitres)"
+                      steppers
+                      ariaLabel="Target volume"
                       testId="recipe-target-volume-input"
                       debounceMs={p.debounceMs}
                       class="step-field__input"

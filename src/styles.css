@@ -4900,3 +4900,137 @@ html {
   min-height: 0;
   display: flex;
 }
+
+/* ─── Numeric input: inline steppers + in-app keypad ──────────────────── */
+
+/* Inline −/+ steppers wrapping a number field (roomy editor rows). */
+.numfield {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.numfield__step {
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elev);
+  color: var(--fg);
+  border-radius: 6px;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  /* Suppress scroll/zoom gestures while holding to repeat. */
+  touch-action: none;
+}
+
+.numfield__step:active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+/* The draggable, app-wide numeric keypad (numericKeypad.tsx). */
+.numpad {
+  position: fixed;
+  z-index: 80;
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-elev);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+  /* The whole pad eats touch gestures so dragging never scrolls the page. */
+  touch-action: none;
+}
+
+.numpad__handle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.5rem 0.5rem 0.75rem;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  cursor: move;
+  user-select: none;
+}
+
+.numpad__label {
+  flex: 0 1 auto;
+  font-size: 0.8rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.numpad__readout {
+  flex: 1 1 auto;
+  text-align: right;
+  font-size: 1.3rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.numpad__close {
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.1rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.numpad__close:active {
+  background: var(--border);
+  color: var(--fg);
+}
+
+.numpad__grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  padding: 1px;
+  background: var(--border);
+}
+
+.numpad__key {
+  border: none;
+  background: var(--bg-elev);
+  color: var(--fg);
+  font-size: 1.3rem;
+  padding: 0.9rem 0;
+  cursor: pointer;
+  user-select: none;
+  touch-action: none;
+}
+
+.numpad__key:active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.numpad__key:disabled {
+  color: var(--border-strong);
+  cursor: default;
+}
+
+.numpad__key--wide {
+  grid-column: span 2;
+}
+
+.numpad__key--done {
+  background: var(--accent);
+  color: #fff;
+  font-size: 1rem;
+}
