@@ -17,9 +17,14 @@
  *
  * and toggles `data-keyboard-open` on `<html>` for any open/closed styling.
  *
- * On top of that, when an editable element gains focus we scroll it to the
- * centre of the (now-shrunk) visible band, so the field itself is never left
- * behind the keyboard.
+ * The catch: in this WebView the `visualViewport` `resize` event does NOT
+ * fire reliably when the keyboard *opens* — it often only fires on a later
+ * re-layout (e.g. the first keystroke). So we can't lean on the event alone
+ * to reveal the focused field. Instead, on focus we run a short bounded
+ * animation-frame poll that re-measures `visualViewport` directly and
+ * scrolls the field into the visible band the moment the keyboard settles.
+ * The poll is self-terminating (capped duration, stops on blur) — not a
+ * standing interval.
  *
  * Defaults live in CSS (`--app-height: 100vh; --keyboard-inset: 0px`), so if
  * `visualViewport` is unavailable this controller no-ops and the layout
@@ -28,6 +33,10 @@
 
 /** Below this many covered px we treat the keyboard as closed (toolbars etc). */
 const KEYBOARD_OPEN_THRESHOLD_PX = 80;
+/** How long to keep re-measuring after focus, waiting for the keyboard. */
+const FOCUS_WATCH_MS = 1500;
+/** Leave a little breathing room below the field when checking visibility. */
+const VISIBLE_MARGIN_PX = 12;
 
 const isEditable = (el: EventTarget | null): el is HTMLElement => {
   if (!(el instanceof HTMLElement)) return false;
@@ -49,32 +58,63 @@ export function initKeyboardInset(): void {
   if (!vv) return;
 
   const root = document.documentElement;
-  let frame = 0;
   let focusedEditable: HTMLElement | null = null;
+  let watchUntil = 0;
+  let watching = false;
 
-  const apply = () => {
-    frame = 0;
-    const layoutHeight = root.clientHeight;
-    const inset = Math.max(0, layoutHeight - vv.height - vv.offsetTop);
+  /** Publish the current viewport state to CSS. Returns whether the keyboard
+   *  looks open. */
+  const measure = (): boolean => {
+    const inset = Math.max(0, root.clientHeight - vv.height - vv.offsetTop);
     root.style.setProperty('--app-height', `${Math.round(vv.height)}px`);
     root.style.setProperty('--keyboard-inset', `${Math.round(inset)}px`);
     const open = inset > KEYBOARD_OPEN_THRESHOLD_PX;
     if (open) root.dataset.keyboardOpen = '';
     else delete root.dataset.keyboardOpen;
+    return open;
+  };
 
-    // Keep the focused field centred in the band that survived the keyboard.
-    if (open && focusedEditable) {
-      focusedEditable.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  /** True when the focused field sits fully within the band above the
+   *  keyboard. Instant scroll only happens when it doesn't. */
+  const focusedFieldVisible = (): boolean => {
+    if (!focusedEditable) return true;
+    const rect = focusedEditable.getBoundingClientRect();
+    return rect.top >= 0 && rect.bottom <= vv.height - VISIBLE_MARGIN_PX;
+  };
+
+  const revealFocused = () => {
+    if (focusedEditable && !focusedFieldVisible()) {
+      // 'auto' = instant: no animation to be interrupted by the keyboard's
+      // own open animation, so the field lands and stays put.
+      focusedEditable.scrollIntoView({ block: 'center', behavior: 'auto' });
     }
   };
 
-  const schedule = () => {
-    if (frame) return;
-    frame = requestAnimationFrame(apply);
+  // Bounded poll: re-measures every frame after focus until the watch window
+  // expires or the field is blurred. This is what catches the keyboard even
+  // when no `resize` event fires on open.
+  const tick = () => {
+    if (!focusedEditable || performance.now() > watchUntil) {
+      watching = false;
+      return;
+    }
+    if (measure()) revealFocused();
+    requestAnimationFrame(tick);
   };
 
-  vv.addEventListener('resize', schedule);
-  vv.addEventListener('scroll', schedule);
+  const startWatch = () => {
+    watchUntil = performance.now() + FOCUS_WATCH_MS;
+    if (!watching) {
+      watching = true;
+      requestAnimationFrame(tick);
+    }
+  };
+
+  vv.addEventListener('resize', () => {
+    measure();
+    revealFocused();
+  });
+  vv.addEventListener('scroll', measure);
 
   document.addEventListener('focusin', (e) => {
     if (!isEditable(e.target)) {
@@ -82,15 +122,12 @@ export function initKeyboardInset(): void {
       return;
     }
     focusedEditable = e.target;
-    // The keyboard animates in after focus; recompute once it has, and fall
-    // back to a timer in case no resize fires.
-    schedule();
-    setTimeout(schedule, 300);
+    startWatch();
   });
 
   document.addEventListener('focusout', () => {
     focusedEditable = null;
   });
 
-  apply();
+  measure();
 }
