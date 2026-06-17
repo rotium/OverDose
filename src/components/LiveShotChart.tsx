@@ -147,15 +147,19 @@ export const drawStepBoundaries = (
   const plotRight = u.bbox.left + u.bbox.width;
   const dpr = window.devicePixelRatio || 1;
   const fontPx = stepLabelFontPx(dpr);
-  // The step currently brewing (latest sample's frame) is the active one —
-  // drawn as the filled "selected pill", matching the review chart's cursor.
-  const activeFrame = pf[n - 1];
+  // The step currently brewing is the active one (filled "selected pill"). Use
+  // the highest frame reached, not the latest sample's — so an end-of-shot
+  // reset toward idle (real hardware) can't steal the highlight onto step 0.
+  let activeFrame = pf[0]!;
+  for (let i = 1; i < n; i++) if (pf[i]! > activeFrame) activeFrame = pf[i]!;
 
   ctx.save();
   setStepLabelFont(ctx, fontPx);
 
   for (let i = 1; i < n; i++) {
-    if (pf[i] === pf[i - 1]) continue;
+    // Forward-only: only a step *advance* is a boundary; a backward jump is the
+    // end-of-shot reset toward idle, not a real step.
+    if (pf[i]! <= pf[i - 1]!) continue;
 
     const xVal = tMs[i]! / 1000;
     const xPos = Math.round(u.valToPos(xVal, X_SCALE, true)) + 0.5;

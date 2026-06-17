@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildShotChartData,
   seriesShow,
+  shotEndSec,
   shotStepBoundaries,
 } from './ShotMiniChart';
 import { DEFAULT_TRACE_VISIBILITY } from '../prefs';
@@ -23,6 +24,7 @@ const measure = (
     targetFlow: over.targetFlow,
     targetPressure: over.targetPressure,
     targetMixTemperature: over.targetMixTemperature,
+    state: over.state,
   },
   scale: over.weight != null ? { weight: over.weight, weightFlow: over.weightFlow } : undefined,
 });
@@ -99,6 +101,65 @@ describe('shotStepBoundaries', () => {
     expect(
       shotStepBoundaries(rec([measure(), measure(), measure()])),
     ).toEqual([]);
+  });
+
+  it('ignores a backward frame jump (the end-of-shot reset → idle)', () => {
+    // 0→1→2 then a reset to 0: only the two forward entries are boundaries,
+    // never the backward → so no bogus "step 0" label at the end.
+    const b = shotStepBoundaries(
+      rec([at(0, 0), at(10, 1), at(20, 2), at(26, 0)]),
+    );
+    expect(b.map((x) => x.frame)).toEqual([1, 2]);
+  });
+});
+
+describe('shotEndSec', () => {
+  const iso = (sec: number) => new Date(2026, 5, 14, 9, 0, sec).toISOString();
+  const sample = (sec: number, frame: number, substate?: string, state = 'espresso') =>
+    measure({
+      timestamp: iso(sec),
+      profileFrame: frame,
+      ...(substate
+        ? { state: { state, substate } as GatewayShotMeasurement['machine']['state'] }
+        : {}),
+    });
+
+  it('returns the first pouringDone time (substate, primary signal)', () => {
+    const r = rec([
+      sample(0, 0, 'preinfusion'),
+      sample(10, 1, 'pouring'),
+      sample(25, 1, 'pouringDone'),
+      sample(28, 0, 'idle', 'idle'),
+    ]);
+    expect(shotEndSec(r)).toBeCloseTo(25);
+  });
+
+  it('returns the time the machine left espresso when there is no pouringDone', () => {
+    const r = rec([
+      sample(0, 0, 'preinfusion'),
+      sample(10, 1, 'pouring'),
+      sample(24, 0, 'idle', 'idle'),
+    ]);
+    expect(shotEndSec(r)).toBeCloseTo(24);
+  });
+
+  it('falls back to the backward profileFrame jump when samples carry no state', () => {
+    const r = rec([
+      measure({ timestamp: iso(0), profileFrame: 0 }),
+      measure({ timestamp: iso(10), profileFrame: 1 }),
+      measure({ timestamp: iso(20), profileFrame: 2 }),
+      measure({ timestamp: iso(26), profileFrame: 0 }),
+    ]);
+    expect(shotEndSec(r)).toBeCloseTo(26);
+  });
+
+  it('returns null when the shot only advances (no detectable tail)', () => {
+    const r = rec([
+      measure({ timestamp: iso(0), profileFrame: 0 }),
+      measure({ timestamp: iso(10), profileFrame: 1 }),
+      measure({ timestamp: iso(20), profileFrame: 2 }),
+    ]);
+    expect(shotEndSec(r)).toBeNull();
   });
 });
 

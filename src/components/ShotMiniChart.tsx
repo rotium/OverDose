@@ -40,12 +40,50 @@ export const shotStepBoundaries = (rec: GatewayShotRecord): StepBoundary[] => {
   for (const m of ms) {
     const f = m.machine.profileFrame;
     if (f == null) continue;
-    if (last != null && f !== last) {
+    // Forward-only: a step boundary is a step *entry*, and DE1 frames advance
+    // monotonically (skipStep jumps forward). A decrease is the end-of-shot
+    // reset toward idle, not a real step — so it never gets a label.
+    if (last != null && f > last) {
       out.push({ xSec: Date.parse(m.machine.timestamp) / 1000 - t0, frame: f });
     }
     last = f;
   }
   return out;
+};
+
+/**
+ * Time (shot-seconds) at which active brewing stopped — the start of the
+ * post-stop settling tail the gateway keeps recording (~4 s). Drawn as an
+ * unlabelled end divider so the last step's band doesn't visually swallow the
+ * tail. Primary signal is the per-sample substate leaving the active-pour set
+ * (`pouringDone` / state ≠ `espresso`), matching the counted-volume window;
+ * falls back to the `profileFrame` stepping backward on older records that
+ * lack per-sample state. Null when no tail is detectable (e.g. the optimistic
+ * in-memory record, which freezes before the machine goes idle).
+ */
+export const shotEndSec = (rec: GatewayShotRecord): number | null => {
+  const ms = rec.measurements;
+  if (!ms || ms.length < 2) return null;
+  const t0 = Date.parse(ms[0]!.machine.timestamp) / 1000;
+  const at = (m: (typeof ms)[number]): number =>
+    Date.parse(m.machine.timestamp) / 1000 - t0;
+  // Primary: first sample where the pour has finished.
+  for (const m of ms) {
+    const st = m.machine.state;
+    if (!st) continue;
+    if (st.substate === 'pouringDone' || (st.state && st.state !== 'espresso')) {
+      return at(m);
+    }
+  }
+  // Fallback (no per-sample state): the profileFrame stepping backward.
+  let last: number | undefined;
+  for (const m of ms) {
+    const f = m.machine.profileFrame;
+    if (f == null) continue;
+    if (last != null && f < last) return at(m);
+    last = f;
+  }
+  return null;
 };
 
 /**
@@ -61,8 +99,11 @@ const drawShotStepBoundaries = (
   /** Cursor mode only: the step frame under the crosshair, drawn as the active
    *  "selected pill". Undefined → no active step (every chip a ghost chip). */
   activeFrame?: number,
+  /** Shot-seconds where brewing stopped — drawn as an unlabelled end divider
+   *  separating the last step from the settling tail. Undefined → none. */
+  endSec?: number,
 ): void => {
-  if (!boundaries.length) return;
+  if (!boundaries.length && endSec == null) return;
   const ctx = u.ctx;
   const top = u.bbox.top - STEP_OVERSHOOT;
   const bottom = u.bbox.top + u.bbox.height + STEP_OVERSHOOT;
@@ -88,6 +129,11 @@ const drawShotStepBoundaries = (
         activeFrame !== undefined && b.frame === activeFrame,
       );
     }
+  }
+  // End-of-shot divider: a bare line (no chip) marking where brewing stopped.
+  if (endSec != null) {
+    const xPos = Math.round(u.valToPos(endSec, 'x', true)) + 0.5;
+    drawStepLine(ctx, xPos, top, bottom);
   }
   ctx.restore();
 };
@@ -199,6 +245,7 @@ export const ShotMiniChart: Component<{
   // Current shot's step boundaries + profile, read by the uPlot draw hook.
   let stepBounds: StepBoundary[] = [];
   let stepProfile: ProfileSnapshot | null = null;
+  let stepEndSec: number | null = null;
   let showSteps = true; // gated by the `steps` visibility flag
 
   // ─── Right-edge value flags (C3) ──────────────────────────────────────
@@ -521,6 +568,7 @@ export const ShotMiniChart: Component<{
                       stepProfile,
                       p.showAxes ?? false,
                       activeStepFrame ?? undefined,
+                      stepEndSec ?? undefined,
                     );
                   }
                 },
@@ -587,6 +635,7 @@ export const ShotMiniChart: Component<{
     if (p.stepBoundaries) {
       stepBounds = shotStepBoundaries(rec);
       stepProfile = rec.workflow?.profile ?? null;
+      stepEndSec = shotEndSec(rec);
     }
     chart.setData(buildShotChartData(rec));
   });
