@@ -1,5 +1,4 @@
 import {
-  For,
   Show,
   createMemo,
   createSignal,
@@ -13,8 +12,9 @@ import {
 } from '../api';
 import { ShotRatingFace } from './ShotRatingFace';
 import { ShotMiniChart } from './ShotMiniChart';
+import { ShotChartLegend } from './ShotChartLegend';
+import { ShotChartOverlay } from './ShotChartOverlay';
 import { deriveShotStats } from '../shotStats';
-import { TRACE_COLOR } from './chartTraces';
 import {
   DEFAULT_TRACE_VISIBILITY,
   type TraceKey,
@@ -43,21 +43,6 @@ export const fmtEst = (
   return v === '—' ? v : `~${v}`;
 };
 
-/** Legend trace declarations for the shot chart — mirrors the live view's
- *  legend; the dashed-targets master toggle is appended after these.
- *  Colours come from `chartTraces.ts` so they never drift. */
-const RESULT_LEGEND: Array<{
-  key: TraceKey;
-  name: string;
-  color: string;
-  suffix?: string;
-}> = [
-  { key: 'pressure', name: 'pressure', color: TRACE_COLOR.pressure },
-  { key: 'flow', name: 'flow', color: TRACE_COLOR.flow },
-  { key: 'weightFlow', name: 'weight flow', color: TRACE_COLOR.weightFlow },
-  { key: 'weight', name: 'weight', color: TRACE_COLOR.weight, suffix: '÷10' },
-  { key: 'mixTemp', name: 'mix temp', color: TRACE_COLOR.mixTemperature, suffix: '÷10' },
-];
 
 /** A compact stat row on the Shot Review rail: a small label with its value
  *  (string or custom content, e.g. the editable dose field) and an optional
@@ -160,6 +145,9 @@ export const ShotReview: Component<{
   const toggleTrace = (key: TraceKey): void => {
     setVisibility({ ...visibility(), [key]: !visibility()[key] });
   };
+
+  // Full-mode (enlarged) chart overlay.
+  const [expanded, setExpanded] = createSignal(false);
 
   // Dose — the one editable number. Stays with the editable fields.
   const doseStat = (): JSX.Element => (
@@ -359,61 +347,29 @@ export const ShotReview: Component<{
 
   const chartBlock = (): JSX.Element => (
     <div class="shot-review__chart-wrap">
-      <ul
-        class="live-view__legend shot-review__legend"
-        aria-label="Chart legend"
-        data-testid={tid('legend')}
-      >
-        <For each={RESULT_LEGEND}>
-          {(item) => {
-            const isOn = createMemo(() => visibility()[item.key]);
-            return (
-              <li>
-                <button
-                  type="button"
-                  class="legend-item"
-                  classList={{ 'legend-item--hidden': !isOn() }}
-                  aria-pressed={isOn()}
-                  aria-label={`Toggle ${item.name} trace`}
-                  data-testid={tid(`legend-${item.key}`)}
-                  onClick={() => toggleTrace(item.key)}
-                >
-                  <span
-                    class="legend-swatch"
-                    style={{ background: item.color }}
-                    aria-hidden="true"
-                  />
-                  <span class="legend-label">{item.name}</span>
-                  <Show when={item.suffix}>
-                    <span class="legend-suffix">{item.suffix}</span>
-                  </Show>
-                </button>
-              </li>
-            );
-          }}
-        </For>
-        {/* Master toggle for the dashed setpoint overlays. */}
-        <li>
-          <button
-            type="button"
-            class="legend-item legend-item--note"
-            classList={{ 'legend-item--hidden': !visibility().targets }}
-            aria-pressed={visibility().targets}
-            aria-label="Toggle target traces"
-            data-testid={tid('legend-targets')}
-            onClick={() => toggleTrace('targets')}
-          >
-            <span class="legend-swatch legend-swatch--dashed" aria-hidden="true" />
-            <span class="legend-label">targets</span>
-          </button>
-        </li>
-      </ul>
+      <ShotChartLegend
+        visibility={visibility}
+        onToggle={toggleTrace}
+        testIdPrefix={p.testIdPrefix ?? 'post-brew'}
+      />
       <div class="shot-review__chart" data-testid={tid('chart')}>
+        {/* Floats in the chart's top-right; the end-of-shot curve sits low
+            there, so it rarely overlaps data. */}
+        <button
+          type="button"
+          class="icon-btn shot-review__expand"
+          aria-label="Enlarge chart"
+          data-testid={tid('chart-expand')}
+          onClick={() => setExpanded(true)}
+        >
+          ⤢
+        </button>
         <ShotMiniChart
           shot={p.full}
           fill={true}
           showAxes={true}
           visibility={visibility}
+          stepBoundaries={true}
         />
       </div>
     </div>
@@ -508,6 +464,15 @@ export const ShotReview: Component<{
       </div>
 
       {p.footer}
+
+      <ShotChartOverlay
+        open={expanded()}
+        onClose={() => setExpanded(false)}
+        title={stats().headline}
+        shot={p.full}
+        visibility={visibility}
+        onToggle={toggleTrace}
+      />
     </section>
   );
 };

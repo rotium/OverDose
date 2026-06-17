@@ -9,6 +9,7 @@ const allOn: TraceVisibility = {
   weight: true,
   mixTemp: true,
   targets: true,
+  steps: true,
 };
 
 describe('resolveSeriesVisibility', () => {

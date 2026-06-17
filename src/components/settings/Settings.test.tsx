@@ -166,6 +166,14 @@ describe('Settings', () => {
       fireEvent.click(screen.getByRole('checkbox', { name: 'Mix temp' }));
       expect(prefs.traceVisibility().mixTemp).toBe(!before);
     });
+
+    it('toggles the step-boundaries default', () => {
+      const { prefs } = setup();
+      fireEvent.click(screen.getByRole('tab', { name: 'App' }));
+      const before = prefs.traceVisibility().steps;
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Step boundaries' }));
+      expect(prefs.traceVisibility().steps).toBe(!before);
+    });
   });
 
   describe('App tab — Alerts subsection', () => {

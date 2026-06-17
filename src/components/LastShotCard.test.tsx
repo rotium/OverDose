@@ -3,12 +3,20 @@ import { render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 
 // Stub the chart: jsdom has no canvas, and the chart's rendering is not what
-// these tests cover. Stats, error states, and dispatch are the contract here.
+// these tests cover. We still surface the `visibility` prop (as JSON) and tag
+// the overlay's instance (it's the one passed `onHover`) so the tests can
+// assert the tile chart and the full-mode overlay carry independent traces.
 vi.mock('./ShotMiniChart', () => ({
-  ShotMiniChart: () => <div data-testid="shot-mini-chart-stub" />,
+  ShotMiniChart: (props: { visibility?: () => unknown; onHover?: unknown }) => (
+    <div
+      data-testid={props.onHover ? 'overlay-mini-chart' : 'tile-mini-chart'}
+      data-vis={JSON.stringify(props.visibility?.() ?? null)}
+    />
+  ),
 }));
 
 import { LastShotCard } from './LastShotCard';
+import { DEFAULT_TRACE_VISIBILITY } from '../prefs';
 import type { GatewayShotRecord, GatewayShotSummary } from '../api';
 
 const summary = (over: Partial<GatewayShotSummary> = {}): GatewayShotSummary => ({
@@ -320,6 +328,60 @@ describe('LastShotCard', () => {
       // Parent can now clear the optimistic — UI should remain on gateway.
       setOpt(null);
       expect(screen.getByText('Gateway shot')).toBeInTheDocument();
+    });
+  });
+
+  describe('enlarge to full-mode overlay', () => {
+    it('opens the overlay from the corner button and closes it', async () => {
+      render(() => (
+        <LastShotCard
+          fetchSummary={() => Promise.resolve(summary())}
+          fetchFull={() => Promise.resolve(fullRecord())}
+          onSeeAll={() => {}}
+        />
+      ));
+      await waitFor(() => screen.getByText('Cappuccino'));
+      expect(screen.queryByTestId('shot-chart-overlay')).toBeNull();
+
+      fireEvent.click(screen.getByTestId('last-shot-chart-expand'));
+      expect(screen.getByTestId('shot-chart-overlay')).toBeInTheDocument();
+      expect(screen.getByTestId('shot-full-readout')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('shot-chart-overlay-close'));
+      await waitFor(() =>
+        expect(screen.queryByTestId('shot-chart-overlay')).toBeNull(),
+      );
+    });
+
+    it('keeps the tile chart at the saved defaults when the overlay toggles a trace', async () => {
+      // Independent visibility: toggling a trace in the full-mode overlay must
+      // NOT reshape the little tile chart sitting behind it.
+      render(() => (
+        <LastShotCard
+          fetchSummary={() => Promise.resolve(summary())}
+          fetchFull={() => Promise.resolve(fullRecord())}
+          onSeeAll={() => {}}
+          traceVisibility={() => ({ ...DEFAULT_TRACE_VISIBILITY, pressure: true })}
+        />
+      ));
+      await waitFor(() => screen.getByText('Cappuccino'));
+
+      const tileVis = () =>
+        JSON.parse(screen.getByTestId('tile-mini-chart').getAttribute('data-vis')!);
+      expect(tileVis().pressure).toBe(true);
+
+      fireEvent.click(screen.getByTestId('last-shot-chart-expand'));
+      // Overlay seeds from the same defaults…
+      const overlayVis = () =>
+        JSON.parse(
+          screen.getByTestId('overlay-mini-chart').getAttribute('data-vis')!,
+        );
+      expect(overlayVis().pressure).toBe(true);
+
+      // …toggling it off in the overlay leaves the tile untouched.
+      fireEvent.click(screen.getByTestId('shot-full-legend-pressure'));
+      expect(overlayVis().pressure).toBe(false);
+      expect(tileVis().pressure).toBe(true);
     });
   });
 

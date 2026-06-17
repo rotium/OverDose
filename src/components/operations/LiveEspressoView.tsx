@@ -283,6 +283,20 @@ export const LiveEspressoView: Component<LiveEspressoViewProps> = (p) => {
             <span class="legend-label">targets</span>
           </button>
         </li>
+        <li>
+          <button
+            type="button"
+            class="legend-item legend-item--note"
+            classList={{ 'legend-item--hidden': !visibility().steps }}
+            aria-pressed={visibility().steps}
+            aria-label="Toggle step boundary lines"
+            data-testid="legend-toggle-steps"
+            onClick={() => toggleTrace('steps')}
+          >
+            <span class="legend-swatch legend-swatch--dashed" />
+            <span class="legend-label">steps</span>
+          </button>
+        </li>
       </ul>
 
       <div class="live-view__chart">

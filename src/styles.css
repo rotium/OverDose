@@ -611,6 +611,14 @@ html {
   flex: 1;
   min-height: 0;
 }
+/* Positioned wrapper so the enlarge button can float over the chart corner. */
+.last-shot__chart {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
 .last-shot__body > .muted {
   margin: 0.25rem 0 0;
 }
@@ -3731,6 +3739,7 @@ html {
 }
 
 .shot-review__chart {
+  position: relative; /* positioning context for the floating expand button */
   display: flex;
   min-width: 0;
   /* Taller than a thumbnail — the scroll area absorbs the height. */
@@ -4725,4 +4734,146 @@ html {
 .picker-dialog--overflow,
 .picker-dialog--overflow .picker-dialog__body {
   overflow: visible;
+}
+
+/* ─── Shot chart: enlarge to full-mode overlay ──────────────────────── */
+
+/* Enlarge button floats in the chart's top-right corner (out of the legend
+   flow, so the legend keeps its full width / single row). Semi-transparent so
+   it sits lightly over the curve. */
+.shot-review__expand {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
+  font-size: 1.05rem;
+  line-height: 1;
+  background: rgba(20, 20, 20, 0.6);
+  border-color: var(--border-strong);
+}
+.shot-review__expand:hover {
+  background: rgba(20, 20, 20, 0.85);
+}
+/* On the axed review charts the plot top sits below the container edge (the
+   top gridline / axis line), so nudge the button down to meet it. The Last
+   Shot card has no axes, so its button stays flush at the corner (base rule). */
+.shot-review__chart .shot-review__expand {
+  top: 1.05rem;
+  right: 1.6rem;
+}
+/* On the Last Shot card the button sits on the card's elevated surface
+   (--bg-elev) rather than the page background the review charts use, so match
+   that tone — same translucency so the curve still shows through. */
+.last-shot__chart .shot-review__expand {
+  background: rgba(28, 28, 28, 0.6); /* --bg-elev #1c1c1c */
+}
+.last-shot__chart .shot-review__expand:hover {
+  background: rgba(28, 28, 28, 0.85);
+}
+
+.shot-chart-overlay__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.shot-chart-overlay {
+  width: min(1200px, 96vw);
+  height: min(820px, 92vh);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem 1.25rem;
+  background: var(--bg-elev);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+}
+
+.shot-chart-overlay__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.shot-chart-overlay__title {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+/* Footer — the non-trace facts (time + active step); per-trace values live
+   on the chart as right-edge flags instead of a strip here. */
+.shot-chart-overlay__footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 2rem;
+  font-variant-numeric: tabular-nums;
+}
+.shot-chart-overlay__foot-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.shot-chart-overlay__foot-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.shot-chart-overlay__foot-value {
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+/* On-chart value flags (full-mode crosshair): a colour-matched pill docked at
+   the plot's right edge at each trace's height, plus an on-curve dot at the
+   cursor. The layer is inert so it never intercepts the scrub gesture. */
+.chart-flags {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+.chart-flag {
+  position: absolute;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: baseline;
+  gap: 0.2rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 0.35rem;
+  background: var(--flag-color);
+  color: #0a0a0a;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+.chart-flag__unit {
+  font-size: 0.65rem;
+  font-weight: 600;
+  opacity: 0.75;
+}
+.chart-flag__dot {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--flag-color);
+  border: 2px solid var(--bg-elev);
+}
+
+/* The chart fills the remaining height. */
+.shot-chart-overlay__chart {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
 }

@@ -151,20 +151,33 @@ describe('ShotHistoryDetail', () => {
     expect(btn).toHaveAttribute('aria-pressed', 'false');
   });
 
+  it('shows the step-boundaries legend toggle, on by default and togglable', () => {
+    setup();
+    const btn = screen.getByTestId('shot-detail-legend-steps');
+    expect(btn).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(btn);
+    expect(btn).toHaveAttribute('aria-pressed', 'false');
+  });
+
   it('seeds the chart legend from the saved default trace visibility', () => {
     setup({
       traceVisibility: {
         ...DEFAULT_TRACE_VISIBILITY,
         weightFlow: false,
         targets: false,
+        steps: false,
       },
     });
-    // Both start hidden because Settings had them off.
+    // All start hidden because Settings had them off.
     expect(screen.getByTestId('shot-detail-legend-weightFlow')).toHaveAttribute(
       'aria-pressed',
       'false',
     );
     expect(screen.getByTestId('shot-detail-legend-targets')).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    expect(screen.getByTestId('shot-detail-legend-steps')).toHaveAttribute(
       'aria-pressed',
       'false',
     );
@@ -237,6 +250,18 @@ describe('ShotHistoryDetail', () => {
     expect(updateShot).not.toHaveBeenCalledWith(
       'shot-1',
       expect.objectContaining({ workflow: expect.anything() }),
+    );
+  });
+
+  it('enlarges the chart in a full-screen overlay and closes it', async () => {
+    setup();
+    expect(screen.queryByTestId('shot-chart-overlay')).toBeNull();
+    fireEvent.click(screen.getByTestId('shot-detail-chart-expand'));
+    expect(screen.getByTestId('shot-chart-overlay')).toBeInTheDocument();
+    expect(screen.getByTestId('shot-full-readout')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('shot-chart-overlay-close'));
+    await waitFor(() =>
+      expect(screen.queryByTestId('shot-chart-overlay')).toBeNull(),
     );
   });
 

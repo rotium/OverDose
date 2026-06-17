@@ -168,7 +168,9 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
     initial.chartSmoothing ?? DEFAULT_CHART_SMOOTHING,
   );
   const [traceVisibility, setTraceVisibility] = createSignal<TraceVisibility>(
-    initial.traceVisibility ?? DEFAULT_TRACE_VISIBILITY,
+    // Merge over the defaults so keys added after a user's prefs were saved
+    // (e.g. `steps`) take their default rather than reading as undefined/off.
+    { ...DEFAULT_TRACE_VISIBILITY, ...initial.traceVisibility },
   );
   const [showSteamFlowSlider, setShowSteamFlowSlider] = createSignal<boolean>(
     initial.showSteamFlowSlider ?? false,

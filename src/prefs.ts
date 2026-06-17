@@ -42,6 +42,8 @@ export interface TraceVisibility {
   weight: boolean;
   mixTemp: boolean;
   targets: boolean;
+  /** Vertical profile step-boundary lines on the chart. */
+  steps: boolean;
 }
 
 export type TraceKey = keyof TraceVisibility;
@@ -53,6 +55,7 @@ export const DEFAULT_TRACE_VISIBILITY: TraceVisibility = {
   weight: true,
   mixTemp: true,
   targets: true,
+  steps: true,
 };
 
 /**

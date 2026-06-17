@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildShotChartData, seriesShow } from './ShotMiniChart';
+import {
+  buildShotChartData,
+  seriesShow,
+  shotStepBoundaries,
+} from './ShotMiniChart';
 import { DEFAULT_TRACE_VISIBILITY } from '../prefs';
 import type { GatewayShotMeasurement, GatewayShotRecord } from '../api';
 
@@ -15,6 +19,7 @@ const measure = (
     pressure: over.pressure ?? 0,
     mixTemperature: over.mixTemperature ?? 90,
     groupTemperature: 0,
+    profileFrame: over.profileFrame,
     targetFlow: over.targetFlow,
     targetPressure: over.targetPressure,
     targetMixTemperature: over.targetMixTemperature,
@@ -66,6 +71,34 @@ describe('buildShotChartData', () => {
   it('emits NaN weight when a frame had no scale', () => {
     const data = buildShotChartData(rec([measure({ pressure: 9 })])) as number[][];
     expect(Number.isNaN(data[3]![0]!)).toBe(true);
+  });
+});
+
+describe('shotStepBoundaries', () => {
+  const at = (sec: number, frame: number) =>
+    measure({
+      timestamp: new Date(2026, 5, 14, 9, 0, sec).toISOString(),
+      profileFrame: frame,
+    });
+
+  it('returns a boundary at each profileFrame transition, in shot-seconds', () => {
+    const b = shotStepBoundaries(
+      rec([at(0, 0), at(5, 0), at(10, 1), at(20, 2), at(25, 2)]),
+    );
+    expect(b.map((x) => x.frame)).toEqual([1, 2]);
+    expect(b[0]!.xSec).toBeCloseTo(10);
+    expect(b[1]!.xSec).toBeCloseTo(20);
+  });
+
+  it('is empty when no frame ever changes', () => {
+    expect(shotStepBoundaries(rec([at(0, 0), at(5, 0), at(10, 0)]))).toEqual([]);
+  });
+
+  it('skips measurements without a recorded frame', () => {
+    // No profileFrame on any sample → no boundaries.
+    expect(
+      shotStepBoundaries(rec([measure(), measure(), measure()])),
+    ).toEqual([]);
   });
 });
 

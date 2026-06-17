@@ -21,6 +21,7 @@ const TRACE_OPTIONS: { key: keyof TraceVisibility; label: string }[] = [
   { key: 'weight', label: 'Weight' },
   { key: 'mixTemp', label: 'Mix temp' },
   { key: 'targets', label: 'Targets' },
+  { key: 'steps', label: 'Step boundaries' },
 ];
 
 /**

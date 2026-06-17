@@ -14,6 +14,7 @@ import {
   shotPeakFlowMlS,
   shotPeakPressureBar,
   shotSubtitle,
+  shotReadoutAt,
   shotTargetVolumeMl,
   shotTargetYieldG,
   shotVolumeMl,
@@ -237,5 +238,31 @@ describe('deriveShotStats', () => {
     );
     expect(s1.volumeCountStart).toBe(1);
     expect(s1.countedVolumeMl).toBeCloseTo(2); // only the frame-1 sample (i=2)
+  });
+});
+
+describe('shotReadoutAt', () => {
+  const rec = record(
+    [
+      meas(0, { pressure: 2, flow: 4, mixTemperature: 90, profileFrame: 0 }, { weight: 0 }),
+      meas(5, { pressure: 9, flow: 2, mixTemperature: 93, profileFrame: 1 }, { weight: 18 }),
+    ],
+    { profile: { title: 'P', steps: [{ name: 'Preinfusion' }, { name: 'Pour' }] } },
+  );
+
+  it('returns real-unit values + step name at the sample index', () => {
+    const r = shotReadoutAt(rec, 1)!;
+    expect(r.timeSec).toBeCloseTo(5);
+    expect(r.pressure).toBe(9);
+    expect(r.flow).toBe(2);
+    expect(r.mixTemp).toBe(93);
+    expect(r.weight).toBe(18);
+    expect(r.stepName).toBe('Pour');
+  });
+
+  it('returns null for a null or out-of-range index', () => {
+    expect(shotReadoutAt(rec, null)).toBeNull();
+    expect(shotReadoutAt(rec, -1)).toBeNull();
+    expect(shotReadoutAt(rec, 5)).toBeNull();
   });
 });

@@ -199,6 +199,37 @@ export interface ShotStats {
   volumeCountStart: number | null;
 }
 
+/** Real-unit values at a sample index — drives the full-mode chart's readout
+ *  strip as the crosshair scrubs. Returns null for an out-of-range index. */
+export interface ShotReadout {
+  timeSec: number;
+  pressure: number | null;
+  flow: number | null;
+  mixTemp: number | null;
+  weight: number | null;
+  stepName: string | null;
+}
+
+export const shotReadoutAt = (
+  rec: GatewayShotRecord,
+  idx: number | null,
+): ShotReadout | null => {
+  const ms = rec.measurements;
+  if (idx == null || !ms || idx < 0 || idx >= ms.length) return null;
+  const m = ms[idx]!;
+  const t0 = Date.parse(ms[0]!.machine.timestamp) / 1000;
+  const frame = m.machine.profileFrame;
+  return {
+    timeSec: Date.parse(m.machine.timestamp) / 1000 - t0,
+    pressure: num(m.machine.pressure),
+    flow: num(m.machine.flow),
+    mixTemp: num(m.machine.mixTemperature),
+    weight: num(m.scale?.weight),
+    stepName:
+      frame != null ? (rec.workflow?.profile?.steps?.[frame]?.name ?? null) : null,
+  };
+};
+
 export const deriveShotStats = (
   summary: GatewayShotSummary | null,
   full: GatewayShotRecord | null,

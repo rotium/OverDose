@@ -9,8 +9,9 @@ import {
   type Component,
 } from 'solid-js';
 import type { GatewayShotRecord, GatewayShotSummary } from '../api';
-import type { TraceVisibility } from '../prefs';
+import { DEFAULT_TRACE_VISIBILITY, type TraceKey, type TraceVisibility } from '../prefs';
 import { ShotMiniChart } from './ShotMiniChart';
+import { ShotChartOverlay } from './ShotChartOverlay';
 import {
   shotDoseG,
   shotDurationSec,
@@ -143,6 +144,23 @@ export const LastShotCard: Component<LastShotCardProps> = (p) => {
   const headlineName = () => shotHeadline(displayedSummary());
   const subtitleLine = () => shotSubtitle(displayedSummary());
 
+  // Full-mode overlay. The overlay's trace visibility is INDEPENDENT of the
+  // tile's: the tile keeps rendering at the saved defaults, while the overlay
+  // gets its own session-local copy so toggling traces there never reshapes
+  // the little card behind it. Reseeded from the saved defaults each time the
+  // overlay opens, so it always starts from a clean, predictable state.
+  const [expanded, setExpanded] = createSignal(false);
+  const [overlayVis, setOverlayVis] = createSignal<TraceVisibility>(
+    p.traceVisibility?.() ?? DEFAULT_TRACE_VISIBILITY,
+  );
+  const openOverlay = (): void => {
+    setOverlayVis(p.traceVisibility?.() ?? DEFAULT_TRACE_VISIBILITY);
+    setExpanded(true);
+  };
+  const toggleOverlayTrace = (key: TraceKey): void => {
+    setOverlayVis((v) => ({ ...v, [key]: !v[key] }));
+  };
+
   return (
     <section class="card last-shot">
       <header class="last-shot__head">
@@ -183,16 +201,37 @@ export const LastShotCard: Component<LastShotCardProps> = (p) => {
                   <span> · {shotDurationSec(displayedFull())}s</span>
                 </Show>
               </p>
-              <ShotMiniChart
-                shot={displayedFull}
-                fill
-                visibility={p.traceVisibility}
-              />
+              <div class="last-shot__chart">
+                <button
+                  type="button"
+                  class="icon-btn shot-review__expand"
+                  aria-label="Enlarge chart"
+                  data-testid="last-shot-chart-expand"
+                  onClick={openOverlay}
+                >
+                  ⤢
+                </button>
+                <ShotMiniChart
+                  shot={displayedFull}
+                  fill
+                  visibility={p.traceVisibility}
+                  stepBoundaries={true}
+                />
+              </div>
               <p class="muted">{fmtAgo(s().timestamp, new Date(now()))}</p>
             </div>
           )}
         </Match>
       </Switch>
+
+      <ShotChartOverlay
+        open={expanded()}
+        onClose={() => setExpanded(false)}
+        title={headlineName()}
+        shot={displayedFull}
+        visibility={overlayVis}
+        onToggle={toggleOverlayTrace}
+      />
     </section>
   );
 };

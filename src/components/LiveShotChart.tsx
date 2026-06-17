@@ -207,6 +207,7 @@ const buildOptions = (
   buffers: LiveShotBuffers,
   getProfile: () => ProfileSnapshot | null,
   smoothing: ChartSmoothing,
+  getSteps: () => boolean,
 ): uPlot.Options => {
   // For 'spline' we replace the path builder on each solid series. uPlot
   // ships a built-in cubic-spline path that draws a smooth curve through
@@ -271,7 +272,11 @@ const buildOptions = (
             },
           ]
         : undefined,
-      draw: [(u) => drawStepBoundaries(u, buffers, getProfile())],
+      draw: [
+        (u) => {
+          if (getSteps()) drawStepBoundaries(u, buffers, getProfile());
+        },
+      ],
     },
     series: [
       {},
@@ -325,6 +330,7 @@ export const LiveShotChart: Component<LiveShotChartProps> = (p) => {
         p.buffers,
         () => p.profile?.() ?? null,
         p.smoothing ?? DEFAULT_CHART_SMOOTHING,
+        () => p.visibility?.()?.steps ?? true,
       ),
       empty,
       container,
