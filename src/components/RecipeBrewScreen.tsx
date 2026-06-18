@@ -1284,9 +1284,9 @@ const BrewPrep: Component<{
             data-testid="autostop-check"
           />
           <span>
-            Auto-stop at {enforced().name}
-            <Show when={enforced().value != null}>
-              {` (${enforced().value} ${enforced().unit})`}
+            Auto-stop at{' '}
+            <Show when={enforced().value != null} fallback={enforced().name}>
+              {`${enforced().value} ${enforced().unit}`}
             </Show>
           </span>
         </label>

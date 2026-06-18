@@ -2900,11 +2900,15 @@ html {
 
 /* Button footer — pinned to the bottom (like the brew-prep .prep__action),
    so the action button sits in the same place regardless of step content. */
+/* Identical to the brew prep action bar (.prep__actionbar): centered button,
+   top separator, same padding. */
 .cleaning-wizard__action {
   margin-top: auto;
   display: flex;
   justify-content: center;
-  padding-top: 0.5rem;
+  padding: 0.6rem 1rem;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
 }
 
 /* Primary action button — matches the prep-screen "Start Brew/Steam" button. */
