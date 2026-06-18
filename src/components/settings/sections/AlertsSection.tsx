@@ -79,6 +79,7 @@ export const AlertsSection: Component<AlertsSectionProps> = (p) => {
               step={1}
               steppers
               unit="mm"
+              class="step-field__input"
               ariaLabel="Warn threshold"
               testId="warn-threshold"
             />          </div>
@@ -104,6 +105,7 @@ export const AlertsSection: Component<AlertsSectionProps> = (p) => {
                 step={1}
                 steppers
                 unit="mm"
+                class="step-field__input"
                 ariaLabel="Critical threshold"
                 testId="critical-threshold"
               />            </Show>
