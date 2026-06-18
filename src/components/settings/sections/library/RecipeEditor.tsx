@@ -358,9 +358,7 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
                     <span class="recipe-editor__field-label">Dose</span>
                     <DebouncedNumberField
                       value={r().doseGrams}
-                      onCommit={handleDoseCommit}
-                      placeholder="g"
-                      min={0}
+                      onCommit={handleDoseCommit}                      min={0}
                       step={1}
                       decimal
                       steppers
@@ -393,9 +391,7 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
                     </span>
                     <DebouncedNumberField
                       value={r().targetYieldGrams}
-                      onCommit={handleTargetYieldCommit}
-                      placeholder="g"
-                      min={0}
+                      onCommit={handleTargetYieldCommit}                      min={0}
                       step={1}
                       decimal
                       steppers
@@ -411,9 +407,7 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
                     </span>
                     <DebouncedNumberField
                       value={r().targetVolumeMl}
-                      onCommit={handleTargetVolumeCommit}
-                      placeholder="mL"
-                      min={0}
+                      onCommit={handleTargetVolumeCommit}                      min={0}
                       step={1}
                       steppers
                       unit="mL"

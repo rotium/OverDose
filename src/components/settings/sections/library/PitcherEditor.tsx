@@ -94,9 +94,7 @@ export const PitcherEditor: Component<PitcherEditorProps> = (p) => {
                   <span class="recipe-editor__field-label">Capacity</span>
                   <DebouncedNumberField
                     value={pt().capacityMl}
-                    onCommit={(v) => commit('capacityMl', v)}
-                    placeholder="mL"
-                    min={0}
+                    onCommit={(v) => commit('capacityMl', v)}                    min={0}
                     step={10}
                     steppers
                     unit="mL"
