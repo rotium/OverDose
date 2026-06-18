@@ -844,18 +844,18 @@ describe('RecipeBrewScreen', () => {
       });
     });
 
-    it('auto-stop shows the yield target with a scale', async () => {
+    it('auto-stop names the yield target with a scale', async () => {
       renderAs('auto', true);
       expect(
         await waitFor(() => screen.getByTestId('prep-card-autostop')),
-      ).toHaveTextContent(/auto-stop at 36 g/i);
+      ).toHaveTextContent(/auto-stop at yield/i);
     });
 
-    it('auto-stop shows the volume target without a scale', async () => {
+    it('auto-stop names the volume target without a scale', async () => {
       renderAs('auto', false);
       expect(
         await waitFor(() => screen.getByTestId('prep-card-autostop')),
-      ).toHaveTextContent(/auto-stop at 45 mL/i);
+      ).toHaveTextContent(/auto-stop at volume/i);
     });
 
     it('warns when the global default cannot apply to the scale state', async () => {
@@ -865,7 +865,7 @@ describe('RecipeBrewScreen', () => {
         await waitFor(() => screen.getByTestId('autostop-warning')),
       ).toBeInTheDocument();
       expect(screen.getByTestId('prep-card-autostop')).toHaveTextContent(
-        /auto-stop at 45 mL/i,
+        /auto-stop at volume/i,
       );
     });
   });

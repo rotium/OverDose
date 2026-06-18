@@ -299,16 +299,6 @@ export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
                     <For each={finishLines}>{(l) => <li>{l}</li>}</For>
                   </ul>
                 </Show>
-                <div class="cleaning-wizard__action">
-                  <button
-                    type="button"
-                    class="btn btn--primary cleaning-wizard__btn"
-                    data-testid="wizard-finish"
-                    onClick={() => void complete()}
-                  >
-                    Done
-                  </button>
-                </div>
               </div>
             </div>
           </Match>
@@ -329,20 +319,6 @@ export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
                     </p>
                   )}
                 </Show>
-                <div class="cleaning-wizard__action">
-                  <button
-                    type="button"
-                    class="btn btn--primary cleaning-wizard__btn"
-                    data-testid="wizard-next"
-                    onClick={next}
-                  >
-                    {startsTimerOf(current())
-                      ? 'Start soak'
-                      : currentIdx() === phases.length - 1
-                        ? 'Finish'
-                        : 'Next'}
-                  </button>
-                </div>
               </div>
             </div>
           </Match>
@@ -376,32 +352,64 @@ export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
                     </Show>
                   </Show>
                 </div>
-                <div class="cleaning-wizard__action">
-                  <Show
-                    when={status() === 'pending'}
-                    fallback={
-                      <button
-                        type="button"
-                        class="btn cleaning-wizard__btn"
-                        data-testid="wizard-stop"
-                        onClick={stopRun}
-                      >
-                        Stop
-                      </button>
-                    }
-                  >
-                    <button
-                      type="button"
-                      class="btn btn--primary cleaning-wizard__btn"
-                      data-testid="wizard-start"
-                      onClick={startRun}
-                    >
-                      Start
-                    </button>
-                  </Show>
-                </div>
               </div>
             </div>
+          </Match>
+        </Switch>
+      </div>
+
+      {/* Single full-width pinned action bar — same as the brew prep bar, so
+          the "Start" footer is identical across screens. The button it shows
+          depends on the current phase. */}
+      <div class="cleaning-wizard__actionbar">
+        <Switch>
+          <Match when={finished()}>
+            <button
+              type="button"
+              class="btn btn--primary cleaning-wizard__btn"
+              data-testid="wizard-finish"
+              onClick={() => void complete()}
+            >
+              Done
+            </button>
+          </Match>
+          <Match when={current()?.kind === 'instruction'}>
+            <button
+              type="button"
+              class="btn btn--primary cleaning-wizard__btn"
+              data-testid="wizard-next"
+              onClick={next}
+            >
+              {startsTimerOf(current())
+                ? 'Start soak'
+                : currentIdx() === phases.length - 1
+                  ? 'Finish'
+                  : 'Next'}
+            </button>
+          </Match>
+          <Match when={current()?.kind === 'run'}>
+            <Show
+              when={status() === 'pending'}
+              fallback={
+                <button
+                  type="button"
+                  class="btn cleaning-wizard__btn"
+                  data-testid="wizard-stop"
+                  onClick={stopRun}
+                >
+                  Stop
+                </button>
+              }
+            >
+              <button
+                type="button"
+                class="btn btn--primary cleaning-wizard__btn"
+                data-testid="wizard-start"
+                onClick={startRun}
+              >
+                Start
+              </button>
+            </Show>
           </Match>
         </Switch>
       </div>

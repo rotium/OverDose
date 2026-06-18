@@ -2900,10 +2900,11 @@ html {
 
 /* Button footer — pinned to the bottom (like the brew-prep .prep__action),
    so the action button sits in the same place regardless of step content. */
-/* Identical to the brew prep action bar (.prep__actionbar): centered button,
-   top separator, same padding. */
-.cleaning-wizard__action {
-  margin-top: auto;
+/* Full-width pinned action bar — identical to the brew prep bar
+   (.prep__actionbar): a sibling of the scrolling body, centered button, top
+   separator spanning the full width. */
+.cleaning-wizard__actionbar {
+  flex: 0 0 auto;
   display: flex;
   justify-content: center;
   padding: 0.6rem 1rem;
@@ -3429,31 +3430,25 @@ html {
 }
 
 /* Standalone Auto-stop control — names the enforced target ("…at volume
-   (36 mL)"). A bordered toggle that lights up accent when armed, so it reads as
-   a real control rather than stray text. */
+   (36 mL)"). Styled like the app's standard checkbox (.settings-checkbox): a
+   subtle bordered chip, no accent fill, so it reads as a control without
+   shouting. align-self keeps it content-width, not stretched. */
 .prep__autostop {
-  display: flex;
+  display: inline-flex;
+  align-self: flex-start;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.55rem 0.8rem;
+  gap: 0.4rem;
+  padding: 0.35rem 0.6rem;
   border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  background: var(--bg-elev);
-  font-size: 0.9rem;
-  font-weight: 500;
+  border-radius: 6px;
+  background: var(--bg);
+  font-size: 0.85rem;
   color: var(--fg);
   cursor: pointer;
   user-select: none;
 }
 
-.prep__autostop:has(input:checked) {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-
 .prep__autostop input {
-  width: 1.05rem;
-  height: 1.05rem;
   accent-color: var(--accent);
   cursor: pointer;
 }
