@@ -4998,6 +4998,20 @@ html {
   padding: 0.05rem 0.3rem;
 }
 
+/* Prep override fields sit on a big prep card; without this the bold 1.25rem
+   input + box reads as a huge button. Force a compact width + lighter weight
+   (high specificity so the input's own width can't win). */
+.prep__stat-edit .numfield__box {
+  padding: 0.25rem 0.45rem;
+}
+
+.prep__stat-edit .numfield__box > input.prep__stat-input {
+  width: 4ch;
+  font-size: 1.05rem;
+  font-weight: 500;
+  text-align: right;
+}
+
 /* The draggable, app-wide numeric keypad (numericKeypad.tsx). */
 .numpad {
   position: fixed;
