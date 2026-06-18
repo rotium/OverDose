@@ -5036,7 +5036,7 @@ html {
 .numpad {
   position: fixed;
   z-index: 80;
-  width: 300px;
+  /* Width follows content (grid, plus the recents column when present). */
   display: flex;
   flex-direction: column;
   background: var(--bg-elev);
@@ -5104,9 +5104,44 @@ html {
   color: var(--fg);
 }
 
+.numpad__body {
+  display: flex;
+  align-items: stretch;
+}
+
+/* MRU quick-pick chips column (Phase 2) — sits left of the keypad grid. */
+.numpad__recents {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 1px;
+  background: var(--border);
+  min-width: 3.6rem;
+}
+
+.numpad__recent {
+  flex: 1 1 0;
+  min-height: 2.6rem;
+  border: none;
+  background: var(--bg-elev);
+  color: var(--fg);
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  user-select: none;
+  touch-action: none;
+  padding: 0 0.4rem;
+}
+
+.numpad__recent:active {
+  background: var(--accent);
+  color: #fff;
+}
+
 .numpad__grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
+  width: 252px;
   gap: 1px;
   padding: 1px;
   background: var(--border);

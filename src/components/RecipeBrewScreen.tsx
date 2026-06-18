@@ -1134,6 +1134,7 @@ const BrewPrep: Component<{
                 decimal
                 steppers
                 unit="g"
+                recentsKey="yield"
                 ariaLabel="Target yield (grams)"
                 testId="prep-card-target-yield-input"
                 class="prep__stat-input"
@@ -1161,6 +1162,7 @@ const BrewPrep: Component<{
                 step={1}
                 steppers
                 unit="mL"
+                recentsKey="volume"
                 ariaLabel="Target volume (millilitres)"
                 testId="prep-card-target-volume-input"
                 class="prep__stat-input"
@@ -1251,6 +1253,7 @@ const BrewPrep: Component<{
               decimal
               steppers
               unit="g"
+              recentsKey="dose"
               ariaLabel="Dose (grams)"
               testId="prep-card-dose-input"
               class="prep__stat-input"
@@ -1266,6 +1269,7 @@ const BrewPrep: Component<{
               step={1}
               decimal
               steppers
+              recentsKey="grinder"
               ariaLabel="Grinder setting"
               testId="prep-card-grinder-input"
               class="prep__stat-input"

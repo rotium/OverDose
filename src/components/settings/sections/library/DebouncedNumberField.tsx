@@ -12,6 +12,7 @@ import {
   requestCloseKeypad,
   type KeypadController,
 } from '../../../../numericKeypad';
+import { pushRecent } from '../../../../numericRecents';
 
 export interface DebouncedNumberFieldProps {
   value: number | undefined;
@@ -29,6 +30,8 @@ export interface DebouncedNumberFieldProps {
   ariaLabel?: string;
   /** Unit shown beside the value in the keypad readout (e.g. "g", "mL"). */
   unit?: string;
+  /** Semantic key for the keypad's MRU quick-pick chips (e.g. "dose"). */
+  recentsKey?: string;
   testId?: string;
   /** Debounce window in ms. Default 500; tests pass 0 for sync commits. */
   debounceMs?: number;
@@ -109,7 +112,11 @@ export const DebouncedNumberField: Component<DebouncedNumberFieldProps> = (
 
   const flush = (raw: string) => {
     clearTimer();
-    p.onCommit(parse(raw));
+    const v = parse(raw);
+    p.onCommit(v);
+    // Record the settled value for the quick-pick chips (blur/Done only, not
+    // every debounced keystroke).
+    if (v !== undefined && p.recentsKey) pushRecent(p.recentsKey, v);
   };
 
   // ── Steppers (−/+) ─────────────────────────────────────────────────────
@@ -157,6 +164,7 @@ export const DebouncedNumberField: Component<DebouncedNumberFieldProps> = (
     controller = {
       label: p.ariaLabel,
       unit: p.unit,
+      recentsKey: p.recentsKey,
       fractional: p.decimal ?? (p.step === undefined || p.step < 1),
       anchorEl: inputEl!,
       value: () => local(),

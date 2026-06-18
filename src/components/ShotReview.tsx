@@ -169,6 +169,7 @@ export const ShotReview: Component<{
             decimal
             steppers
             unit="g"
+            recentsKey="dose"
             ariaLabel="Actual dose, grams"
             testId={tid('dose-input')}
             class="rstat__input"
@@ -203,6 +204,7 @@ export const ShotReview: Component<{
               decimal
               steppers
               unit="g"
+              recentsKey="yield"
               ariaLabel="Actual yield, grams"
               testId={tid('yield-input')}
               class="rstat__input"

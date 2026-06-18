@@ -16,6 +16,7 @@
  * Double-tap the handle to re-anchor under the current field.
  */
 import {
+  For,
   Show,
   createEffect,
   createSignal,
@@ -23,6 +24,7 @@ import {
   type Component,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
+import { recentsFor } from './numericRecents';
 
 export interface KeypadController {
   /** Field label, shown in the pad's handle. */
@@ -31,6 +33,8 @@ export interface KeypadController {
   unit?: string;
   /** Input mode: 'number' (default) or 'time' (HH:MM, left-to-right fill). */
   mode?: 'number' | 'time';
+  /** Semantic key for the MRU quick-pick chips (e.g. "dose"); omitted = none. */
+  recentsKey?: string;
   /** Whether a decimal point is allowed (false → integer field). */
   fractional: boolean;
   /** The input element — used to anchor the pad and to blur on Done. */
@@ -225,6 +229,12 @@ export const NumericKeypad: Component = () => {
     closeKeypad(c);
   };
 
+  // Quick-pick: set the field to a recent value and finish (same as Done).
+  const pick = (c: KeypadController, value: number): void => {
+    c.setValue(String(value));
+    done(c);
+  };
+
   const act = (fn: (c: KeypadController) => void) => (e: MouseEvent): void => {
     e.preventDefault();
     const c = active();
@@ -319,7 +329,30 @@ export const NumericKeypad: Component = () => {
                 ✕
               </button>
             </div>
-            <div class="numpad__grid">
+            <div class="numpad__body">
+              <Show
+                when={
+                  c().mode !== 'time' &&
+                  c().recentsKey &&
+                  recentsFor(c().recentsKey!).length > 0
+                }
+              >
+                <div class="numpad__recents" data-testid="numpad-recents">
+                  <For each={recentsFor(c().recentsKey!)}>
+                    {(v) => (
+                      <button
+                        type="button"
+                        class="numpad__recent"
+                        onPointerDown={keepFocus}
+                        onClick={act((cc) => pick(cc, v))}
+                      >
+                        {v}
+                      </button>
+                    )}
+                  </For>
+                </div>
+              </Show>
+              <div class="numpad__grid">
               <Key label="7" onPress={(c) => digit(c, '7')} />
               <Key label="8" onPress={(c) => digit(c, '8')} />
               <Key label="9" onPress={(c) => digit(c, '9')} />
@@ -339,6 +372,7 @@ export const NumericKeypad: Component = () => {
               />
               <Key label="0" onPress={(c) => digit(c, '0')} wide />
               <Key label="Done" onPress={done} wide done testId="numpad-done" />
+              </div>
             </div>
           </div>
         </Portal>

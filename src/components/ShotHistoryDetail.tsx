@@ -325,6 +325,7 @@ export const ShotHistoryDetail: Component<{
             step={1}
             decimal
             steppers
+            recentsKey="grinder"
             ariaLabel="Grind setting"
             testId="shot-detail-grind"
             class="rstat__input"
