@@ -3397,10 +3397,16 @@ html {
 }
 
 .prep__stats {
+  /* Two columns: bean spans the full width on its own row (its text can be
+     long), then dose + grinder pair up side by side below it. */
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
   align-content: start;
+}
+
+.prep__bean {
+  grid-column: 1 / -1;
 }
 
 /* Stop targets — sit below the profile (they shape the brew). Both yield and
