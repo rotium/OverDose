@@ -61,7 +61,9 @@ export const PitcherEditor: Component<PitcherEditorProps> = (p) => {
       <h2 class="routine-editor__title">Edit Pitcher</h2>
 
       <Switch>
-        <Match when={pitcher.loading}>
+        {/* Initial load only — `.latest` survives a refetch so a debounced
+            auto-save doesn't unmount the form and close the keypad. */}
+        <Match when={pitcher.loading && !pitcher.latest}>
           <p class="muted">loading…</p>
         </Match>
         <Match when={pitcher() === null}>

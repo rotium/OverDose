@@ -204,7 +204,10 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
       <h2 class="routine-editor__title">Edit Recipe</h2>
 
       <Switch>
-        <Match when={recipe.loading}>
+        {/* Only on the *initial* load — `.latest` stays defined through a
+            refetch, so a debounced auto-save doesn't unmount the form (which
+            would blur the focused field and close the keypad). */}
+        <Match when={recipe.loading && !recipe.latest}>
           <p class="muted">loading…</p>
         </Match>
         <Match when={recipe() === null}>

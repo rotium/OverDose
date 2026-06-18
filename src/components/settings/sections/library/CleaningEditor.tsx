@@ -221,7 +221,9 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
       <h2 class="routine-editor__title">Edit Cleaning</h2>
 
       <Switch>
-        <Match when={cleaning.loading}>
+        {/* Initial load only — `.latest` survives a refetch so a debounced
+            auto-save doesn't unmount the form and close the keypad. */}
+        <Match when={cleaning.loading && !cleaning.latest}>
           <p class="muted">loading…</p>
         </Match>
         <Match when={cleaning() === null}>
