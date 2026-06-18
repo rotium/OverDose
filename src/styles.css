@@ -3452,11 +3452,26 @@ html {
 }
 
 /* Editable variant — the prep card's per-shot override inputs. The
-   `.prep__stat` is a <label> so tapping the row focuses the input. */
+   `.prep__stat` is a <label> so tapping the row focuses the input.
+   Block-level flex (not inline) so it spans the card width and the field can
+   actually grow next to the steppers + Auto-stop checkbox. */
 .prep__stat-edit {
-  display: inline-flex;
-  align-items: baseline;
+  display: flex;
+  align-items: center;
   gap: 0.35rem;
+}
+
+/* Let the field fill the row so the number stays visible (it was collapsing
+   to ~1 digit beside the steppers + checkbox). */
+.prep__stat-edit .numfield {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.prep__stat-edit .numfield .prep__stat-input {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
 }
 
 .prep__stat-input {
@@ -4952,13 +4967,6 @@ html {
 
 .numfield__step:active {
   color: var(--accent);
-}
-
-/* In flexible cells (brew-prep targets, with the Auto-stop checkbox beside
-   them) the field must grow so the number stays visible. */
-.prep__stat-edit .numfield {
-  flex: 1 1 auto;
-  min-width: 0;
 }
 
 /* The draggable, app-wide numeric keypad (numericKeypad.tsx). */
