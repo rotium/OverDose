@@ -5092,11 +5092,35 @@ html {
   background: transparent !important;
   padding: 0 !important;
   min-width: 0;
+  /* The box (not the inner input) carries the active-field ring; keep the
+     borderless input clear so the ring never double-draws inside it. */
+  box-shadow: none !important;
 }
 
 .numfield__unit {
   color: var(--muted);
   white-space: nowrap;
+}
+
+/* Active (keypad-editing) field — the single source of truth for "this is the
+   field the in-app keypad is driving", keyed on the inputmode="none" marker
+   every keypad field carries. A filled accent tint + accent edge make it
+   unmistakable among sibling fields and share the keypad's accent hue, so field
+   and pad read as a matched pair. The edge is a 1px border + a 1px inset ring
+   (not a 2px border) so gaining focus never reflows the layout. */
+input[inputmode='none']:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: rgba(59, 130, 246, 0.13);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+/* Steppered fields: the input is borderless inside .numfield__box, which owns
+   the border — so the box carries the treatment via :focus-within instead. */
+.numfield__box:focus-within {
+  border-color: var(--accent);
+  background: rgba(59, 130, 246, 0.13);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 
 /* Shot-review/summary stats are compact — keep the box tight. */
@@ -5122,13 +5146,25 @@ html {
 .numpad {
   position: fixed;
   z-index: 80;
+  /* The pad is a floating instrument, so it rides one notch lighter than the
+     app surfaces (which are all near-black) — a drop shadow alone can't
+     separate it on a dark bg. A faint accent ring + tinted edge give it
+     identity and tie it, by hue, to the accent-tinted field it's editing. */
+  --pad-surface: #242424;
+  --pad-key: #2c2c2c;
+  /* Gap/separator color for the key grid — kept darker than the keys so the
+     1px gaps read as dividers (lifting the keys made the old --border gaps
+     blend into them). */
+  --pad-line: #1a1a1a;
   /* Width follows content (grid, plus the recents column when present). */
   display: flex;
   flex-direction: column;
-  background: var(--bg-elev);
-  border: 1px solid var(--border-strong);
+  background: var(--pad-surface);
+  border: 1px solid #454c5a;
   border-radius: 12px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+  box-shadow:
+    0 0 0 1px rgba(59, 130, 246, 0.25),
+    0 18px 50px rgba(0, 0, 0, 0.6);
   overflow: hidden;
   /* The whole pad eats touch gestures so dragging never scrolls the page. */
   touch-action: none;
@@ -5139,8 +5175,9 @@ html {
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 0.5rem 0.5rem 0.75rem;
-  background: var(--bg);
-  border-bottom: 1px solid var(--border);
+  /* A touch darker than the panel so the drag header reads as distinct chrome. */
+  background: #1e1e1e;
+  border-bottom: 1px solid #3a3f48;
   cursor: move;
   user-select: none;
 }
@@ -5149,8 +5186,8 @@ html {
   flex: 0 0 auto;
   width: 12px;
   height: 16px;
-  fill: var(--muted);
-  opacity: 0.7;
+  fill: #7ea2e6;
+  opacity: 0.85;
 }
 
 .numpad__label {
@@ -5194,8 +5231,9 @@ html {
   flex-direction: column;
   gap: 1px;
   padding: 1px;
-  background: var(--border);
-  border-left: 2px solid var(--border-strong);
+  /* Same gap color as the key grid — the 1px gap against the grid's own gap
+     reads as one divider, so the column needs no heavier border to separate. */
+  background: var(--pad-line);
   min-width: 3.6rem;
 }
 
@@ -5205,8 +5243,10 @@ html {
   display: grid;
   place-items: center;
   border: none;
+  /* Quick-picks commit *and close* the pad — same action class as Done — so
+     they sit in Done's accent family (blue = commit, grey = compose). */
   background: var(--accent-soft);
-  color: var(--fg);
+  color: #dbe7ff;
   font-size: 0.95rem;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
@@ -5224,7 +5264,9 @@ html {
    swallow pointerdown and close the pad). */
 .numpad__recent--empty,
 .numpad__recent--empty:active {
-  background: var(--bg-elev);
+  /* Recessed (darker than the keys) so an empty slot reads as inert, not as a
+     tappable key. */
+  background: #212121;
   cursor: default;
 }
 
@@ -5234,12 +5276,12 @@ html {
   width: 252px;
   gap: 1px;
   padding: 1px;
-  background: var(--border);
+  background: var(--pad-line);
 }
 
 .numpad__key {
   border: none;
-  background: var(--bg-elev);
+  background: var(--pad-key);
   color: var(--fg);
   font-size: 1.3rem;
   padding: 0.9rem 0;
@@ -5262,7 +5304,7 @@ html {
 }
 
 .numpad__key--dim:active {
-  background: var(--bg-elev);
+  background: var(--pad-key);
   color: var(--border-strong);
 }
 

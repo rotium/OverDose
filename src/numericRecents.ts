@@ -13,8 +13,9 @@
 import { createSignal } from 'solid-js';
 
 /** How many quick-pick slots a field shows (filled newest-first; the rest
- *  render as inert empty slots). */
-export const RECENTS_CAP = 5;
+ *  render as inert empty slots). Four so the chips line up one-per-row with the
+ *  keypad's four key rows (five squashed them shorter than the digit keys). */
+export const RECENTS_CAP = 4;
 const PREFIX = 'overdose.recents.';
 
 const load = (key: string): number[] => {
