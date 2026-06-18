@@ -3429,28 +3429,77 @@ html {
   gap: 0.6rem;
 }
 
-/* Standalone Auto-stop control — names the enforced target ("…at volume
-   (36 mL)"). Styled like the app's standard checkbox (.settings-checkbox): a
-   subtle bordered chip, no accent fill, so it reads as a control without
-   shouting. align-self keeps it content-width, not stretched. */
+/* Auto-stop — a field card (same chrome as Dose/Grind) holding a calm toggle
+   switch + the "Auto-stop at <target>" sentence. The switch leads the line;
+   the on-state is a muted accent-soft track (not loud). Greyed + "set a
+   target" when there's no target to stop at. */
 .prep__autostop {
-  display: inline-flex;
-  align-self: flex-start;
+  display: flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.35rem 0.6rem;
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  background: var(--bg);
+  gap: 0.6rem;
+  padding: 0.7rem 0.8rem;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 8px;
   font-size: 0.85rem;
   color: var(--fg);
   cursor: pointer;
   user-select: none;
 }
 
-.prep__autostop input {
-  accent-color: var(--accent);
-  cursor: pointer;
+/* Real checkbox kept for state + a11y; visually replaced by the track. */
+.prep__autostop-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.prep__autostop-track {
+  flex: none;
+  position: relative;
+  width: 38px;
+  height: 22px;
+  border-radius: 99px;
+  background: #2a2a2a;
+  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.prep__autostop-track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ccc;
+  transition: left 0.15s, background 0.15s;
+}
+
+.prep__autostop-input:checked + .prep__autostop-track {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.prep__autostop-input:checked + .prep__autostop-track::after {
+  left: 16px;
+  background: #fff;
+}
+
+.prep__autostop--disabled {
+  cursor: not-allowed;
+  color: var(--muted);
+}
+
+.prep__autostop--disabled .prep__autostop-track {
+  opacity: 0.4;
+}
+
+.prep__autostop-hint {
+  color: var(--muted);
 }
 
 .prep__autostop-warning {

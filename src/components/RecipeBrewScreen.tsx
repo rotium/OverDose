@@ -1015,6 +1015,9 @@ const BrewPrep: Component<{
     p.scaleConnected()
       ? { name: 'yield', value: p.draft()?.targetYieldGrams, unit: 'g' }
       : { name: 'volume', value: p.draft()?.targetVolumeMl, unit: 'mL' };
+  // Auto-stop needs a value on the enforced target; with both empty there's
+  // nothing to stop at, so the control is disabled.
+  const canStop = (): boolean => enforced().value != null;
 
   return (
     // 2-column grid: the two co-equal choices (Bean over Profile) on the left,
@@ -1276,16 +1279,30 @@ const BrewPrep: Component<{
           </label>
         </div>
 
-        <label class="prep__autostop" data-testid="prep-card-autostop">
+        <label
+          class="prep__autostop"
+          classList={{ 'prep__autostop--disabled': !canStop() }}
+          data-testid="prep-card-autostop"
+        >
           <input
             type="checkbox"
-            checked={p.autoStopOn()}
+            class="prep__autostop-input"
+            checked={p.autoStopOn() && canStop()}
+            disabled={!canStop()}
             onChange={(e) => p.onAutoStop(e.currentTarget.checked)}
             data-testid="autostop-check"
           />
+          <span class="prep__autostop-track" aria-hidden="true" />
           <span>
-            Auto-stop at {enforced().name}
-            <Show when={enforced().value != null}>
+            <Show
+              when={canStop()}
+              fallback={
+                <>
+                  Auto-stop <span class="prep__autostop-hint">· set a target</span>
+                </>
+              }
+            >
+              Auto-stop at {enforced().name}
               {` (${enforced().value} ${enforced().unit})`}
             </Show>
           </span>
