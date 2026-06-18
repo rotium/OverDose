@@ -323,6 +323,7 @@ export const ShotHistoryDetail: Component<{
             onCommit={setGrind}
             min={0}
             step={0.1}
+            steppers
             ariaLabel="Grind setting"
             testId="shot-detail-grind"
             class="rstat__input"

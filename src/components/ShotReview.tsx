@@ -166,6 +166,8 @@ export const ShotReview: Component<{
             onCommit={(v) => p.onActualDose(v)}
             min={0}
             step={0.1}
+            steppers
+            unit="g"
             ariaLabel="Actual dose, grams"
             testId={tid('dose-input')}
             class="rstat__input"
@@ -199,6 +201,8 @@ export const ShotReview: Component<{
               onCommit={(v) => p.onActualYield(v)}
               min={0}
               step={0.1}
+              steppers
+              unit="g"
               ariaLabel="Actual yield, grams"
               testId={tid('yield-input')}
               class="rstat__input"

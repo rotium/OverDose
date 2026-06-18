@@ -8,6 +8,7 @@ import {
 import {
   openKeypad,
   closeKeypad,
+  requestCloseKeypad,
   type KeypadController,
 } from '../../../../numericKeypad';
 
@@ -164,10 +165,9 @@ export const DebouncedNumberField: Component<DebouncedNumberFieldProps> = (
   const handleBlur = (raw: string) => {
     focused = false;
     flush(raw);
-    // Defer the close: if focus moved to another number field, that field's
-    // focus handler has already taken the pad over, so closeKeypad() no-ops.
-    const mine = controller;
-    queueMicrotask(() => closeKeypad(mine));
+    // Deferred + cancelable: if focus moved to another number field, that
+    // field's openKeypad has already cancelled this close.
+    if (controller) requestCloseKeypad(controller);
   };
 
   const field = (

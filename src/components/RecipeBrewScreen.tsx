@@ -1131,6 +1131,8 @@ const BrewPrep: Component<{
                 placeholder="—"
                 min={0}
                 step={0.1}
+                steppers
+                unit="g"
                 ariaLabel="Target yield (grams)"
                 testId="prep-card-target-yield-input"
                 class="prep__stat-input"
@@ -1158,6 +1160,8 @@ const BrewPrep: Component<{
                 placeholder="—"
                 min={0}
                 step={1}
+                steppers
+                unit="mL"
                 ariaLabel="Target volume (millilitres)"
                 testId="prep-card-target-volume-input"
                 class="prep__stat-input"
@@ -1247,6 +1251,8 @@ const BrewPrep: Component<{
               placeholder="—"
               min={0}
               step={0.1}
+              steppers
+              unit="g"
               ariaLabel="Dose (grams)"
               testId="prep-card-dose-input"
               class="prep__stat-input"
@@ -1262,6 +1268,7 @@ const BrewPrep: Component<{
               onCommit={(v) => p.patchDraft({ grinderSetting: v })}
               placeholder="—"
               step={0.1}
+              steppers
               ariaLabel="Grinder setting"
               testId="prep-card-grinder-input"
               class="prep__stat-input"

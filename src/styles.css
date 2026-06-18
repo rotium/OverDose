@@ -5025,7 +5025,16 @@ html {
   color: #fff;
 }
 
+/* Inactive key (e.g. the decimal point on an integer field). It stays a real,
+   interactive button — a `disabled` one would swallow pointerdown and let the
+   input blur, closing the pad — but it reads and presses as if disabled. */
 .numpad__key--dim {
+  color: var(--border-strong);
+  cursor: default;
+}
+
+.numpad__key--dim:active {
+  background: var(--bg-elev);
   color: var(--border-strong);
 }
 

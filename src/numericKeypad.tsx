@@ -41,16 +41,34 @@ export interface KeypadController {
 }
 
 const [active, setActive] = createSignal<KeypadController | null>(null);
+// A close requested by a field's blur is *deferred* and *cancelable*: if
+// another field grabs the pad before the deferred close runs, the close is
+// cancelled. This guarantees the pad never blips to `null` during a field
+// hand-over (which would otherwise reset the "fresh open" state and make it
+// re-anchor on every field).
+let pendingClose: KeypadController | null = null;
 
-/** Open (or hand over) the pad to a field. */
+/** Open (or hand over) the pad to a field. Cancels any pending blur-close. */
 export const openKeypad = (c: KeypadController): void => {
+  pendingClose = null;
   setActive(c);
 };
 
-/** Close the pad. With a controller, only closes if that field still owns it
- *  — so a blur that's immediately followed by another field's focus is a
- *  no-op (the new field already took ownership). */
+/** Deferred close from a field losing focus. No-ops if another field has
+ *  since taken the pad over. */
+export const requestCloseKeypad = (c: KeypadController): void => {
+  pendingClose = c;
+  queueMicrotask(() => {
+    if (pendingClose === c && active() === c) {
+      pendingClose = null;
+      setActive(null);
+    }
+  });
+};
+
+/** Immediate close (the Done button / handle ✕). */
 export const closeKeypad = (c?: KeypadController): void => {
+  pendingClose = null;
   if (!c || active() === c) setActive(null);
 };
 
@@ -194,6 +212,7 @@ export const NumericKeypad: Component = () => {
         'numpad__key--done': props.done,
         'numpad__key--dim': props.dim,
       }}
+      aria-disabled={props.dim ? 'true' : undefined}
       data-testid={props.testId}
       onPointerDown={keepFocus}
       onClick={act(props.onPress)}
