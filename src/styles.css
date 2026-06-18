@@ -2492,8 +2492,9 @@ html {
 /* Native time control — sizes to its own HH:MM + spinner, so it must not
    inherit the narrow, right-aligned numeric field width (clips the minutes). */
 .cleaning-editor__time-input {
-  width: auto;
-  min-width: 5rem;
+  /* Explicit width — `auto` fell back to the default ~20ch input size. Fits
+     "HH:MM" plus the clock glyph. */
+  width: 5.5rem;
   /* Room on the right for the clock glyph that marks this as a time field. */
   padding: 0.5rem 1.9rem 0.5rem 0.6rem;
   border: 1px solid var(--border);
@@ -3468,15 +3469,11 @@ html {
   gap: 0.35rem;
 }
 
-/* Size the field to its content (a fixed-width box), not the whole row — it
-   was either collapsing to ~1 digit or, once it grew, ballooning across the
-   card. 4.5rem fits a "150.5". */
-.prep__stat-edit .numfield__box > input {
-  width: 4.5rem;
-}
-
 .prep__stat-input {
-  width: 100%;
+  /* Hug the content — `width: 100%` resolved against the inline-flex box to
+     the browser's default ~20ch input size, which read as a huge field.
+     5ch fits "150.5". */
+  width: 5ch;
   min-width: 0;
   font-size: 1.25rem;
   font-weight: 600;
