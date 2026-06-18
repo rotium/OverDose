@@ -61,7 +61,9 @@ export const PitcherEditor: Component<PitcherEditorProps> = (p) => {
       <h2 class="routine-editor__title">Edit Pitcher</h2>
 
       <Switch>
-        <Match when={pitcher.loading}>
+        {/* Initial load only — `.latest` survives a refetch so a debounced
+            auto-save doesn't unmount the form and close the keypad. */}
+        <Match when={pitcher.loading && !pitcher.latest}>
           <p class="muted">loading…</p>
         </Match>
         <Match when={pitcher() === null}>
@@ -94,17 +96,15 @@ export const PitcherEditor: Component<PitcherEditorProps> = (p) => {
                   <span class="recipe-editor__field-label">Capacity</span>
                   <DebouncedNumberField
                     value={pt().capacityMl}
-                    onCommit={(v) => commit('capacityMl', v)}
-                    placeholder="mL"
-                    min={0}
+                    onCommit={(v) => commit('capacityMl', v)}                    min={0}
                     step={10}
+                    steppers
+                    unit="mL"
                     ariaLabel="Capacity (millilitres)"
                     testId="pitcher-capacity-input"
                     debounceMs={p.debounceMs}
                     class="step-field__input"
-                  />
-                  <span class="step-field__unit">mL</span>
-                </label>
+                  />                </label>
               </section>
 
               <section class="settings-section">

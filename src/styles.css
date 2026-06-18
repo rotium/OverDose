@@ -9,12 +9,21 @@
   --muted: #888;
   --muted-2: #777;
   --accent: #3b82f6;
+  /* Muted tone of --accent for the recents quick-pick chips: related to the
+     Done key but clearly secondary. */
+  --accent-soft: #2b4d74;
   --good: #1f6f3a;
   --bad: #6f1f1f;
   --warn: #a86a00;
   --warn-fg: #f5b65b;
   --bad-fg: #ff8a8a;
   --good-fg: #5fd089;
+
+  /* Keyboard-aware viewport (set by src/keyboardInset.ts). Defaults match the
+     no-keyboard state so the layout is unchanged until the soft keyboard
+     overlays the WebView. */
+  --app-height: 100vh;
+  --keyboard-inset: 0px;
 }
 
 * {
@@ -34,7 +43,7 @@ html {
 .home {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: var(--app-height);
 }
 
 .home__main {
@@ -651,8 +660,8 @@ html {
   position: fixed;
   left: 0;
   right: 0;
-  bottom: 0;
-  height: 92vh;
+  bottom: var(--keyboard-inset);
+  height: min(92vh, var(--app-height));
   background: var(--bg);
   border-top: 1px solid var(--border-strong);
   border-radius: 14px 14px 0 0;
@@ -1334,7 +1343,7 @@ html {
 .settings {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: var(--app-height);
   background: var(--bg);
 }
 
@@ -1861,6 +1870,8 @@ html {
 .picker-dialog__backdrop {
   position: fixed;
   inset: 0;
+  /* Keep the dialog centred in the band above the soft keyboard. */
+  bottom: var(--keyboard-inset);
   background: rgba(0, 0, 0, 0.55);
   z-index: 20;
   display: flex;
@@ -2484,14 +2495,22 @@ html {
 /* Native time control — sizes to its own HH:MM + spinner, so it must not
    inherit the narrow, right-aligned numeric field width (clips the minutes). */
 .cleaning-editor__time-input {
-  width: auto;
-  min-width: 7rem;
-  padding: 0.5rem 0.5rem;
+  /* Explicit width — `auto` fell back to the default ~20ch input size. Fits
+     "HH:MM" plus the clock glyph. */
+  width: 5.5rem;
+  /* Room on the right for the clock glyph that marks this as a time field. */
+  padding: 0.5rem 1.9rem 0.5rem 0.6rem;
   border: 1px solid var(--border);
   border-radius: 4px;
-  background: var(--bg);
+  background:
+    var(--bg)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7v5l3 2'/%3E%3C/svg%3E")
+    no-repeat right 0.55rem center;
+  background-size: 1rem;
   color: var(--fg);
   font: inherit;
+  text-align: center;
+  cursor: pointer;
 }
 
 .step-field__input::placeholder {
@@ -2557,6 +2576,37 @@ html {
   gap: 0.75rem 1rem;
   align-items: center;
   margin-top: 0.9rem;
+}
+
+/* The recipe Brewing block: one field per full-width row (label left, the
+   stepper/input/unit group right). A 2x2 grid was too tight once the fields
+   carried steppers + unit. Scoped so the shared field-row class (also used by
+   the cleaning reminder) keeps its grid. */
+.recipe-editor__field-row--stack {
+  display: flex;
+  flex-direction: column;
+}
+
+.recipe-editor__field-row--stack .recipe-editor__field {
+  display: flex;
+  width: 100%;
+}
+
+.recipe-editor__field-row--stack .recipe-editor__field-label {
+  margin-right: auto;
+}
+
+/* Uniform box width across the rows so the controls line up in a clean column
+   (dose/yield/volume carry a unit, grinder doesn't, so the boxes would
+   otherwise be ragged). The input fills the box; the unit sits at the right. */
+.recipe-editor__field-row--stack .numfield__box {
+  width: 7rem;
+}
+
+.recipe-editor__field-row--stack .numfield__box > input {
+  flex: 1 1 auto;
+  width: auto;
+  text-align: right;
 }
 
 .recipe-editor__field {
@@ -3028,7 +3078,7 @@ html {
 .brew-screen {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: var(--app-height);
   background: var(--bg);
   color: var(--fg);
 }
@@ -3350,10 +3400,16 @@ html {
 }
 
 .prep__stats {
+  /* Two columns: bean spans the full width on its own row (its text can be
+     long), then dose + grinder pair up side by side below it. */
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
   align-content: start;
+}
+
+.prep__bean {
+  grid-column: 1 / -1;
 }
 
 /* Stop targets — sit below the profile (they shape the brew). Both yield and
@@ -3426,15 +3482,20 @@ html {
 }
 
 /* Editable variant — the prep card's per-shot override inputs. The
-   `.prep__stat` is a <label> so tapping the row focuses the input. */
+   `.prep__stat` is a <label> so tapping the row focuses the input.
+   Block-level flex (not inline) so it spans the card width and the field can
+   actually grow next to the steppers + Auto-stop checkbox. */
 .prep__stat-edit {
-  display: inline-flex;
-  align-items: baseline;
+  display: flex;
+  align-items: center;
   gap: 0.35rem;
 }
 
 .prep__stat-input {
-  width: 100%;
+  /* Hug the content — `width: 100%` resolved against the inline-flex box to
+     the browser's default ~20ch input size, which read as a huge field.
+     5ch fits "150.5". */
+  width: 5ch;
   min-width: 0;
   font-size: 1.25rem;
   font-weight: 600;
@@ -3815,7 +3876,8 @@ html {
 }
 
 .rstat__input {
-  width: 3.4ch;
+  /* Wide enough for a 3-digit + decimal yield like "150.5". */
+  width: 5.5ch;
   min-width: 0;
   font: inherit;
   font-size: 1.05rem;
@@ -4344,7 +4406,7 @@ html {
 .shot-history {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: var(--app-height);
   padding: 1rem;
   gap: 0.75rem;
   min-height: 0;
@@ -4774,6 +4836,7 @@ html {
 .shot-chart-overlay__backdrop {
   position: fixed;
   inset: 0;
+  bottom: var(--keyboard-inset);
   z-index: 60;
   background: rgba(0, 0, 0, 0.7);
   display: flex;
@@ -4890,4 +4953,234 @@ html {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
+}
+
+/* ─── Numeric input: inline steppers + in-app keypad ──────────────────── */
+
+/* Inline −/+ steppers wrapping a number field (roomy editor rows). */
+.numfield {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+/* Ghost steppers: borderless, muted glyphs that recede next to the number
+   (they used to read as primary buttons and dominated every field). One tap
+   still nudges; the glyph flashes accent on press. */
+.numfield__step {
+  flex: 0 0 auto;
+  width: 1.5rem;
+  height: 1.5rem;
+  display: grid;
+  place-items: center;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 6px;
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  /* Suppress scroll/zoom gestures while holding to repeat. */
+  touch-action: none;
+}
+
+.numfield__step:active {
+  color: var(--accent);
+}
+
+/* The bordered box that holds the input + its unit, flanked by the steppers.
+   The box owns the border so the unit sits inside it; the input goes
+   borderless. */
+.numfield__box {
+  display: inline-flex;
+  align-items: baseline;
+  /* A little breathing room so the unit doesn't crowd the digits ("18g"). */
+  gap: 0.3rem;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  padding: 0.4rem 0.55rem;
+}
+
+.numfield__box > input {
+  border: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+  min-width: 0;
+}
+
+.numfield__unit {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* Shot-review/summary stats are compact — keep the box tight. */
+.rstat__edit .numfield__box {
+  padding: 0.05rem 0.3rem;
+}
+
+/* Prep override fields sit on a big prep card; without this the bold 1.25rem
+   input + box reads as a huge button. Force a compact width + lighter weight
+   (high specificity so the input's own width can't win). */
+.prep__stat-edit .numfield__box {
+  padding: 0.25rem 0.45rem;
+}
+
+.prep__stat-edit .numfield__box > input.prep__stat-input {
+  width: 4ch;
+  font-size: 1.05rem;
+  font-weight: 500;
+  text-align: right;
+}
+
+/* The draggable, app-wide numeric keypad (numericKeypad.tsx). */
+.numpad {
+  position: fixed;
+  z-index: 80;
+  /* Width follows content (grid, plus the recents column when present). */
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-elev);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+  /* The whole pad eats touch gestures so dragging never scrolls the page. */
+  touch-action: none;
+}
+
+.numpad__handle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.5rem 0.5rem 0.75rem;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  cursor: move;
+  user-select: none;
+}
+
+.numpad__label {
+  flex: 0 1 auto;
+  font-size: 0.8rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.numpad__readout {
+  flex: 1 1 auto;
+  text-align: right;
+  font-size: 1.3rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.numpad__unit {
+  color: var(--muted);
+  font-size: 0.85em;
+}
+
+/* Time mode: the segment currently being filled (HH, then MM). */
+.numpad__seg--active {
+  color: var(--accent);
+}
+
+.numpad__body {
+  display: flex;
+  align-items: stretch;
+}
+
+/* MRU quick-pick chips column (Phase 2) — sits to the RIGHT of the digit grid,
+   grouped with Done as the value-producing actions. Filled chips use a muted
+   accent tone (kin to Done, but secondary); empty slots are neutral + inert.
+   Always shown for a field with a recentsKey. */
+.numpad__recents {
+  order: 1; /* right of the grid */
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 1px;
+  background: var(--border);
+  border-left: 2px solid var(--border-strong);
+  min-width: 3.6rem;
+}
+
+.numpad__recent {
+  flex: 1 1 0;
+  min-height: 2.6rem;
+  display: grid;
+  place-items: center;
+  border: none;
+  background: var(--accent-soft);
+  color: var(--fg);
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  user-select: none;
+  touch-action: none;
+  padding: 0 0.4rem;
+}
+
+.numpad__recent:active {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Empty slot — neutral and inert (a span, not a disabled button, which would
+   swallow pointerdown and close the pad). */
+.numpad__recent--empty,
+.numpad__recent--empty:active {
+  background: var(--bg-elev);
+  cursor: default;
+}
+
+.numpad__grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  width: 252px;
+  gap: 1px;
+  padding: 1px;
+  background: var(--border);
+}
+
+.numpad__key {
+  border: none;
+  background: var(--bg-elev);
+  color: var(--fg);
+  font-size: 1.3rem;
+  padding: 0.9rem 0;
+  cursor: pointer;
+  user-select: none;
+  touch-action: none;
+}
+
+.numpad__key:active {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Inactive key (e.g. the decimal point on an integer field). It stays a real,
+   interactive button — a `disabled` one would swallow pointerdown and let the
+   input blur, closing the pad — but it reads and presses as if disabled. */
+.numpad__key--dim {
+  color: var(--border-strong);
+  cursor: default;
+}
+
+.numpad__key--dim:active {
+  background: var(--bg-elev);
+  color: var(--border-strong);
+}
+
+.numpad__key--wide {
+  grid-column: span 2;
+}
+
+.numpad__key--done {
+  background: var(--accent);
+  color: #fff;
+  font-size: 1rem;
 }

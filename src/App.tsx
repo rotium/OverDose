@@ -34,6 +34,7 @@ import {
   EXPLORE_BREW_RECIPE_ID,
   EXPLORE_STEAM_RECIPE_ID,
 } from './exploreBrew';
+import { NumericKeypad } from './numericKeypad';
 import { LiveShotProvider, useLiveShot } from './LiveShotContext';
 import { frozenToGatewayShotRecord } from './liveShotAdapter';
 import { linkSeedRecipeProfiles } from './repositories';
@@ -697,6 +698,9 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
       </Show>
       {/* Always mounted; it owns its own enter/leave fade off `active`. */}
       <SleepOverlay active={isSleeping} onWake={onWakeFromOverlay} />
+      {/* In-app numeric keypad — opens for any focused number field so the
+          OS soft keyboard never has to. Single instance for the whole app. */}
+      <NumericKeypad />
     </>
   );
 };

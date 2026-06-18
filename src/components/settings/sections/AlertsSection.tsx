@@ -69,17 +69,20 @@ export const AlertsSection: Component<AlertsSectionProps> = (p) => {
             Warn threshold
           </label>
           <div class="settings-number-row">
-            <input
-              id="warn-threshold"
-              type="number"
+            <DebouncedNumberField
+              value={prefs.waterWarnMm()}
+              onCommit={(v) => {
+                if (v !== undefined) setWarn(String(v));
+              }}
               min={refillMm() ?? 0}
               max={WATER_TANK_MAX_MM}
-              step="1"
-              value={prefs.waterWarnMm()}
-              onChange={(e) => setWarn(e.currentTarget.value)}
-            />
-            <span class="settings-unit">mm</span>
-          </div>
+              step={1}
+              steppers
+              unit="mm"
+              class="step-field__input"
+              ariaLabel="Warn threshold"
+              testId="warn-threshold"
+            />          </div>
         </div>
         <div class="settings-field">
           <label class="settings-field__label">Critical threshold</label>
@@ -100,11 +103,12 @@ export const AlertsSection: Component<AlertsSectionProps> = (p) => {
                 onCommit={commitCritical}
                 min={0}
                 step={1}
+                steppers
+                unit="mm"
+                class="step-field__input"
                 ariaLabel="Critical threshold"
                 testId="critical-threshold"
-              />
-              <span class="settings-unit">mm</span>
-            </Show>
+              />            </Show>
           </div>
         </div>
         <p class="settings-help">

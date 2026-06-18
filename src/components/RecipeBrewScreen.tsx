@@ -1130,13 +1130,15 @@ const BrewPrep: Component<{
                 onCommit={(v) => p.patchDraft({ targetYieldGrams: v })}
                 placeholder="—"
                 min={0}
-                step={0.1}
+                step={1}
+                decimal
+                steppers
+                unit="g"
+                recentsKey="yield"
                 ariaLabel="Target yield (grams)"
                 testId="prep-card-target-yield-input"
                 class="prep__stat-input"
-              />
-              <span class="prep__stat-unit">g</span>
-              <Show when={p.scaleConnected()}>
+              />              <Show when={p.scaleConnected()}>
                 <label class="prep__autostop-check">
                   <input
                     type="checkbox"
@@ -1158,12 +1160,13 @@ const BrewPrep: Component<{
                 placeholder="—"
                 min={0}
                 step={1}
+                steppers
+                unit="mL"
+                recentsKey="volume"
                 ariaLabel="Target volume (millilitres)"
                 testId="prep-card-target-volume-input"
                 class="prep__stat-input"
-              />
-              <span class="prep__stat-unit">mL</span>
-              <Show when={!p.scaleConnected()}>
+              />              <Show when={!p.scaleConnected()}>
                 <label class="prep__autostop-check">
                   <input
                     type="checkbox"
@@ -1246,13 +1249,15 @@ const BrewPrep: Component<{
               onCommit={(v) => p.patchDraft({ doseGrams: v })}
               placeholder="—"
               min={0}
-              step={0.1}
+              step={1}
+              decimal
+              steppers
+              unit="g"
+              recentsKey="dose"
               ariaLabel="Dose (grams)"
               testId="prep-card-dose-input"
               class="prep__stat-input"
-            />
-            <span class="prep__stat-unit">g</span>
-          </span>
+            />          </span>
         </label>
         <label class="prep__stat" data-testid="prep-card-grinder">
           <span class="prep__stat-label">Grinder setting</span>
@@ -1261,7 +1266,10 @@ const BrewPrep: Component<{
               value={p.draft()?.grinderSetting}
               onCommit={(v) => p.patchDraft({ grinderSetting: v })}
               placeholder="—"
-              step={0.1}
+              step={1}
+              decimal
+              steppers
+              recentsKey="grinder"
               ariaLabel="Grinder setting"
               testId="prep-card-grinder-input"
               class="prep__stat-input"

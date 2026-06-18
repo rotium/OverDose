@@ -39,6 +39,7 @@ import {
 } from '../../../../domain';
 import { useRepositories } from '../../../../RepositoriesContext';
 import { DebouncedNumberField } from './DebouncedNumberField';
+import { TimeField } from '../../../../numericKeypad';
 import { PickerDialog } from '../../../PickerDialog';
 import { ProfilePicker } from './ProfilePicker';
 import { api, type ProfileRecord } from '../../../../api';
@@ -220,7 +221,9 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
       <h2 class="routine-editor__title">Edit Cleaning</h2>
 
       <Switch>
-        <Match when={cleaning.loading}>
+        {/* Initial load only — `.latest` survives a refetch so a debounced
+            auto-save doesn't unmount the form and close the keypad. */}
+        <Match when={cleaning.loading && !cleaning.latest}>
           <p class="muted">loading…</p>
         </Match>
         <Match when={cleaning() === null}>
@@ -343,14 +346,12 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                                     }
                                     min={1}
                                     step={1}
-                                    placeholder="s"
-                                    ariaLabel="Flush seconds"
+                                    steppers
+                                    unit="s"                                    ariaLabel="Flush seconds"
                                     testId={`step-seconds-${s.id}`}
                                     debounceMs={p.debounceMs}
                                     class="step-field__input"
-                                  />
-                                  <span class="step-field__unit">s</span>
-                                </label>
+                                  />                                </label>
                               </Show>
                               <Show when={s.type === 'steamWand'}>
                                 <label class="recipe-editor__field">
@@ -370,14 +371,12 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                                     }
                                     min={1}
                                     step={1}
-                                    placeholder="s"
-                                    ariaLabel="Steam seconds"
+                                    steppers
+                                    unit="s"                                    ariaLabel="Steam seconds"
                                     testId={`step-seconds-${s.id}`}
                                     debounceMs={p.debounceMs}
                                     class="step-field__input"
-                                  />
-                                  <span class="step-field__unit">s</span>
-                                </label>
+                                  />                                </label>
                               </Show>
                               <Show when={s.type === 'steamPurge'}>
                                 <label class="recipe-editor__field">
@@ -397,14 +396,12 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                                     }
                                     min={1}
                                     step={1}
-                                    placeholder="s"
-                                    ariaLabel="Purge seconds"
+                                    steppers
+                                    unit="s"                                    ariaLabel="Purge seconds"
                                     testId={`step-seconds-${s.id}`}
                                     debounceMs={p.debounceMs}
                                     class="step-field__input"
-                                  />
-                                  <span class="step-field__unit">s</span>
-                                </label>
+                                  />                                </label>
                               </Show>
                               <Show
                                 when={
@@ -434,14 +431,12 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                                     }
                                     min={1}
                                     step={1}
-                                    placeholder="min"
-                                    ariaLabel="Soak timer minutes"
+                                    steppers
+                                    unit="min"                                    ariaLabel="Soak timer minutes"
                                     testId={`step-minutes-${s.id}`}
                                     debounceMs={p.debounceMs}
                                     class="step-field__input"
-                                  />
-                                  <span class="step-field__unit">min</span>
-                                </label>
+                                  />                                </label>
                               </Show>
                             </div>
                             <button
@@ -552,6 +547,7 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                               onCommit={(n) => updateReminder({ every: Math.max(1, n ?? 1) })}
                               min={1}
                               step={1}
+                              steppers
                               placeholder="1"
                               ariaLabel="Remind every"
                               testId="cleaning-every"
@@ -601,6 +597,7 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                                 }
                                 min={1}
                                 step={1}
+                                steppers
                                 placeholder="1"
                                 ariaLabel="Day of month"
                                 testId="cleaning-day-of-month"
@@ -611,13 +608,13 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                           </Show>
                           <label class="recipe-editor__field">
                             <span class="recipe-editor__field-label">at</span>
-                            <input
-                              type="time"
+                            <TimeField
                               class="cleaning-editor__time-input"
-                              data-testid="cleaning-at-time"
-                              aria-label="Reminder time"
+                              testId="cleaning-at-time"
+                              ariaLabel="Reminder time"
+                              placeholder="HH:MM"
                               value={r().atTime}
-                              onChange={(e) => updateReminder({ atTime: e.currentTarget.value })}
+                              onCommit={(v) => updateReminder({ atTime: v })}
                             />
                           </label>
                         </div>

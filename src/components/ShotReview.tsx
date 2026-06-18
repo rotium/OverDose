@@ -165,14 +165,16 @@ export const ShotReview: Component<{
             value={p.actualDose()}
             onCommit={(v) => p.onActualDose(v)}
             min={0}
-            step={0.1}
+            step={1}
+            decimal
+            steppers
+            unit="g"
+            recentsKey="dose"
             ariaLabel="Actual dose, grams"
             testId={tid('dose-input')}
             class="rstat__input"
             debounceMs={p.doseDebounceMs}
-          />
-          <span class="rstat__unit">g</span>
-        </span>
+          />        </span>
       </Show>
     </ReviewStat>
   );
@@ -198,14 +200,16 @@ export const ShotReview: Component<{
               value={p.actualYield() ?? stats().yieldG ?? undefined}
               onCommit={(v) => p.onActualYield(v)}
               min={0}
-              step={0.1}
+              step={1}
+              decimal
+              steppers
+              unit="g"
+              recentsKey="yield"
               ariaLabel="Actual yield, grams"
               testId={tid('yield-input')}
               class="rstat__input"
               debounceMs={p.doseDebounceMs}
-            />
-            <span class="rstat__unit">g</span>
-          </span>
+            />          </span>
         </Show>
       </ReviewStat>
       <ReviewStat label="Time" testId={tid('time')}>

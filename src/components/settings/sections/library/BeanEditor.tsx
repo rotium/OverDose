@@ -326,6 +326,7 @@ export const BeanEditor: Component<BeanEditorProps> = (p) => {
                       placeholder="min"
                       min={0}
                       step={50}
+                      unit="m"
                       ariaLabel="Altitude minimum (metres)"
                       testId="bean-altitude-min"
                       debounceMs={p.debounceMs}
@@ -338,6 +339,7 @@ export const BeanEditor: Component<BeanEditorProps> = (p) => {
                       placeholder="max"
                       min={0}
                       step={50}
+                      unit="m"
                       ariaLabel="Altitude maximum (metres)"
                       testId="bean-altitude-max"
                       debounceMs={p.debounceMs}

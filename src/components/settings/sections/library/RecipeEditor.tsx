@@ -204,7 +204,10 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
       <h2 class="routine-editor__title">Edit Recipe</h2>
 
       <Switch>
-        <Match when={recipe.loading}>
+        {/* Only on the *initial* load — `.latest` stays defined through a
+            refetch, so a debounced auto-save doesn't unmount the form (which
+            would blur the focused field and close the keypad). */}
+        <Match when={recipe.loading && !recipe.latest}>
           <p class="muted">loading…</p>
         </Match>
         <Match when={recipe() === null}>
@@ -353,22 +356,22 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
                   onOpen={() => setBeanDialogOpen(true)}
                   onClear={handleBeanClear}
                 />
-                <div class="recipe-editor__field-row">
+                <div class="recipe-editor__field-row recipe-editor__field-row--stack">
                   <label class="recipe-editor__field">
                     <span class="recipe-editor__field-label">Dose</span>
                     <DebouncedNumberField
                       value={r().doseGrams}
-                      onCommit={handleDoseCommit}
-                      placeholder="g"
-                      min={0}
-                      step={0.1}
-                      ariaLabel="Dose-in weight (grams)"
+                      onCommit={handleDoseCommit}                      min={0}
+                      step={1}
+                      decimal
+                      steppers
+                      unit="g"
+                      recentsKey="dose"
+                      ariaLabel="Dose"
                       testId="recipe-dose-input"
                       debounceMs={p.debounceMs}
                       class="step-field__input"
-                    />
-                    <span class="step-field__unit">g</span>
-                  </label>
+                    />                  </label>
                   <label class="recipe-editor__field">
                     <span class="recipe-editor__field-label">
                       Grinder setting
@@ -377,7 +380,10 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
                       value={r().grinderSetting}
                       onCommit={handleGrinderSettingCommit}
                       placeholder="—"
-                      step={0.1}
+                      step={1}
+                      decimal
+                      steppers
+                      recentsKey="grinder"
                       ariaLabel="Grinder setting"
                       testId="recipe-grinder-setting-input"
                       debounceMs={p.debounceMs}
@@ -390,34 +396,33 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
                     </span>
                     <DebouncedNumberField
                       value={r().targetYieldGrams}
-                      onCommit={handleTargetYieldCommit}
-                      placeholder="g"
-                      min={0}
-                      step={0.1}
-                      ariaLabel="Target yield (grams)"
+                      onCommit={handleTargetYieldCommit}                      min={0}
+                      step={1}
+                      decimal
+                      steppers
+                      unit="g"
+                      recentsKey="yield"
+                      ariaLabel="Target yield"
                       testId="recipe-target-yield-input"
                       debounceMs={p.debounceMs}
                       class="step-field__input"
-                    />
-                    <span class="step-field__unit">g</span>
-                  </label>
+                    />                  </label>
                   <label class="recipe-editor__field">
                     <span class="recipe-editor__field-label">
                       Target volume
                     </span>
                     <DebouncedNumberField
                       value={r().targetVolumeMl}
-                      onCommit={handleTargetVolumeCommit}
-                      placeholder="mL"
-                      min={0}
+                      onCommit={handleTargetVolumeCommit}                      min={0}
                       step={1}
-                      ariaLabel="Target volume (millilitres)"
+                      steppers
+                      unit="mL"
+                      recentsKey="volume"
+                      ariaLabel="Target volume"
                       testId="recipe-target-volume-input"
                       debounceMs={p.debounceMs}
                       class="step-field__input"
-                    />
-                    <span class="step-field__unit">mL</span>
-                  </label>
+                    />                  </label>
                 </div>
                 <p class="settings-help">
                   Target yield stops the shot at this cup weight — needs a
