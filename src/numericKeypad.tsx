@@ -16,7 +16,7 @@
  * Double-tap the handle to re-anchor under the current field.
  */
 import {
-  For,
+  Index,
   Show,
   createEffect,
   createSignal,
@@ -24,7 +24,7 @@ import {
   type Component,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { recentsFor } from './numericRecents';
+import { recentsFor, RECENTS_CAP } from './numericRecents';
 
 export interface KeypadController {
   /** Field label, shown in the pad's handle. */
@@ -235,6 +235,13 @@ export const NumericKeypad: Component = () => {
     done(c);
   };
 
+  // Fixed-length slot list: the MRU values newest-first, padded with
+  // `undefined` so every field always shows all RECENTS_CAP slots.
+  const recentsSlots = (key: string): (number | undefined)[] => {
+    const vals = recentsFor(key);
+    return Array.from({ length: RECENTS_CAP }, (_, i) => vals[i]);
+  };
+
   const act = (fn: (c: KeypadController) => void) => (e: MouseEvent): void => {
     e.preventDefault();
     const c = active();
@@ -330,26 +337,31 @@ export const NumericKeypad: Component = () => {
               </button>
             </div>
             <div class="numpad__body">
-              <Show
-                when={
-                  c().mode !== 'time' &&
-                  c().recentsKey &&
-                  recentsFor(c().recentsKey!).length > 0
-                }
-              >
+              <Show when={c().mode !== 'time' && c().recentsKey}>
                 <div class="numpad__recents" data-testid="numpad-recents">
-                  <For each={recentsFor(c().recentsKey!)}>
-                    {(v) => (
-                      <button
-                        type="button"
-                        class="numpad__recent"
-                        onPointerDown={keepFocus}
-                        onClick={act((cc) => pick(cc, v))}
+                  <Index each={recentsSlots(c().recentsKey!)}>
+                    {(slot) => (
+                      <Show
+                        when={slot() !== undefined}
+                        fallback={
+                          <span
+                            class="numpad__recent numpad__recent--empty"
+                            aria-hidden="true"
+                            onPointerDown={keepFocus}
+                          />
+                        }
                       >
-                        {v}
-                      </button>
+                        <button
+                          type="button"
+                          class="numpad__recent"
+                          onPointerDown={keepFocus}
+                          onClick={act((cc) => pick(cc, slot()!))}
+                        >
+                          {slot()}
+                        </button>
+                      </Show>
                     )}
-                  </For>
+                  </Index>
                 </div>
               </Show>
               <div class="numpad__grid">

@@ -12,7 +12,9 @@
  */
 import { createSignal } from 'solid-js';
 
-const CAP = 5;
+/** How many quick-pick slots a field shows (filled newest-first; the rest
+ *  render as inert empty slots). */
+export const RECENTS_CAP = 5;
 const PREFIX = 'overdose.recents.';
 
 const load = (key: string): number[] => {
@@ -39,7 +41,7 @@ export const recentsFor = (key: string): number[] => {
 /** Record a committed value: move-to-front, de-dupe, cap. */
 export const pushRecent = (key: string, value: number): void => {
   if (!Number.isFinite(value)) return;
-  const next = [value, ...load(key).filter((v) => v !== value)].slice(0, CAP);
+  const next = [value, ...load(key).filter((v) => v !== value)].slice(0, RECENTS_CAP);
   try {
     localStorage.setItem(PREFIX + key, JSON.stringify(next));
   } catch {
