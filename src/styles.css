@@ -2493,13 +2493,20 @@ html {
    inherit the narrow, right-aligned numeric field width (clips the minutes). */
 .cleaning-editor__time-input {
   width: auto;
-  min-width: 7rem;
-  padding: 0.5rem 0.5rem;
+  min-width: 5rem;
+  /* Room on the right for the clock glyph that marks this as a time field. */
+  padding: 0.5rem 1.9rem 0.5rem 0.6rem;
   border: 1px solid var(--border);
   border-radius: 4px;
-  background: var(--bg);
+  background:
+    var(--bg)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7v5l3 2'/%3E%3C/svg%3E")
+    no-repeat right 0.55rem center;
+  background-size: 1rem;
   color: var(--fg);
   font: inherit;
+  text-align: center;
+  cursor: pointer;
 }
 
 .step-field__input::placeholder {
@@ -3461,17 +3468,11 @@ html {
   gap: 0.35rem;
 }
 
-/* Let the field fill the row so the number stays visible (it was collapsing
-   to ~1 digit beside the steppers + checkbox). */
-.prep__stat-edit .numfield {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.prep__stat-edit .numfield .prep__stat-input {
-  flex: 1 1 auto;
-  width: auto;
-  min-width: 0;
+/* Size the field to its content (a fixed-width box), not the whole row — it
+   was either collapsing to ~1 digit or, once it grew, ballooning across the
+   card. 4.5rem fits a "150.5". */
+.prep__stat-edit .numfield__box > input {
+  width: 4.5rem;
 }
 
 .prep__stat-input {
@@ -4993,12 +4994,6 @@ html {
 .numfield__unit {
   color: var(--muted);
   white-space: nowrap;
-}
-
-/* Brew-prep: the box grows to fill the row so the number stays visible. */
-.prep__stat-edit .numfield__box {
-  flex: 1 1 auto;
-  min-width: 0;
 }
 
 /* Shot-review/summary stats are compact — keep the box tight. */
