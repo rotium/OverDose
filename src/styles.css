@@ -3383,15 +3383,17 @@ html {
 /* Brew prep: profile | parameters side-by-side on a wide (landscape tablet)
    screen, stacking to one column when narrow. Keeps the card short enough
    that the Start button stays on-screen without scrolling. */
+/* Brew prep — a 2-column grid: the two choices (Bean over Profile) on the
+   left, the numbers (Dose/Grind, Targets, Auto-stop) on the right. Reads as
+   columns and as rows. Start lives in the pinned action bar, not here. */
 .brew-prep {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1.25rem;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 1rem 1.25rem;
   align-items: start;
 }
 
-/* Left column of the brew prep: profile + stop targets stacked, so the grid
-   sees one cell here (not one per child) and keeps the two-column layout. */
+/* Left column: Bean over Profile. */
 .brew-prep__col {
   display: flex;
   flex-direction: column;
@@ -3399,50 +3401,44 @@ html {
   min-width: 0;
 }
 
+/* Right column: Dose/Grind pair, Targets, then the Auto-stop line. */
 .prep__stats {
-  /* Two columns: bean spans the full width on its own row (its text can be
-     long), then dose + grinder pair up side by side below it. */
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.75rem;
-  align-content: start;
-}
-
-.prep__bean {
-  grid-column: 1 / -1;
-}
-
-/* Stop targets — sit below the profile (they shape the brew). Both yield and
-   volume are shown; the Auto-stop checkbox rides inline on whichever target
-   the machine can enforce (yield with a scale, volume without). */
-.prep__targets {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 0.75rem;
-  margin-bottom: 0.75rem;
+  min-width: 0;
 }
 
-.prep__targets .prep__stat {
-  flex: 1 1 200px;
+/* Dose | Grind, side by side. */
+.prep__numpair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
 }
 
-.prep__autostop-check {
-  display: inline-flex;
+/* Target weight | volume, side by side. */
+.prep__targets {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+
+/* Standalone Auto-stop line — names the enforced target ("…at volume (36 mL)"). */
+.prep__autostop {
+  display: flex;
   align-items: center;
-  gap: 0.3rem;
-  margin-left: 0.5rem;
-  font-size: 0.8rem;
-  color: var(--muted);
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--fg);
   cursor: pointer;
-  white-space: nowrap;
 }
 
-.prep__autostop-check input {
+.prep__autostop input {
   cursor: pointer;
 }
 
 .prep__autostop-warning {
-  margin: 0 0 0.75rem;
+  margin: 0;
   font-size: 0.8rem;
   color: var(--warn-fg);
 }
@@ -3665,16 +3661,27 @@ html {
   gap: 0.75rem;
 }
 
+/* Pinned prep action bar — a sibling of the scrolling body, fixed at the
+   bottom of .brew-screen so Start is always visible no matter how tall the
+   prep body grows. Sits above the soft keypad via the keyboard-aware
+   --app-height on .brew-screen. */
+.prep__actionbar {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: center;
+  padding: 0.6rem 1rem;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+
 .prep-card__steam {
   margin: 0;
 }
 
 .prep__start {
-  font-size: 1.05rem;
+  /* Standard .btn btn--primary size — drop the oversized prep button. The
+     data-state variants below still set their icon layout + colours. */
   font-weight: 600;
-  padding: 0.85rem 2.25rem;
-  min-width: 260px;
-  border-radius: 10px;
 }
 
 /* Warming-up state — disabled, amber, with a thermometer icon. Overrides

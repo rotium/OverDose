@@ -693,6 +693,18 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
               />
             </Show>
           </section>
+          {/* Pinned action bar — sibling of the scrolling body so Start is
+              always visible (prep steps only; PostBrew has its own actions). */}
+          <Show when={!isFinished()}>
+            <PrepActionBar
+              step={() => steps()[currentIdx()]!}
+              status={() => statuses()[currentIdx()]!}
+              isWarming={isWarming}
+              isHeaterOff={heaterOff}
+              isWaterCritical={waterCritical}
+              onStart={startCurrentStep}
+            />
+          </Show>
         </Match>
       </Switch>
     </main>
@@ -890,58 +902,73 @@ const PrepCard: Component<{
       </Switch>
     </div>
 
-    <footer class="prep__action">
-      <Show
-        when={p.status() === 'pending'}
-        fallback={
-          <p
-            class="prep__running"
-            data-testid="prep-card-running"
-            aria-live="polite"
-          >
-            {formatStepType(p.step().type)} in progress…
-          </p>
-        }
-      >
-        <button
-          type="button"
-          class="btn btn--primary prep__start"
-          data-testid="prep-card-start"
-          data-heater-off={p.isHeaterOff() ? 'true' : undefined}
-          data-water-critical={
-            p.isWaterCritical() && !p.isHeaterOff() ? 'true' : undefined
-          }
-          data-warming={
-            p.isWarming() && !p.isHeaterOff() && !p.isWaterCritical()
-              ? 'true'
-              : undefined
-          }
-          disabled={p.isWarming() || p.isHeaterOff() || p.isWaterCritical()}
-          aria-disabled={
-            p.isWarming() || p.isHeaterOff() || p.isWaterCritical()
-          }
-          onClick={p.onStart}
-        >
-          <Switch
-            fallback={<>Start {formatStepType(p.step().type).toLowerCase()}</>}
-          >
-            <Match when={p.isHeaterOff()}>
-              <PowerIcon size={18} />
-              Heater off
-            </Match>
-            <Match when={p.isWaterCritical()}>
-              <WaterDropIcon size={18} />
-              Refill water
-            </Match>
-            <Match when={p.isWarming()}>
-              <ThermometerIcon size={18} />
-              Warming up…
-            </Match>
-          </Switch>
-        </button>
-      </Show>
-    </footer>
   </section>
+);
+
+/**
+ * The Start / "…in progress" action — lifted out of the prep card into a bar
+ * pinned at the bottom of the brew screen, so it's always visible no matter how
+ * tall the prep body gets (and it sits above the soft keypad via --app-height).
+ * Shared by every step type; keeps the readiness gating (warming / heater-off /
+ * water-critical) and the standard button size.
+ */
+const PrepActionBar: Component<{
+  step: Accessor<RoutineStep>;
+  status: Accessor<StepStatus>;
+  isWarming: Accessor<boolean>;
+  isHeaterOff: Accessor<boolean>;
+  isWaterCritical: Accessor<boolean>;
+  onStart: () => void;
+}> = (p) => (
+  <footer class="prep__actionbar" data-testid="prep-action-bar">
+    <Show
+      when={p.status() === 'pending'}
+      fallback={
+        <p
+          class="prep__running"
+          data-testid="prep-card-running"
+          aria-live="polite"
+        >
+          {formatStepType(p.step().type)} in progress…
+        </p>
+      }
+    >
+      <button
+        type="button"
+        class="btn btn--primary prep__start"
+        data-testid="prep-card-start"
+        data-heater-off={p.isHeaterOff() ? 'true' : undefined}
+        data-water-critical={
+          p.isWaterCritical() && !p.isHeaterOff() ? 'true' : undefined
+        }
+        data-warming={
+          p.isWarming() && !p.isHeaterOff() && !p.isWaterCritical()
+            ? 'true'
+            : undefined
+        }
+        disabled={p.isWarming() || p.isHeaterOff() || p.isWaterCritical()}
+        aria-disabled={p.isWarming() || p.isHeaterOff() || p.isWaterCritical()}
+        onClick={p.onStart}
+      >
+        <Switch
+          fallback={<>Start {formatStepType(p.step().type).toLowerCase()}</>}
+        >
+          <Match when={p.isHeaterOff()}>
+            <PowerIcon size={18} />
+            Heater off
+          </Match>
+          <Match when={p.isWaterCritical()}>
+            <WaterDropIcon size={18} />
+            Refill water
+          </Match>
+          <Match when={p.isWarming()}>
+            <ThermometerIcon size={18} />
+            Warming up…
+          </Match>
+        </Switch>
+      </button>
+    </Show>
+  </footer>
 );
 
 const BrewPrep: Component<{
@@ -982,21 +1009,69 @@ const BrewPrep: Component<{
     p.patchDraft({ beanId: id });
   };
 
+  // The machine auto-stops on exactly one target — yield (with a scale) or
+  // volume (without). The standalone Auto-stop line names that target.
+  const enforced = () =>
+    p.scaleConnected()
+      ? { name: 'yield', value: p.draft()?.targetYieldGrams, unit: 'g' }
+      : { name: 'volume', value: p.draft()?.targetVolumeMl, unit: 'mL' };
+
   return (
-    // Two-column on a wide tablet (profile | parameters), stacking to one
-    // column when narrow. Start lives in the PrepCard footer below. The
+    // 2-column grid: the two co-equal choices (Bean over Profile) on the left,
+    // the numbers (Dose/Grind, Targets, Auto-stop) on the right. Reads as
+    // columns and as rows. Start lives in the pinned action bar, not here. The
     // picker dialogs render via Portal, so they aren't grid items.
     <div class="brew-prep">
-      {/* Left column: the brew definition — profile + stop targets (the
-          targets shape the brew, so they live with the profile rather than
-          among the dose/grind prep values on the right). */}
+      {/* Left column: Bean over Profile — the two co-equal choices. */}
       <div class="brew-prep__col">
-        {/*
-          Profile is the headline of the brew step — it determines the whole
-          shot. Title + author header, small target-curve thumbnail, plus a
-          Change button to swap the profile *for this shot only*. Below: the
-          editable dose / grinder / yield / volume overrides.
-        */}
+        <label class="prep__stat prep__bean" data-testid="prep-card-bean">
+          <span class="prep__stat-label">Bean</span>
+          <button
+            type="button"
+            class="prep__bean-button"
+            data-testid="prep-card-bean-change"
+            onClick={() => setBeanDialogOpen(true)}
+          >
+            <Show
+              when={hasBeanId()}
+              fallback={
+                <span class="prep__bean-empty" data-testid="prep-card-bean-empty">
+                  Choose a bean
+                </span>
+              }
+            >
+              <Show
+                when={p.bean()}
+                fallback={
+                  <span
+                    class="prep__bean-empty"
+                    data-testid="prep-card-bean-missing"
+                  >
+                    {p.beanLoading()
+                      ? 'Loading…'
+                      : `(missing bean — ${p.draft()?.beanId})`}
+                  </span>
+                }
+              >
+                <span class="prep__bean-name" data-testid="prep-card-bean-name">
+                  {p.bean()!.roaster} — {p.bean()!.name}
+                  <Show when={p.bean()!.decaf}>
+                    <span class="bean-tree__badge">decaf</span>
+                  </Show>
+                  <Show when={p.bean()!.archived}>
+                    <span class="bean-tree__badge bean-tree__badge--muted">
+                      archived
+                    </span>
+                  </Show>
+                </span>
+              </Show>
+            </Show>
+            <span class="prep__bean-chevron" aria-hidden="true">
+              ›
+            </span>
+          </button>
+        </label>
+        {/* Profile — the recipe's headline; Change swaps it for this shot. */}
         <section class="prep__profile" data-testid="prep-card-profile">
           <div class="prep__profile-toprow">
             <span class="prep__profile-label">Profile</span>
@@ -1115,12 +1190,52 @@ const BrewPrep: Component<{
           />
         </PickerDialog>
 
-        {/* Stop targets — below the profile because they shape the brew. Both
-            are shown and always editable: each is an auto-stop target AND a
-            manual-stop reference (e.g. set 36 g with no scale and stop by hand
-            at it). The Auto-stop checkbox sits on whichever target the machine
-            can actually enforce — yield with a scale, volume without; the other
-            is a plain reference. */}
+      </div>
+
+      {/* Right column: the numbers — Dose·Grind over Targets, then the
+          standalone Auto-stop line naming the enforced target. */}
+      <div class="prep__stats">
+        <div class="prep__numpair">
+          <label class="prep__stat" data-testid="prep-card-dose">
+            <span class="prep__stat-label">Dose</span>
+            <span class="prep__stat-edit">
+              <DebouncedNumberField
+                value={p.draft()?.doseGrams}
+                onCommit={(v) => p.patchDraft({ doseGrams: v })}
+                placeholder="—"
+                min={0}
+                step={1}
+                decimal
+                steppers
+                unit="g"
+                recentsKey="dose"
+                ariaLabel="Dose (grams)"
+                testId="prep-card-dose-input"
+                class="prep__stat-input"
+              />
+            </span>
+          </label>
+          <label class="prep__stat" data-testid="prep-card-grinder">
+            <span class="prep__stat-label">Grinder setting</span>
+            <span class="prep__stat-edit">
+              <DebouncedNumberField
+                value={p.draft()?.grinderSetting}
+                onCommit={(v) => p.patchDraft({ grinderSetting: v })}
+                placeholder="—"
+                step={1}
+                decimal
+                steppers
+                recentsKey="grinder"
+                ariaLabel="Grinder setting"
+                testId="prep-card-grinder-input"
+                class="prep__stat-input"
+              />
+            </span>
+          </label>
+        </div>
+
+        {/* Both targets always editable (auto-stop target + manual-stop
+            reference); Auto-stop itself is the standalone line below. */}
         <div class="prep__targets" data-testid="prep-card-targets">
           <label class="prep__stat" data-testid="prep-card-target-yield">
             <span class="prep__stat-label">Target yield</span>
@@ -1138,17 +1253,7 @@ const BrewPrep: Component<{
                 ariaLabel="Target yield (grams)"
                 testId="prep-card-target-yield-input"
                 class="prep__stat-input"
-              />              <Show when={p.scaleConnected()}>
-                <label class="prep__autostop-check">
-                  <input
-                    type="checkbox"
-                    checked={p.autoStopOn()}
-                    onChange={(e) => p.onAutoStop(e.currentTarget.checked)}
-                    data-testid="autostop-check"
-                  />
-                  <span>Auto-stop</span>
-                </label>
-              </Show>
+              />
             </span>
           </label>
           <label class="prep__stat" data-testid="prep-card-target-volume">
@@ -1166,20 +1271,26 @@ const BrewPrep: Component<{
                 ariaLabel="Target volume (millilitres)"
                 testId="prep-card-target-volume-input"
                 class="prep__stat-input"
-              />              <Show when={!p.scaleConnected()}>
-                <label class="prep__autostop-check">
-                  <input
-                    type="checkbox"
-                    checked={p.autoStopOn()}
-                    onChange={(e) => p.onAutoStop(e.currentTarget.checked)}
-                    data-testid="autostop-check"
-                  />
-                  <span>Auto-stop</span>
-                </label>
-              </Show>
+              />
             </span>
           </label>
         </div>
+
+        <label class="prep__autostop" data-testid="prep-card-autostop">
+          <input
+            type="checkbox"
+            checked={p.autoStopOn()}
+            onChange={(e) => p.onAutoStop(e.currentTarget.checked)}
+            data-testid="autostop-check"
+          />
+          <span>
+            Auto-stop at {enforced().name}
+            <Show when={enforced().value != null}>
+              {` (${enforced().value} ${enforced().unit})`}
+            </Show>
+          </span>
+        </label>
+
         <Show when={p.stopModeWarning()}>
           <p
             class="prep__autostop-warning"
@@ -1189,93 +1300,6 @@ const BrewPrep: Component<{
             {p.stopModeWarning()}
           </p>
         </Show>
-      </div>
-
-      <div class="prep__stats">
-        {/* Bean reads as a stat card like dose/grind, but its value is a
-            button that opens the picker. Spans the full grid width. */}
-        <div class="prep__stat prep__bean" data-testid="prep-card-bean">
-          <span class="prep__stat-label">Bean</span>
-          <button
-            type="button"
-            class="prep__bean-button"
-            data-testid="prep-card-bean-change"
-            onClick={() => setBeanDialogOpen(true)}
-          >
-            <Show
-              when={hasBeanId()}
-              fallback={
-                <span class="prep__bean-empty" data-testid="prep-card-bean-empty">
-                  Choose a bean
-                </span>
-              }
-            >
-              <Show
-                when={p.bean()}
-                fallback={
-                  <span
-                    class="prep__bean-empty"
-                    data-testid="prep-card-bean-missing"
-                  >
-                    {p.beanLoading()
-                      ? 'Loading…'
-                      : `(missing bean — ${p.draft()?.beanId})`}
-                  </span>
-                }
-              >
-                <span class="prep__bean-name" data-testid="prep-card-bean-name">
-                  {p.bean()!.roaster} — {p.bean()!.name}
-                  <Show when={p.bean()!.decaf}>
-                    <span class="bean-tree__badge">decaf</span>
-                  </Show>
-                  <Show when={p.bean()!.archived}>
-                    <span class="bean-tree__badge bean-tree__badge--muted">
-                      archived
-                    </span>
-                  </Show>
-                </span>
-              </Show>
-            </Show>
-            <span class="prep__bean-chevron" aria-hidden="true">
-              ›
-            </span>
-          </button>
-        </div>
-        <label class="prep__stat" data-testid="prep-card-dose">
-          <span class="prep__stat-label">Dose</span>
-          <span class="prep__stat-edit">
-            <DebouncedNumberField
-              value={p.draft()?.doseGrams}
-              onCommit={(v) => p.patchDraft({ doseGrams: v })}
-              placeholder="—"
-              min={0}
-              step={1}
-              decimal
-              steppers
-              unit="g"
-              recentsKey="dose"
-              ariaLabel="Dose (grams)"
-              testId="prep-card-dose-input"
-              class="prep__stat-input"
-            />          </span>
-        </label>
-        <label class="prep__stat" data-testid="prep-card-grinder">
-          <span class="prep__stat-label">Grinder setting</span>
-          <span class="prep__stat-edit">
-            <DebouncedNumberField
-              value={p.draft()?.grinderSetting}
-              onCommit={(v) => p.patchDraft({ grinderSetting: v })}
-              placeholder="—"
-              step={1}
-              decimal
-              steppers
-              recentsKey="grinder"
-              ariaLabel="Grinder setting"
-              testId="prep-card-grinder-input"
-              class="prep__stat-input"
-            />
-          </span>
-        </label>
       </div>
     </div>
   );

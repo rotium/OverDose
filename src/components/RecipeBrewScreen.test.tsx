@@ -258,7 +258,7 @@ describe('RecipeBrewScreen', () => {
       });
       // Prep renders (the brew step), seeded from the override's dose.
       const dose = await waitFor(() => screen.getByTestId('prep-card-dose-input'));
-      expect(dose).toHaveValue(18);
+      expect(dose).toHaveValue('18');
       expect(screen.getByTestId('prep-card-start')).toBeInTheDocument();
     });
 
@@ -844,19 +844,18 @@ describe('RecipeBrewScreen', () => {
       });
     });
 
-    it('checkbox sits on yield with a scale, volume without', async () => {
+    it('auto-stop line names yield with a scale', async () => {
       renderAs('auto', true);
-      await waitFor(() => screen.getByTestId('autostop-check'));
       expect(
-        screen
-          .getByTestId('prep-card-target-yield')
-          .querySelector('[data-testid="autostop-check"]'),
-      ).not.toBeNull();
+        await waitFor(() => screen.getByTestId('prep-card-autostop')),
+      ).toHaveTextContent(/auto-stop at yield/i);
+    });
+
+    it('auto-stop line names volume without a scale', async () => {
+      renderAs('auto', false);
       expect(
-        screen
-          .getByTestId('prep-card-target-volume')
-          .querySelector('[data-testid="autostop-check"]'),
-      ).toBeNull();
+        await waitFor(() => screen.getByTestId('prep-card-autostop')),
+      ).toHaveTextContent(/auto-stop at volume/i);
     });
 
     it('warns when the global default cannot apply to the scale state', async () => {
@@ -865,11 +864,9 @@ describe('RecipeBrewScreen', () => {
       expect(
         await waitFor(() => screen.getByTestId('autostop-warning')),
       ).toBeInTheDocument();
-      expect(
-        screen
-          .getByTestId('prep-card-target-volume')
-          .querySelector('[data-testid="autostop-check"]'),
-      ).not.toBeNull();
+      expect(screen.getByTestId('prep-card-autostop')).toHaveTextContent(
+        /auto-stop at volume/i,
+      );
     });
   });
 
@@ -1435,10 +1432,10 @@ describe('RecipeBrewScreen', () => {
         'Cappuccino · Brazil',
       );
       // Dose is now an inline-editable field, seeded from the derived dose.
-      expect(screen.getByTestId('post-brew-dose-input')).toHaveValue(18);
+      expect(screen.getByTestId('post-brew-dose-input')).toHaveValue('18');
       // Yield is now inline-editable, seeded from the measured last scale
       // weight (35.8); target still shown separately.
-      expect(screen.getByTestId('post-brew-yield-input')).toHaveValue(35.8);
+      expect(screen.getByTestId('post-brew-yield-input')).toHaveValue('35.8');
       expect(
         screen.getByTestId('post-brew-stat-yield-target'),
       ).toHaveTextContent('target 36');
@@ -1631,7 +1628,7 @@ describe('RecipeBrewScreen', () => {
         screen.getByTestId('post-brew-dose-input'),
       );
       // Seeded from the target dose (18) for display.
-      expect(dose).toHaveValue(18);
+      expect(dose).toHaveValue('18');
       fireEvent.input(dose, { target: { value: '18.4' } });
       fireEvent.blur(dose);
 

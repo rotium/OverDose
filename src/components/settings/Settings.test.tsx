@@ -188,8 +188,9 @@ describe('Settings', () => {
       const { prefs } = setup();
       openAlerts();
       const input = screen.getByLabelText('Warn threshold') as HTMLInputElement;
-      input.value = '8';
-      fireEvent.change(input);
+      // Debounced field: commit fires on input (debounced) + blur (flush).
+      fireEvent.input(input, { target: { value: '8' } });
+      fireEvent.blur(input);
       expect(prefs.waterWarnMm()).toBe(8);
     });
 
@@ -214,8 +215,9 @@ describe('Settings', () => {
       openAlerts();
       // Try to drop warn below the machine's refill level → clamps up to it.
       const warn = screen.getByLabelText('Warn threshold') as HTMLInputElement;
-      warn.value = '1';
-      fireEvent.change(warn);
+      // Debounced field: commit fires on input (debounced) + blur (flush).
+      fireEvent.input(warn, { target: { value: '1' } });
+      fireEvent.blur(warn);
       expect(prefs.waterWarnMm()).toBe(3);
     });
 
