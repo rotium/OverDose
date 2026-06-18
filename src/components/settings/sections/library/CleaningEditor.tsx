@@ -39,6 +39,7 @@ import {
 } from '../../../../domain';
 import { useRepositories } from '../../../../RepositoriesContext';
 import { DebouncedNumberField } from './DebouncedNumberField';
+import { TimeField } from '../../../../numericKeypad';
 import { PickerDialog } from '../../../PickerDialog';
 import { ProfilePicker } from './ProfilePicker';
 import { api, type ProfileRecord } from '../../../../api';
@@ -621,13 +622,12 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                           </Show>
                           <label class="recipe-editor__field">
                             <span class="recipe-editor__field-label">at</span>
-                            <input
-                              type="time"
+                            <TimeField
                               class="cleaning-editor__time-input"
-                              data-testid="cleaning-at-time"
-                              aria-label="Reminder time"
+                              testId="cleaning-at-time"
+                              ariaLabel="Reminder time"
                               value={r().atTime}
-                              onChange={(e) => updateReminder({ atTime: e.currentTarget.value })}
+                              onCommit={(v) => updateReminder({ atTime: v })}
                             />
                           </label>
                         </div>

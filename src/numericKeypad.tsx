@@ -19,6 +19,7 @@ import {
   Show,
   createEffect,
   createSignal,
+  onCleanup,
   type Component,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
@@ -28,6 +29,8 @@ export interface KeypadController {
   label?: string;
   /** Unit shown beside the value in the readout (e.g. "g", "mL"). */
   unit?: string;
+  /** Input mode: 'number' (default) or 'time' (HH:MM, left-to-right fill). */
+  mode?: 'number' | 'time';
   /** Whether a decimal point is allowed (false → integer field). */
   fractional: boolean;
   /** The input element — used to anchor the pad and to blur on Done. */
@@ -81,6 +84,15 @@ const GAP = 8;
 const clamp = (v: number, lo: number, hi: number): number =>
   Math.max(lo, Math.min(v, hi));
 
+/** Turn a buffer of up to 4 digits into a clamped "HH:MM" (pads right with
+ *  zeros, so "11" → 11:00, "112" → 11:20; clamps 23:59). */
+const formatTime = (digits: string): string => {
+  const padded = (digits + '0000').slice(0, 4);
+  const hh = Math.min(23, Number(padded.slice(0, 2)) || 0);
+  const mm = Math.min(59, Number(padded.slice(2, 4)) || 0);
+  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+};
+
 export const NumericKeypad: Component = () => {
   const [pos, setPos] = createSignal<Pos>({ left: 0, top: 0 });
   // Overtype mode: when a field first gains the pad its value stays visible,
@@ -88,6 +100,8 @@ export const NumericKeypad: Component = () => {
   // Backspace/clear drop out of overtype so you can edit the existing value;
   // Done with no key pressed keeps it unchanged.
   const [pristine, setPristine] = createSignal(true);
+  // Time mode: the 0–4 digit buffer being filled (HH then MM).
+  const [timeDigits, setTimeDigits] = createSignal('');
   // We anchor to the field only on a *fresh* open. Switching fields while the
   // pad is open leaves it exactly where it is (the user found re-anchoring on
   // every field jarring); a manual drag obviously keeps its spot too. The pad
@@ -120,6 +134,7 @@ export const NumericKeypad: Component = () => {
       return;
     }
     setPristine(true); // each field starts in overtype mode
+    setTimeDigits('');
     const fresh = !wasOpen;
     wasOpen = true;
     if (fresh) {
@@ -161,13 +176,28 @@ export const NumericKeypad: Component = () => {
   // lose the caret). preventDefault on pointerdown keeps focus on the input.
   const keepFocus = (e: PointerEvent): void => e.preventDefault();
 
+  // In time mode each digit fills the HH:MM buffer left-to-right and the
+  // field's live value tracks it (clamped), so a blur commits the same thing
+  // Done would.
+  const setTime = (c: KeypadController, buf: string): void => {
+    setTimeDigits(buf);
+    c.setValue(buf === '' ? '' : formatTime(buf));
+  };
+
   const digit = (c: KeypadController, d: string): void => {
+    if (c.mode === 'time') {
+      const buf = pristine() ? '' : timeDigits();
+      setPristine(false);
+      if (buf.length >= 4) return;
+      setTime(c, buf + d);
+      return;
+    }
     const cur = pristine() ? '' : c.value();
     setPristine(false);
     c.setValue(cur === '0' ? d : cur + d);
   };
   const dot = (c: KeypadController): void => {
-    if (!c.fractional) return;
+    if (c.mode === 'time' || !c.fractional) return; // ":" in time mode is inert
     const cur = pristine() ? '' : c.value();
     setPristine(false);
     if (cur.includes('.')) return;
@@ -175,10 +205,18 @@ export const NumericKeypad: Component = () => {
   };
   const backspace = (c: KeypadController): void => {
     setPristine(false);
+    if (c.mode === 'time') {
+      setTime(c, timeDigits().slice(0, -1));
+      return;
+    }
     c.setValue(c.value().slice(0, -1));
   };
   const clearAll = (c: KeypadController): void => {
     setPristine(false);
+    if (c.mode === 'time') {
+      setTime(c, '');
+      return;
+    }
     c.setValue('');
   };
   const done = (c: KeypadController): void => {
@@ -238,9 +276,37 @@ export const NumericKeypad: Component = () => {
             >
               <span class="numpad__label">{c().label ?? 'Value'}</span>
               <span class="numpad__readout" data-testid="numpad-readout">
-                {c().value() || '0'}
-                <Show when={c().unit}>
-                  <span class="numpad__unit"> {c().unit}</span>
+                <Show
+                  when={c().mode === 'time'}
+                  fallback={
+                    <>
+                      {c().value() || '0'}
+                      <Show when={c().unit}>
+                        <span class="numpad__unit"> {c().unit}</span>
+                      </Show>
+                    </>
+                  }
+                >
+                  <Show
+                    when={timeDigits().length > 0}
+                    fallback={<span>{c().value() || '--:--'}</span>}
+                  >
+                    <span
+                      classList={{
+                        'numpad__seg--active': timeDigits().length < 2,
+                      }}
+                    >
+                      {(timeDigits().slice(0, 2) + '__').slice(0, 2)}
+                    </span>
+                    <span>:</span>
+                    <span
+                      classList={{
+                        'numpad__seg--active': timeDigits().length >= 2,
+                      }}
+                    >
+                      {(timeDigits().slice(2, 4) + '__').slice(0, 2)}
+                    </span>
+                  </Show>
                 </Show>
               </span>
               <button
@@ -266,9 +332,9 @@ export const NumericKeypad: Component = () => {
               <Key label="2" onPress={(c) => digit(c, '2')} />
               <Key label="3" onPress={(c) => digit(c, '3')} />
               <Key
-                label="."
+                label={c().mode === 'time' ? ':' : '.'}
                 onPress={dot}
-                dim={!c().fractional}
+                dim={c().mode === 'time' || !c().fractional}
                 testId="numpad-dot"
               />
               <Key label="0" onPress={(c) => digit(c, '0')} wide />
@@ -278,5 +344,68 @@ export const NumericKeypad: Component = () => {
         </Portal>
       )}
     </Show>
+  );
+};
+
+export interface TimeFieldProps {
+  /** "HH:MM" (or empty). */
+  value: string;
+  onCommit: (value: string) => void;
+  ariaLabel?: string;
+  testId?: string;
+  class?: string;
+}
+
+/**
+ * A read-only "HH:MM" field driven by the keypad's time mode — tapping it
+ * opens the pad, which fills HH then auto-advances to MM. Mirrors
+ * DebouncedNumberField's focus/blur/hand-over plumbing; no OS keyboard.
+ */
+export const TimeField: Component<TimeFieldProps> = (p) => {
+  const [local, setLocal] = createSignal(p.value);
+  let focused = false;
+  let inputEl: HTMLInputElement | undefined;
+  let controller: KeypadController | undefined;
+
+  createEffect(() => {
+    const v = p.value;
+    if (!focused) setLocal(v);
+  });
+
+  onCleanup(() => closeKeypad(controller));
+
+  const handleFocus = (): void => {
+    focused = true;
+    controller = {
+      label: p.ariaLabel,
+      mode: 'time',
+      fractional: false,
+      anchorEl: inputEl!,
+      value: () => local(),
+      setValue: (s) => setLocal(s),
+      commit: () => p.onCommit(local()),
+    };
+    openKeypad(controller);
+  };
+
+  const handleBlur = (): void => {
+    focused = false;
+    p.onCommit(local());
+    if (controller) requestCloseKeypad(controller);
+  };
+
+  return (
+    <input
+      ref={inputEl}
+      type="text"
+      inputmode="none"
+      readonly
+      class={p.class}
+      value={local()}
+      aria-label={p.ariaLabel}
+      data-testid={p.testId}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
+    />
   );
 };

@@ -5009,6 +5009,11 @@ html {
   font-size: 0.85em;
 }
 
+/* Time mode: the segment currently being filled (HH, then MM). */
+.numpad__seg--active {
+  color: var(--accent);
+}
+
 .numpad__close {
   flex: 0 0 auto;
   width: 2rem;
