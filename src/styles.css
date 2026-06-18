@@ -2593,6 +2593,19 @@ html {
   margin-right: auto;
 }
 
+/* Uniform box width across the rows so the controls line up in a clean column
+   (dose/yield/volume carry a unit, grinder doesn't, so the boxes would
+   otherwise be ragged). The input fills the box; the unit sits at the right. */
+.recipe-editor__field-row--stack .numfield__box {
+  width: 7rem;
+}
+
+.recipe-editor__field-row--stack .numfield__box > input {
+  flex: 1 1 auto;
+  width: auto;
+  text-align: right;
+}
+
 .recipe-editor__field {
   display: inline-flex;
   align-items: center;
