@@ -5088,25 +5088,6 @@ html {
   color: var(--accent);
 }
 
-.numpad__close {
-  flex: 0 0 auto;
-  width: 2rem;
-  height: 2rem;
-  display: grid;
-  place-items: center;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  font-size: 1.1rem;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.numpad__close:active {
-  background: var(--border);
-  color: var(--fg);
-}
-
 .numpad__body {
   display: flex;
   align-items: stretch;

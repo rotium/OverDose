@@ -48,34 +48,48 @@ export interface KeypadController {
 }
 
 const [active, setActive] = createSignal<KeypadController | null>(null);
-// A close requested by a field's blur is *deferred* and *cancelable*: if
-// another field grabs the pad before the deferred close runs, the close is
-// cancelled. This guarantees the pad never blips to `null` during a field
-// hand-over (which would otherwise reset the "fresh open" state and make it
-// re-anchor on every field).
+// A close requested by a field's blur is *deferred* and *cancelable*: another
+// field grabbing the pad cancels it, so the pad never blips to `null` during a
+// field hand-over (which would reset the "fresh open" state and re-anchor it).
+//
+// The defer is a short TIMER, not a microtask: on touch this WebView dispatches
+// the old field's blur and the new field's focus in *separate* tasks, so a
+// microtask fires in the gap — before the new focus — and nulls the pad, which
+// is what made it jump to each newly-tapped field.
 let pendingClose: KeypadController | null = null;
+let closeTimer: ReturnType<typeof setTimeout> | undefined;
+
+const cancelPendingClose = (): void => {
+  pendingClose = null;
+  if (closeTimer !== undefined) {
+    clearTimeout(closeTimer);
+    closeTimer = undefined;
+  }
+};
 
 /** Open (or hand over) the pad to a field. Cancels any pending blur-close. */
 export const openKeypad = (c: KeypadController): void => {
-  pendingClose = null;
+  cancelPendingClose();
   setActive(c);
 };
 
-/** Deferred close from a field losing focus. No-ops if another field has
- *  since taken the pad over. */
+/** Deferred close from a field losing focus. The ~150 ms window lets an
+ *  incoming focus on another field cancel it; only a genuine tap-away closes. */
 export const requestCloseKeypad = (c: KeypadController): void => {
   pendingClose = c;
-  queueMicrotask(() => {
+  if (closeTimer !== undefined) clearTimeout(closeTimer);
+  closeTimer = setTimeout(() => {
+    closeTimer = undefined;
     if (pendingClose === c && active() === c) {
       pendingClose = null;
       setActive(null);
     }
-  });
+  }, 150);
 };
 
-/** Immediate close (the Done button / handle ✕). */
+/** Immediate close (the Done button). */
 export const closeKeypad = (c?: KeypadController): void => {
-  pendingClose = null;
+  cancelPendingClose();
   if (!c || active() === c) setActive(null);
 };
 
@@ -326,15 +340,6 @@ export const NumericKeypad: Component = () => {
                   </Show>
                 </Show>
               </span>
-              <button
-                type="button"
-                class="numpad__close"
-                aria-label="Done"
-                onPointerDown={keepFocus}
-                onClick={act(done)}
-              >
-                ✕
-              </button>
             </div>
             <div class="numpad__body">
               <Show when={c().mode !== 'time' && c().recentsKey}>
