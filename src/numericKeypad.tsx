@@ -65,6 +65,11 @@ const clamp = (v: number, lo: number, hi: number): number =>
 
 export const NumericKeypad: Component = () => {
   const [pos, setPos] = createSignal<Pos>({ left: 0, top: 0 });
+  // Overtype mode: when a field first gains the pad its value stays visible,
+  // but the first digit/decimal *replaces* it (rather than appending to it).
+  // Backspace/clear drop out of overtype so you can edit the existing value;
+  // Done with no key pressed keeps it unchanged.
+  const [pristine, setPristine] = createSignal(true);
   // We anchor to the field only on a *fresh* open. Switching fields while the
   // pad is open leaves it exactly where it is (the user found re-anchoring on
   // every field jarring); a manual drag obviously keeps its spot too. The pad
@@ -96,6 +101,7 @@ export const NumericKeypad: Component = () => {
       wasOpen = false;
       return;
     }
+    setPristine(true); // each field starts in overtype mode
     const fresh = !wasOpen;
     wasOpen = true;
     if (fresh) {
@@ -138,18 +144,25 @@ export const NumericKeypad: Component = () => {
   const keepFocus = (e: PointerEvent): void => e.preventDefault();
 
   const digit = (c: KeypadController, d: string): void => {
-    const cur = c.value();
+    const cur = pristine() ? '' : c.value();
+    setPristine(false);
     c.setValue(cur === '0' ? d : cur + d);
   };
   const dot = (c: KeypadController): void => {
     if (!c.fractional) return;
-    const cur = c.value();
+    const cur = pristine() ? '' : c.value();
+    setPristine(false);
     if (cur.includes('.')) return;
     c.setValue(cur === '' ? '0.' : cur + '.');
   };
-  const backspace = (c: KeypadController): void =>
+  const backspace = (c: KeypadController): void => {
+    setPristine(false);
     c.setValue(c.value().slice(0, -1));
-  const clearAll = (c: KeypadController): void => c.setValue('');
+  };
+  const clearAll = (c: KeypadController): void => {
+    setPristine(false);
+    c.setValue('');
+  };
   const done = (c: KeypadController): void => {
     c.commit();
     c.anchorEl.blur();
