@@ -99,6 +99,9 @@ interface Pos {
 }
 
 const GAP = 8;
+// Distance the pad sits from the anchored field (kept larger than the viewport
+// margin so the pad never crowds or partially covers the field it's editing).
+const FIELD_GAP = 16;
 const clamp = (v: number, lo: number, hi: number): number =>
   Math.max(lo, Math.min(v, hi));
 
@@ -135,11 +138,16 @@ export const NumericKeypad: Component = () => {
     const r = c.anchorEl.getBoundingClientRect();
     const w = padRef?.offsetWidth ?? 300;
     const h = padRef?.offsetHeight ?? 320;
-    let top = r.bottom + GAP;
+    let top = r.bottom + FIELD_GAP;
     // Flip above the field when there isn't room below it.
-    if (top + h > vh() - GAP) top = r.top - GAP - h;
+    if (top + h > vh() - GAP) top = r.top - FIELD_GAP - h;
     top = clamp(top, GAP, Math.max(GAP, vh() - h - GAP));
-    const left = clamp(r.left, GAP, Math.max(GAP, vw() - w - GAP));
+    // Center the pad horizontally on the field, clamped to the viewport.
+    const left = clamp(
+      r.left + r.width / 2 - w / 2,
+      GAP,
+      Math.max(GAP, vw() - w - GAP),
+    );
     setPos({ left, top });
   };
 
@@ -305,6 +313,18 @@ export const NumericKeypad: Component = () => {
               onPointerDown={startDrag}
               onDblClick={reanchor}
             >
+              <svg
+                class="numpad__grip"
+                viewBox="0 0 12 16"
+                aria-hidden="true"
+              >
+                <circle cx="3.5" cy="3" r="1.3" />
+                <circle cx="8.5" cy="3" r="1.3" />
+                <circle cx="3.5" cy="8" r="1.3" />
+                <circle cx="8.5" cy="8" r="1.3" />
+                <circle cx="3.5" cy="13" r="1.3" />
+                <circle cx="8.5" cy="13" r="1.3" />
+              </svg>
               <span class="numpad__label">{c().label ?? 'Value'}</span>
               <span class="numpad__readout" data-testid="numpad-readout">
                 <Show

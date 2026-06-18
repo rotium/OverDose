@@ -5145,6 +5145,14 @@ html {
   user-select: none;
 }
 
+.numpad__grip {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 16px;
+  fill: var(--muted);
+  opacity: 0.7;
+}
+
 .numpad__label {
   flex: 0 1 auto;
   font-size: 0.8rem;
