@@ -9,6 +9,9 @@
   --muted: #888;
   --muted-2: #777;
   --accent: #3b82f6;
+  /* Muted tone of --accent for the recents quick-pick chips: related to the
+     Done key but clearly secondary. */
+  --accent-soft: #2b4d74;
   --good: #1f6f3a;
   --bad: #6f1f1f;
   --warn: #a86a00;
@@ -5109,16 +5112,18 @@ html {
   align-items: stretch;
 }
 
-/* MRU quick-pick chips column (Phase 2) — sits left of the keypad grid, in a
-   recessed zone (darker bg + divider) so it reads as its own area, not more
-   keys. Always shown for a field with recents; empty slots are inert. */
+/* MRU quick-pick chips column (Phase 2) — sits to the RIGHT of the digit grid,
+   grouped with Done as the value-producing actions. Filled chips use a muted
+   accent tone (kin to Done, but secondary); empty slots are neutral + inert.
+   Always shown for a field with a recentsKey. */
 .numpad__recents {
+  order: 1; /* right of the grid */
   display: flex;
   flex-direction: column;
   gap: 1px;
   padding: 1px;
-  background: var(--bg);
-  border-right: 2px solid var(--border-strong);
+  background: var(--border);
+  border-left: 2px solid var(--border-strong);
   min-width: 3.6rem;
 }
 
@@ -5128,7 +5133,7 @@ html {
   display: grid;
   place-items: center;
   border: none;
-  background: var(--bg);
+  background: var(--accent-soft);
   color: var(--fg);
   font-size: 0.95rem;
   font-variant-numeric: tabular-nums;
@@ -5143,11 +5148,11 @@ html {
   color: #fff;
 }
 
-/* Empty slot — visible but inert (not a real disabled button, which would
+/* Empty slot — neutral and inert (a span, not a disabled button, which would
    swallow pointerdown and close the pad). */
 .numpad__recent--empty,
 .numpad__recent--empty:active {
-  background: var(--bg);
+  background: var(--bg-elev);
   cursor: default;
 }
 
