@@ -20,6 +20,7 @@ import {
   shotYieldG,
   shotTargetYieldG,
 } from '../shotStats';
+import { gatewayCaughtUp } from '../liveShotAdapter';
 
 const fmtAgo = (timestamp: string, now: Date = new Date()): string => {
   const then = new Date(timestamp);
@@ -114,7 +115,7 @@ export const LastShotCard: Component<LastShotCardProps> = (p) => {
     if (!opt) return false;
     const s = summary();
     if (!s) return true;
-    return Date.parse(s.timestamp) < Date.parse(opt.timestamp);
+    return !gatewayCaughtUp(s, opt.timestamp);
   };
 
   const displayedSummary = (): GatewayShotSummary | null => {

@@ -1,5 +1,37 @@
-import type { GatewayShotRecord } from './api';
+import type { GatewayShotRecord, GatewayShotSummary } from './api';
 import type { FrozenLiveShot } from './liveShot';
+
+/**
+ * Window for the optimistic→gateway hand-off.
+ *
+ * The optimistic record's `timestamp` is the first captured frame's machine
+ * timestamp; the gateway records the *same* shot starting a touch earlier (it
+ * captures from the true shot start), so its timestamp is ≤ ours. A strict
+ * "gateway ≥ optimistic" therefore never flips on real hardware, stranding the
+ * UI on the optimistic record forever (so post-brew edits never get a real
+ * shot id to save against).
+ *
+ * Both timestamps are in the same machine clock, and the *previous* shot is far
+ * older (a whole shot cycle + review), so we instead treat the gateway's latest
+ * as "the shot we just brewed" once it's within this window of our start. Two
+ * espresso shots can't start within ~10 s of each other, so this can't latch
+ * onto the previous shot.
+ */
+export const HANDOFF_WINDOW_MS = 10_000;
+
+/**
+ * Has the gateway caught up to the shot the optimistic record stands in for?
+ * True once the gateway's latest shot timestamp is within {@link
+ * HANDOFF_WINDOW_MS} of the optimistic start (in either direction).
+ */
+export const gatewayCaughtUp = (
+  gatewaySummary: GatewayShotSummary | null | undefined,
+  optimisticTimestamp: string,
+): boolean => {
+  if (!gatewaySummary) return false;
+  const gap = Date.parse(optimisticTimestamp) - Date.parse(gatewaySummary.timestamp);
+  return gap <= HANDOFF_WINDOW_MS;
+};
 
 /**
  * Convert an in-memory frozen live shot into the GatewayShotRecord shape so

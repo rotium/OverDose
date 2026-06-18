@@ -42,6 +42,7 @@ import {
 } from '../api';
 import { buildProfileCurve } from '../profile/curve';
 import { deriveShotStats } from '../shotStats';
+import { gatewayCaughtUp } from '../liveShotAdapter';
 import { ShotReview } from './ShotReview';
 import { type AutoStopMode, type TraceVisibility } from '../prefs';
 import {
@@ -1474,7 +1475,7 @@ const PostBrewView: Component<{
     if (!opt) return false;
     const s = summary();
     if (!s) return true;
-    return Date.parse(s.timestamp) < Date.parse(opt.timestamp);
+    return !gatewayCaughtUp(s, opt.timestamp);
   };
 
   // The gateway persists the shot asynchronously on shot-end, so the
@@ -1484,9 +1485,10 @@ const PostBrewView: Component<{
   // real record for the chart. Bounded so a permanently-stale gateway can't
   // spin forever.
   const SUMMARY_POLL_MS = 600;
+  const SUMMARY_POLL_MAX = 16; // ~9.6 s — gateway persistence can lag on real hw
   let summaryPolls = 0;
   createEffect(() => {
-    if (!usingOptimistic() || summaryPolls >= 8) return;
+    if (!usingOptimistic() || summaryPolls >= SUMMARY_POLL_MAX) return;
     const t = setTimeout(() => {
       summaryPolls++;
       void refetchSummary();
