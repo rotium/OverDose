@@ -19,7 +19,6 @@ import {
   Show,
   createEffect,
   createSignal,
-  untrack,
   type Component,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
@@ -27,6 +26,8 @@ import { Portal } from 'solid-js/web';
 export interface KeypadController {
   /** Field label, shown in the pad's handle. */
   label?: string;
+  /** Unit shown beside the value in the readout (e.g. "g", "mL"). */
+  unit?: string;
   /** Whether a decimal point is allowed (false → integer field). */
   fractional: boolean;
   /** The input element — used to anchor the pad and to blur on Done. */
@@ -64,8 +65,12 @@ const clamp = (v: number, lo: number, hi: number): number =>
 
 export const NumericKeypad: Component = () => {
   const [pos, setPos] = createSignal<Pos>({ left: 0, top: 0 });
-  // "Has the user dragged it this session?" — drives the sticky-position rule.
-  const [moved, setMoved] = createSignal(false);
+  // We anchor to the field only on a *fresh* open. Switching fields while the
+  // pad is open leaves it exactly where it is (the user found re-anchoring on
+  // every field jarring); a manual drag obviously keeps its spot too. The pad
+  // re-anchors below the current field on the next fresh open, or on a
+  // double-tap of the handle.
+  let wasOpen = false;
   let padRef: HTMLDivElement | undefined;
 
   const vw = (): number => window.visualViewport?.width ?? window.innerWidth;
@@ -83,18 +88,22 @@ export const NumericKeypad: Component = () => {
     setPos({ left, top });
   };
 
-  // On open / field hand-over: re-anchor unless the user has dragged it.
+  // Anchor only on a fresh open (closed → open). Field hand-overs leave the
+  // pad in place.
   createEffect(() => {
     const c = active();
     if (!c) {
-      setMoved(false);
+      wasOpen = false;
       return;
     }
-    if (untrack(moved)) return;
-    // Measure after the pad has rendered so width/height are real.
-    requestAnimationFrame(() => {
-      if (active() === c && !untrack(moved)) reposition(c);
-    });
+    const fresh = !wasOpen;
+    wasOpen = true;
+    if (fresh) {
+      // Measure after the pad has rendered so width/height are real.
+      requestAnimationFrame(() => {
+        if (active() === c) reposition(c);
+      });
+    }
   });
 
   const startDrag = (e: PointerEvent): void => {
@@ -103,7 +112,6 @@ export const NumericKeypad: Component = () => {
     const offX = e.clientX - start.left;
     const offY = e.clientY - start.top;
     const move = (ev: PointerEvent): void => {
-      setMoved(true);
       const w = padRef?.offsetWidth ?? 300;
       const h = padRef?.offsetHeight ?? 320;
       setPos({
@@ -122,7 +130,6 @@ export const NumericKeypad: Component = () => {
   const reanchor = (): void => {
     const c = active();
     if (!c) return;
-    setMoved(false);
     requestAnimationFrame(() => reposition(c));
   };
 
@@ -160,7 +167,10 @@ export const NumericKeypad: Component = () => {
     onPress: (c: KeypadController) => void;
     wide?: boolean;
     done?: boolean;
-    disabled?: boolean;
+    /** Greyed-out but still interactive — a real `disabled` button swallows
+     *  pointerdown, so focus would leave the input and the pad would close.
+     *  The press handler no-ops instead. */
+    dim?: boolean;
     testId?: string;
   }) => (
     <button
@@ -169,8 +179,8 @@ export const NumericKeypad: Component = () => {
       classList={{
         'numpad__key--wide': props.wide,
         'numpad__key--done': props.done,
+        'numpad__key--dim': props.dim,
       }}
-      disabled={props.disabled}
       data-testid={props.testId}
       onPointerDown={keepFocus}
       onClick={act(props.onPress)}
@@ -197,6 +207,9 @@ export const NumericKeypad: Component = () => {
               <span class="numpad__label">{c().label ?? 'Value'}</span>
               <span class="numpad__readout" data-testid="numpad-readout">
                 {c().value() || '0'}
+                <Show when={c().unit}>
+                  <span class="numpad__unit"> {c().unit}</span>
+                </Show>
               </span>
               <button
                 type="button"
@@ -223,7 +236,7 @@ export const NumericKeypad: Component = () => {
               <Key
                 label="."
                 onPress={dot}
-                disabled={!c().fractional}
+                dim={!c().fractional}
                 testId="numpad-dot"
               />
               <Key label="0" onPress={(c) => digit(c, '0')} wide />

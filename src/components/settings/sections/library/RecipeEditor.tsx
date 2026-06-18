@@ -363,6 +363,7 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
                       min={0}
                       step={0.1}
                       steppers
+                      unit="g"
                       ariaLabel="Dose"
                       testId="recipe-dose-input"
                       debounceMs={p.debounceMs}
@@ -397,6 +398,7 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
                       min={0}
                       step={0.1}
                       steppers
+                      unit="g"
                       ariaLabel="Target yield"
                       testId="recipe-target-yield-input"
                       debounceMs={p.debounceMs}
@@ -415,6 +417,7 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
                       min={0}
                       step={1}
                       steppers
+                      unit="mL"
                       ariaLabel="Target volume"
                       testId="recipe-target-volume-input"
                       debounceMs={p.debounceMs}

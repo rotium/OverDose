@@ -343,6 +343,8 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                                     }
                                     min={1}
                                     step={1}
+                                    steppers
+                                    unit="s"
                                     placeholder="s"
                                     ariaLabel="Flush seconds"
                                     testId={`step-seconds-${s.id}`}
@@ -370,6 +372,8 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                                     }
                                     min={1}
                                     step={1}
+                                    steppers
+                                    unit="s"
                                     placeholder="s"
                                     ariaLabel="Steam seconds"
                                     testId={`step-seconds-${s.id}`}
@@ -397,6 +401,8 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                                     }
                                     min={1}
                                     step={1}
+                                    steppers
+                                    unit="s"
                                     placeholder="s"
                                     ariaLabel="Purge seconds"
                                     testId={`step-seconds-${s.id}`}
@@ -434,6 +440,8 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                                     }
                                     min={1}
                                     step={1}
+                                    steppers
+                                    unit="min"
                                     placeholder="min"
                                     ariaLabel="Soak timer minutes"
                                     testId={`step-minutes-${s.id}`}

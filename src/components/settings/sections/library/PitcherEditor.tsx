@@ -98,6 +98,8 @@ export const PitcherEditor: Component<PitcherEditorProps> = (p) => {
                     placeholder="mL"
                     min={0}
                     step={10}
+                    steppers
+                    unit="mL"
                     ariaLabel="Capacity (millilitres)"
                     testId="pitcher-capacity-input"
                     debounceMs={p.debounceMs}

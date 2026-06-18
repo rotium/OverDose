@@ -19,6 +19,8 @@ export interface DebouncedNumberFieldProps {
   max?: number;
   step?: number;
   ariaLabel?: string;
+  /** Unit shown beside the value in the keypad readout (e.g. "g", "mL"). */
+  unit?: string;
   testId?: string;
   /** Debounce window in ms. Default 500; tests pass 0 for sync commits. */
   debounceMs?: number;
@@ -146,6 +148,7 @@ export const DebouncedNumberField: Component<DebouncedNumberFieldProps> = (
     focused = true;
     controller = {
       label: p.ariaLabel,
+      unit: p.unit,
       fractional: p.step === undefined || p.step < 1,
       anchorEl: inputEl!,
       value: () => local(),

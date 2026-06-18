@@ -100,6 +100,8 @@ export const AlertsSection: Component<AlertsSectionProps> = (p) => {
                 onCommit={commitCritical}
                 min={0}
                 step={1}
+                steppers
+                unit="mm"
                 ariaLabel="Critical threshold"
                 testId="critical-threshold"
               />

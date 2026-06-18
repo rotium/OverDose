@@ -4977,6 +4977,11 @@ html {
   font-variant-numeric: tabular-nums;
 }
 
+.numpad__unit {
+  color: var(--muted);
+  font-size: 0.85em;
+}
+
 .numpad__close {
   flex: 0 0 auto;
   width: 2rem;
@@ -5020,9 +5025,8 @@ html {
   color: #fff;
 }
 
-.numpad__key:disabled {
+.numpad__key--dim {
   color: var(--border-strong);
-  cursor: default;
 }
 
 .numpad__key--wide {
