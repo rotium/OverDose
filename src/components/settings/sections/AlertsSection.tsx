@@ -69,14 +69,18 @@ export const AlertsSection: Component<AlertsSectionProps> = (p) => {
             Warn threshold
           </label>
           <div class="settings-number-row">
-            <input
-              id="warn-threshold"
-              type="number"
+            <DebouncedNumberField
+              value={prefs.waterWarnMm()}
+              onCommit={(v) => {
+                if (v !== undefined) setWarn(String(v));
+              }}
               min={refillMm() ?? 0}
               max={WATER_TANK_MAX_MM}
-              step="1"
-              value={prefs.waterWarnMm()}
-              onChange={(e) => setWarn(e.currentTarget.value)}
+              step={1}
+              steppers
+              unit="mm"
+              ariaLabel="Warn threshold"
+              testId="warn-threshold"
             />
             <span class="settings-unit">mm</span>
           </div>

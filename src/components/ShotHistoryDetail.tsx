@@ -322,7 +322,8 @@ export const ShotHistoryDetail: Component<{
             value={grind()}
             onCommit={setGrind}
             min={0}
-            step={0.1}
+            step={1}
+            decimal
             steppers
             ariaLabel="Grind setting"
             testId="shot-detail-grind"

@@ -165,7 +165,8 @@ export const ShotReview: Component<{
             value={p.actualDose()}
             onCommit={(v) => p.onActualDose(v)}
             min={0}
-            step={0.1}
+            step={1}
+            decimal
             steppers
             unit="g"
             ariaLabel="Actual dose, grams"
@@ -200,7 +201,8 @@ export const ShotReview: Component<{
               value={p.actualYield() ?? stats().yieldG ?? undefined}
               onCommit={(v) => p.onActualYield(v)}
               min={0}
-              step={0.1}
+              step={1}
+              decimal
               steppers
               unit="g"
               ariaLabel="Actual yield, grams"

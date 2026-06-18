@@ -560,6 +560,7 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                               onCommit={(n) => updateReminder({ every: Math.max(1, n ?? 1) })}
                               min={1}
                               step={1}
+                              steppers
                               placeholder="1"
                               ariaLabel="Remind every"
                               testId="cleaning-every"
@@ -609,6 +610,7 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                                 }
                                 min={1}
                                 step={1}
+                                steppers
                                 placeholder="1"
                                 ariaLabel="Day of month"
                                 testId="cleaning-day-of-month"

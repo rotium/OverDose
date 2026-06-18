@@ -1130,7 +1130,8 @@ const BrewPrep: Component<{
                 onCommit={(v) => p.patchDraft({ targetYieldGrams: v })}
                 placeholder="—"
                 min={0}
-                step={0.1}
+                step={1}
+                decimal
                 steppers
                 unit="g"
                 ariaLabel="Target yield (grams)"
@@ -1250,7 +1251,8 @@ const BrewPrep: Component<{
               onCommit={(v) => p.patchDraft({ doseGrams: v })}
               placeholder="—"
               min={0}
-              step={0.1}
+              step={1}
+              decimal
               steppers
               unit="g"
               ariaLabel="Dose (grams)"
@@ -1267,7 +1269,8 @@ const BrewPrep: Component<{
               value={p.draft()?.grinderSetting}
               onCommit={(v) => p.patchDraft({ grinderSetting: v })}
               placeholder="—"
-              step={0.1}
+              step={1}
+              decimal
               steppers
               ariaLabel="Grinder setting"
               testId="prep-card-grinder-input"

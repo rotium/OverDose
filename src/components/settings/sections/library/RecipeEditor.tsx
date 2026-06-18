@@ -353,7 +353,7 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
                   onOpen={() => setBeanDialogOpen(true)}
                   onClear={handleBeanClear}
                 />
-                <div class="recipe-editor__field-row">
+                <div class="recipe-editor__field-row recipe-editor__field-row--stack">
                   <label class="recipe-editor__field">
                     <span class="recipe-editor__field-label">Dose</span>
                     <DebouncedNumberField
@@ -361,7 +361,8 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
                       onCommit={handleDoseCommit}
                       placeholder="g"
                       min={0}
-                      step={0.1}
+                      step={1}
+                      decimal
                       steppers
                       unit="g"
                       ariaLabel="Dose"
@@ -379,7 +380,8 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
                       value={r().grinderSetting}
                       onCommit={handleGrinderSettingCommit}
                       placeholder="—"
-                      step={0.1}
+                      step={1}
+                      decimal
                       steppers
                       ariaLabel="Grinder setting"
                       testId="recipe-grinder-setting-input"
@@ -396,7 +398,8 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
                       onCommit={handleTargetYieldCommit}
                       placeholder="g"
                       min={0}
-                      step={0.1}
+                      step={1}
+                      decimal
                       steppers
                       unit="g"
                       ariaLabel="Target yield"

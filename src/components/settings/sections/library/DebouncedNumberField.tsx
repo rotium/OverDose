@@ -18,7 +18,13 @@ export interface DebouncedNumberFieldProps {
   placeholder?: string;
   min?: number;
   max?: number;
+  /** Stepper increment (and the legacy fractional hint). Default 1. */
   step?: number;
+  /** Whether the keypad allows a decimal point. Defaults to inferring from
+   *  `step` (`< 1` → decimals) for back-compat; set explicitly to decouple
+   *  the decimal key from the stepper increment (e.g. nudge by 1 but still
+   *  type 18.5). */
+  decimal?: boolean;
   ariaLabel?: string;
   /** Unit shown beside the value in the keypad readout (e.g. "g", "mL"). */
   unit?: string;
@@ -150,7 +156,7 @@ export const DebouncedNumberField: Component<DebouncedNumberFieldProps> = (
     controller = {
       label: p.ariaLabel,
       unit: p.unit,
-      fractional: p.step === undefined || p.step < 1,
+      fractional: p.decimal ?? (p.step === undefined || p.step < 1),
       anchorEl: inputEl!,
       value: () => local(),
       setValue: (next) => {
