@@ -81,9 +81,7 @@ export const AlertsSection: Component<AlertsSectionProps> = (p) => {
               unit="mm"
               ariaLabel="Warn threshold"
               testId="warn-threshold"
-            />
-            <span class="settings-unit">mm</span>
-          </div>
+            />          </div>
         </div>
         <div class="settings-field">
           <label class="settings-field__label">Critical threshold</label>
@@ -108,9 +106,7 @@ export const AlertsSection: Component<AlertsSectionProps> = (p) => {
                 unit="mm"
                 ariaLabel="Critical threshold"
                 testId="critical-threshold"
-              />
-              <span class="settings-unit">mm</span>
-            </Show>
+              />            </Show>
           </div>
         </div>
         <p class="settings-help">

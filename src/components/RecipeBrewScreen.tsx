@@ -1137,9 +1137,7 @@ const BrewPrep: Component<{
                 ariaLabel="Target yield (grams)"
                 testId="prep-card-target-yield-input"
                 class="prep__stat-input"
-              />
-              <span class="prep__stat-unit">g</span>
-              <Show when={p.scaleConnected()}>
+              />              <Show when={p.scaleConnected()}>
                 <label class="prep__autostop-check">
                   <input
                     type="checkbox"
@@ -1166,9 +1164,7 @@ const BrewPrep: Component<{
                 ariaLabel="Target volume (millilitres)"
                 testId="prep-card-target-volume-input"
                 class="prep__stat-input"
-              />
-              <span class="prep__stat-unit">mL</span>
-              <Show when={!p.scaleConnected()}>
+              />              <Show when={!p.scaleConnected()}>
                 <label class="prep__autostop-check">
                   <input
                     type="checkbox"
@@ -1258,9 +1254,7 @@ const BrewPrep: Component<{
               ariaLabel="Dose (grams)"
               testId="prep-card-dose-input"
               class="prep__stat-input"
-            />
-            <span class="prep__stat-unit">g</span>
-          </span>
+            />          </span>
         </label>
         <label class="prep__stat" data-testid="prep-card-grinder">
           <span class="prep__stat-label">Grinder setting</span>

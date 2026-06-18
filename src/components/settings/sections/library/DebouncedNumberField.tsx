@@ -1,4 +1,5 @@
 import {
+  Show,
   createEffect,
   createSignal,
   onCleanup,
@@ -199,6 +200,19 @@ export const DebouncedNumberField: Component<DebouncedNumberFieldProps> = (
 
   if (!p.steppers) return field;
 
+  // Steppered fields render the input + its unit together inside one bordered
+  // box, with the −/+ flanking it: −  [ 18.0 g ]  +. The box owns the border
+  // (the input goes borderless via CSS), so the unit reads as part of the
+  // field rather than dangling after the + button.
+  const box = (
+    <span class="numfield__box">
+      {field}
+      <Show when={p.unit}>
+        <span class="numfield__unit">{p.unit}</span>
+      </Show>
+    </span>
+  );
+
   return (
     <span class="numfield">
       <button
@@ -215,7 +229,7 @@ export const DebouncedNumberField: Component<DebouncedNumberFieldProps> = (
       >
         −
       </button>
-      {field}
+      {box}
       <button
         type="button"
         class="numfield__step"

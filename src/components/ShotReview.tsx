@@ -173,9 +173,7 @@ export const ShotReview: Component<{
             testId={tid('dose-input')}
             class="rstat__input"
             debounceMs={p.doseDebounceMs}
-          />
-          <span class="rstat__unit">g</span>
-        </span>
+          />        </span>
       </Show>
     </ReviewStat>
   );
@@ -209,9 +207,7 @@ export const ShotReview: Component<{
               testId={tid('yield-input')}
               class="rstat__input"
               debounceMs={p.doseDebounceMs}
-            />
-            <span class="rstat__unit">g</span>
-          </span>
+            />          </span>
         </Show>
       </ReviewStat>
       <ReviewStat label="Time" testId={tid('time')}>

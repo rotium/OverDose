@@ -351,9 +351,7 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                                     testId={`step-seconds-${s.id}`}
                                     debounceMs={p.debounceMs}
                                     class="step-field__input"
-                                  />
-                                  <span class="step-field__unit">s</span>
-                                </label>
+                                  />                                </label>
                               </Show>
                               <Show when={s.type === 'steamWand'}>
                                 <label class="recipe-editor__field">
@@ -380,9 +378,7 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                                     testId={`step-seconds-${s.id}`}
                                     debounceMs={p.debounceMs}
                                     class="step-field__input"
-                                  />
-                                  <span class="step-field__unit">s</span>
-                                </label>
+                                  />                                </label>
                               </Show>
                               <Show when={s.type === 'steamPurge'}>
                                 <label class="recipe-editor__field">
@@ -409,9 +405,7 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                                     testId={`step-seconds-${s.id}`}
                                     debounceMs={p.debounceMs}
                                     class="step-field__input"
-                                  />
-                                  <span class="step-field__unit">s</span>
-                                </label>
+                                  />                                </label>
                               </Show>
                               <Show
                                 when={
@@ -448,9 +442,7 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                                     testId={`step-minutes-${s.id}`}
                                     debounceMs={p.debounceMs}
                                     class="step-field__input"
-                                  />
-                                  <span class="step-field__unit">min</span>
-                                </label>
+                                  />                                </label>
                               </Show>
                             </div>
                             <button
@@ -626,6 +618,7 @@ export const CleaningEditor: Component<CleaningEditorProps> = (p) => {
                               class="cleaning-editor__time-input"
                               testId="cleaning-at-time"
                               ariaLabel="Reminder time"
+                              placeholder="HH:MM"
                               value={r().atTime}
                               onCommit={(v) => updateReminder({ atTime: v })}
                             />

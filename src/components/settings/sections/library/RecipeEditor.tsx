@@ -369,9 +369,7 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
                       testId="recipe-dose-input"
                       debounceMs={p.debounceMs}
                       class="step-field__input"
-                    />
-                    <span class="step-field__unit">g</span>
-                  </label>
+                    />                  </label>
                   <label class="recipe-editor__field">
                     <span class="recipe-editor__field-label">
                       Grinder setting
@@ -406,9 +404,7 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
                       testId="recipe-target-yield-input"
                       debounceMs={p.debounceMs}
                       class="step-field__input"
-                    />
-                    <span class="step-field__unit">g</span>
-                  </label>
+                    />                  </label>
                   <label class="recipe-editor__field">
                     <span class="recipe-editor__field-label">
                       Target volume
@@ -425,9 +421,7 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
                       testId="recipe-target-volume-input"
                       debounceMs={p.debounceMs}
                       class="step-field__input"
-                    />
-                    <span class="step-field__unit">mL</span>
-                  </label>
+                    />                  </label>
                 </div>
                 <p class="settings-help">
                   Target yield stops the shot at this cup weight — needs a

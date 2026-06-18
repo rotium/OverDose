@@ -4969,6 +4969,43 @@ html {
   color: var(--accent);
 }
 
+/* The bordered box that holds the input + its unit, flanked by the steppers.
+   The box owns the border so the unit sits inside it; the input goes
+   borderless. */
+.numfield__box {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.12rem;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  padding: 0.4rem 0.55rem;
+}
+
+.numfield__box > input {
+  border: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+  min-width: 0;
+}
+
+.numfield__unit {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* Brew-prep: the box grows to fill the row so the number stays visible. */
+.prep__stat-edit .numfield__box {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Shot-review/summary stats are compact — keep the box tight. */
+.rstat__edit .numfield__box {
+  padding: 0.05rem 0.3rem;
+}
+
 /* The draggable, app-wide numeric keypad (numericKeypad.tsx). */
 .numpad {
   position: fixed;

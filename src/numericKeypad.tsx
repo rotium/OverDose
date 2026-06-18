@@ -352,6 +352,7 @@ export interface TimeFieldProps {
   value: string;
   onCommit: (value: string) => void;
   ariaLabel?: string;
+  placeholder?: string;
   testId?: string;
   class?: string;
 }
@@ -402,6 +403,7 @@ export const TimeField: Component<TimeFieldProps> = (p) => {
       readonly
       class={p.class}
       value={local()}
+      placeholder={p.placeholder}
       aria-label={p.ariaLabel}
       data-testid={p.testId}
       onFocus={handleFocus}

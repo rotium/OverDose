@@ -104,9 +104,7 @@ export const PitcherEditor: Component<PitcherEditorProps> = (p) => {
                     testId="pitcher-capacity-input"
                     debounceMs={p.debounceMs}
                     class="step-field__input"
-                  />
-                  <span class="step-field__unit">mL</span>
-                </label>
+                  />                </label>
               </section>
 
               <section class="settings-section">
