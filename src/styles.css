@@ -2908,12 +2908,13 @@ html {
 }
 
 /* Primary action button — matches the prep-screen "Start Brew/Steam" button. */
+/* Shared primary-action size — see .prep__start; every "Start" matches. */
 .cleaning-wizard__btn {
-  font-size: 1.05rem;
+  font-size: 1rem;
   font-weight: 600;
-  padding: 0.85rem 2.25rem;
-  min-width: 260px;
-  border-radius: 10px;
+  padding: 0.6rem 1.5rem;
+  min-width: 200px;
+  border-radius: 8px;
 }
 
 .cleaning-wizard__lines {
@@ -3423,17 +3424,33 @@ html {
   gap: 0.6rem;
 }
 
-/* Standalone Auto-stop line — names the enforced target ("…at volume (36 mL)"). */
+/* Standalone Auto-stop control — names the enforced target ("…at volume
+   (36 mL)"). A bordered toggle that lights up accent when armed, so it reads as
+   a real control rather than stray text. */
 .prep__autostop {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.85rem;
+  gap: 0.6rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-elev);
+  font-size: 0.9rem;
+  font-weight: 500;
   color: var(--fg);
   cursor: pointer;
+  user-select: none;
+}
+
+.prep__autostop:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .prep__autostop input {
+  width: 1.05rem;
+  height: 1.05rem;
+  accent-color: var(--accent);
   cursor: pointer;
 }
 
@@ -3485,6 +3502,8 @@ html {
   display: flex;
   align-items: center;
   gap: 0.35rem;
+  /* Shared control height so Bean / Dose / Grind / targets line up. */
+  min-height: 2.2rem;
 }
 
 .prep__stat-input {
@@ -3679,9 +3698,14 @@ html {
 }
 
 .prep__start {
-  /* Standard .btn btn--primary size — drop the oversized prep button. The
-     data-state variants below still set their icon layout + colours. */
+  /* Shared primary-action size — matches .cleaning-wizard__btn so every
+     "Start" looks the same. The data-state variants below still set their
+     icon layout + colours. */
+  font-size: 1rem;
   font-weight: 600;
+  padding: 0.6rem 1.5rem;
+  min-width: 200px;
+  border-radius: 8px;
 }
 
 /* Warming-up state — disabled, amber, with a thermometer icon. Overrides
@@ -4351,6 +4375,8 @@ html {
   text-align: left;
   cursor: pointer;
   line-height: 1.1;
+  /* Match the Dose/Grind field height so the top row is even. */
+  min-height: 2.2rem;
 }
 
 .prep__bean-button:hover,
@@ -4364,7 +4390,9 @@ html {
   font-weight: 600;
   display: inline-flex;
   align-items: baseline;
-  flex-wrap: wrap;
+  /* Stay one line — wrapping made the Bean card taller than Dose/Grind. */
+  flex-wrap: nowrap;
+  overflow: hidden;
   gap: 0.3rem;
   min-width: 0;
 }
