@@ -10,8 +10,9 @@ import { clearDebugLog, debugLogSize, getDebugLog } from '../../../debugLog';
 import { BUILD_INFO, buildInfoLine } from '../../../buildInfo';
 
 /**
- * Developer tools (Settings → App → Developer). Debug logging toggle + copy /
- * clear of the in-app log buffer, and a "reset app data" that clears all
+ * Developer tools (Settings → About → Developer). One section card titled
+ * "Developer" with three subsections: Build identity, debug Logging (toggle +
+ * copy/clear of the in-app log buffer), and a Reset that clears all
  * locally-stored skin state for a fresh-install-like start.
  */
 export const DeveloperSection: Component = () => {
@@ -56,9 +57,11 @@ export const DeveloperSection: Component = () => {
   };
 
   return (
-    <div class="settings-section-stack">
-      <section class="settings-section" aria-labelledby="dev-build-heading">
-        <h2 id="dev-build-heading">Build</h2>
+    <section class="settings-section" aria-labelledby="dev-heading">
+      <h2 id="dev-heading">Developer</h2>
+
+      <div class="settings-subsection" aria-labelledby="dev-build-heading">
+        <h3 class="settings-subheading" id="dev-build-heading">Build</h3>
         <dl class="dev-build" data-testid="dev-build">
           <dt>Version</dt>
           <dd data-testid="dev-build-version">{BUILD_INFO.version}</dd>
@@ -67,10 +70,10 @@ export const DeveloperSection: Component = () => {
           <dt>Built</dt>
           <dd data-testid="dev-build-time">{BUILD_INFO.buildTime}</dd>
         </dl>
-      </section>
+      </div>
 
-      <section class="settings-section" aria-labelledby="dev-logging-heading">
-        <h2 id="dev-logging-heading">Logging</h2>
+      <div class="settings-subsection" aria-labelledby="dev-logging-heading">
+        <h3 class="settings-subheading" id="dev-logging-heading">Logging</h3>
         <label class="settings-checkbox">
           <input
             type="checkbox"
@@ -106,10 +109,10 @@ export const DeveloperSection: Component = () => {
             Clear log
           </button>
         </div>
-      </section>
+      </div>
 
-      <section class="settings-section" aria-labelledby="dev-reset-heading">
-        <h2 id="dev-reset-heading">Reset</h2>
+      <div class="settings-subsection" aria-labelledby="dev-reset-heading">
+        <h3 class="settings-subheading" id="dev-reset-heading">Reset</h3>
         <p class="settings-help">
           Clears all locally-stored skin data — preferences, recipes, routines,
           and pitchers — then reloads, like a fresh install. Gateway data
@@ -149,7 +152,7 @@ export const DeveloperSection: Component = () => {
             </div>
           </div>
         </Show>
-      </section>
-    </div>
+      </div>
+    </section>
   );
 };

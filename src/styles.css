@@ -1532,6 +1532,78 @@ html {
   color: var(--muted);
 }
 
+/* Read-only label↔value rows — used by the "About this machine" identity
+   card. Separator lines between rows; none after the last. */
+.info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.info-row:last-child {
+  border-bottom: none;
+}
+
+.info-row__label {
+  color: var(--muted);
+}
+
+.info-row__value {
+  color: var(--fg);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.info-row__value--mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 400;
+  font-size: 0.9rem;
+}
+
+/* GHC presence indicator — quiet by default, green when present. */
+.machine-info-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  border: 1px solid var(--border-strong);
+  color: var(--muted);
+}
+
+.machine-info-pill--yes {
+  color: var(--good-fg);
+  border-color: var(--good);
+}
+
+.machine-info-pill__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* Subsections within a single section card (e.g. the About tab's App card —
+   Gateway / Skin — and Developer card — Build / Logging / Reset). Hairline
+   separators between groups; the first sits directly under the card's h2. */
+.settings-subsection + .settings-subsection {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.settings-subheading {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--fg);
+}
+
 /* Range slider primitive — paired with an inline numeric readout so the user
    can see the precise value while dragging. Layout intentionally grid-style
    so the readout's tabular-num width doesn't shift the slider's track. */

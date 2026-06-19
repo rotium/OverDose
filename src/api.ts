@@ -19,6 +19,24 @@ export interface MachineInfo {
 }
 
 /**
+ * Gateway build identity from `GET /api/v1/info` — the reaprime gateway's own
+ * version/commit, distinct from OverDose's (`buildInfo.ts`) and the machine's
+ * firmware (`MachineInfo`). `localIp` is the gateway's LAN address (empty when
+ * unavailable), exposed for phone hand-off / QR use.
+ */
+export interface GatewayInfo {
+  commit: string;
+  commitShort: string;
+  branch: string;
+  buildTime: string;
+  version: string;
+  buildNumber: string;
+  appStore: boolean;
+  fullVersion: string;
+  localIp: string;
+}
+
+/**
  * Gateway shot-record summary. Mirrors the relevant fields from reaprime's
  * ShotRecordSummary schema — we type only what the UI consumes. The gateway's
  * `workflow` field is reaprime's own Workflow concept (bean/grinder/dose
@@ -195,6 +213,9 @@ async function fetchStore<T>(key: string): Promise<T | null> {
 export const api = {
   devices: () => fetchJson<Device[]>('/api/v1/devices'),
   machineInfo: () => fetchJson<MachineInfo>('/api/v1/machine/info'),
+
+  /** Gateway build identity (version / commit / build time / LAN IP). */
+  gatewayInfo: () => fetchJson<GatewayInfo>('/api/v1/info'),
 
   /** Read a value from the gateway KV store (namespace `overdose`). Resolves
    *  to null when the key doesn't exist. Backs the library sync — see

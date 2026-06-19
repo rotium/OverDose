@@ -4,23 +4,21 @@ import type { WsStream } from '../../streams';
 import { DisplaySection } from './sections/DisplaySection';
 import { BrewingSection } from './sections/BrewingSection';
 import { AlertsSection } from './sections/AlertsSection';
-import { AboutSection } from './sections/AboutSection';
-import { DeveloperSection } from './sections/DeveloperSection';
 
 /**
  * App tab — skin-side UI preferences. Sectioned into a left side-nav so
  * unrelated controls (display formatting vs. alert thresholds) live in
  * their own panes rather than competing on one scrolling page. New
  * subsections can plug in by extending SECTIONS and adding a Match arm.
+ *
+ * App build info + developer tools live in the About tab (see AboutTab).
  */
-type SectionId = 'display' | 'brewing' | 'alerts' | 'about' | 'developer';
+type SectionId = 'display' | 'brewing' | 'alerts';
 
 const SECTIONS: { id: SectionId; label: string }[] = [
   { id: 'display', label: 'Display' },
   { id: 'brewing', label: 'Brewing' },
   { id: 'alerts', label: 'Alerts' },
-  { id: 'about', label: 'About' },
-  { id: 'developer', label: 'Developer' },
 ];
 
 export const AppTab: Component<{
@@ -55,12 +53,6 @@ export const AppTab: Component<{
           </Match>
           <Match when={section() === 'alerts'}>
             <AlertsSection waterLevels={p.waterLevelsStream?.latest} />
-          </Match>
-          <Match when={section() === 'about'}>
-            <AboutSection />
-          </Match>
-          <Match when={section() === 'developer'}>
-            <DeveloperSection />
           </Match>
         </Switch>
       </div>

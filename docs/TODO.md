@@ -40,3 +40,24 @@ behavior intent-driven. OverDose's stop-mode setting would then map 1:1 to
 
 **Why deferred:** reaprime is upstream — treat as read-only unless we're
 explicitly changing it.
+
+## Machine capabilities (deferred — functional, not just display)
+
+**Status:** deferred. Surfacing `/machine/capabilities` was considered as part
+of the machine-info card (Variant B) but rejected as a *display-only* teaser.
+Capabilities are worth wiring **functionally**, not listing as text.
+
+- `GET /api/v1/machine/capabilities` returns `[]` on a plain DE1; a Bengle
+  returns `["cupWarmer", "integratedScale", "ledStrip", "stopAtWeight"]`. The
+  reaprime spec says skins should query it **once after connect** to decide
+  which UI to render.
+- **`stopAtWeight` is the high-value one:** on a Bengle the firmware can own
+  stop-at-weight autonomously (driven by the integrated scale), with the app
+  reflecting `WorkflowContext.targetYield` into the SAW MMR. This intersects
+  the **Auto-stop** work above — on a `stopAtWeight`-capable machine, OverDose
+  could hand the stop to firmware instead of running client-side SAW.
+- Other capabilities (`cupWarmer`, `ledStrip`) would gate Bengle-only UI that
+  OverDose doesn't have yet.
+
+**Why deferred:** display-only listing invites "why can't I use this?" Capability
+detection should land alongside the behavior it gates.

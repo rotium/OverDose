@@ -2,13 +2,15 @@ import { Match, Switch, createSignal, type Component } from 'solid-js';
 import type { ShotSettingsSnapshot, WaterLevelsSnapshot } from '../../snapshot';
 import type { WsStream } from '../../streams';
 import { AppTab } from './AppTab';
+import { AboutTab } from './AboutTab';
 import { GatewayTab } from './GatewayTab';
 import { LibraryTab } from './LibraryTab';
 import { MachineTab } from './MachineTab';
 
 /**
- * Global Settings screen. Three tabs (App / Gateway / Machine) covering
- * skin preferences, gateway connection, and DE1 machine settings. Renders
+ * Global Settings screen. Tabs (Library / App / Machine / About) covering
+ * skin preferences, DE1 machine settings, and machine/app/developer info.
+ * Renders
  * full-screen, replacing Home while open; LiveBrewDrawer still overlays on
  * top from App.tsx so an in-progress brew remains visible.
  *
@@ -32,12 +34,13 @@ export interface SettingsProps {
   waterLevelsStream?: WsStream<WaterLevelsSnapshot>;
 }
 
-type Tab = 'app' | 'gateway' | 'machine' | 'library';
+type Tab = 'app' | 'gateway' | 'machine' | 'library' | 'about';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'library', label: 'Library' },
   { id: 'app', label: 'App' },
   { id: 'machine', label: 'Machine' },
+  { id: 'about', label: 'About' },
   // Gateway tab hidden for now — the GatewayTab component + its Match arm are
   // kept below so re-enabling is just restoring this entry.
 ];
@@ -95,6 +98,9 @@ export const Settings: Component<SettingsProps> = (p) => {
           </Match>
           <Match when={tab() === 'library'}>
             <LibraryTab shotSettingsStream={p.shotSettingsStream} />
+          </Match>
+          <Match when={tab() === 'about'}>
+            <AboutTab />
           </Match>
         </Switch>
       </div>
