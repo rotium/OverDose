@@ -410,6 +410,23 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
   const isFinished = (): boolean =>
     statuses().length > 0 && currentIdx() === statuses().length;
 
+  // Only an espresso (brew) step produces a shot to review. Steam/water/
+  // flush-only routines (e.g. the Explore "Steam" tile) make no shot, so
+  // there's nothing to summarize.
+  const hasBrewStep = createMemo(() => steps().some((s) => s.type === 'brew'));
+
+  // When a non-brew routine finishes, return straight to Home instead of
+  // showing PostBrewView — it would fetch /shots/latest and surface the
+  // *previous* brew's shot, which never happened this run. Guarded so it
+  // fires once (onExit may not unmount synchronously).
+  let exitedAfterNonBrew = false;
+  createEffect(() => {
+    if (isFinished() && !hasBrewStep() && !exitedAfterNonBrew) {
+      exitedAfterNonBrew = true;
+      p.onExit();
+    }
+  });
+
   // Detect step start + end via the machine snapshot. The per-step status
   // itself acts as memory — waiting-to-enter the target state ⇒ flip to
   // `running`; `running` ⇒ waiting to leave it — so we don't need to track
@@ -649,17 +666,21 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
             <Show
               when={!isFinished()}
               fallback={
-                <PostBrewView
-                  onDone={p.onExit}
-                  onBrewAgain={resetForBrewAgain}
-                  fetchLatestShot={p.fetchLatestShot}
-                  fetchShot={p.fetchShot}
-                  optimisticShot={p.optimisticShot}
-                  updateShot={p.updateShot}
-                  saveDebounceMs={p.saveDebounceMs}
-                  traceVisibility={p.traceVisibility}
-                  fetchDrinkers={p.fetchDrinkers}
-                />
+                // Brew (or brew+steam) → shot summary. Non-brew routines
+                // render nothing here; the effect above exits to Home.
+                <Show when={hasBrewStep()}>
+                  <PostBrewView
+                    onDone={p.onExit}
+                    onBrewAgain={resetForBrewAgain}
+                    fetchLatestShot={p.fetchLatestShot}
+                    fetchShot={p.fetchShot}
+                    optimisticShot={p.optimisticShot}
+                    updateShot={p.updateShot}
+                    saveDebounceMs={p.saveDebounceMs}
+                    traceVisibility={p.traceVisibility}
+                    fetchDrinkers={p.fetchDrinkers}
+                  />
+                </Show>
               }
             >
               <PrepCard

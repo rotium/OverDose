@@ -1300,6 +1300,36 @@ describe('RecipeBrewScreen', () => {
       expect(screen.queryByTestId('prep-card')).not.toBeInTheDocument();
     });
 
+    it('steam-only routine: returns to Home (no shot summary) when it ends', async () => {
+      const env = renderScreen({
+        recipeId: 'explore-steam',
+        routines: [
+          {
+            id: 'explore-steam-routine',
+            name: 'Steam',
+            steps: [routineStep('steam', {}, 'explore-steam-step')],
+          },
+        ],
+        recipes: [
+          {
+            id: 'explore-steam',
+            name: 'Steam',
+            routineId: 'explore-steam-routine',
+            overrides: {},
+          },
+        ],
+      });
+      fireEvent.click(await waitFor(() => screen.getByTestId('prep-card-start')));
+      // Steam runs, then the machine leaves steam → step done → finished.
+      env.setMachineSnap(snapshotWithState('steam'));
+      env.setMachineSnap(snapshotWithState('idle'));
+
+      // No espresso shot happened, so we exit to Home rather than showing the
+      // (stale) post-brew summary.
+      await waitFor(() => expect(env.onExit).toHaveBeenCalled());
+      expect(screen.queryByTestId('post-brew-view')).not.toBeInTheDocument();
+    });
+
     it('Brew again resets to step 1', async () => {
       const env = renderScreen({
         routines: [
