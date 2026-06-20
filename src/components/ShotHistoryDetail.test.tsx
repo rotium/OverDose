@@ -121,11 +121,13 @@ describe('ShotHistoryDetail', () => {
     fireEvent.click(screen.getByTestId('shot-detail-edit'));
     fireEvent.click(screen.getByTestId('shot-detail-bean'));
     fireEvent.click(await screen.findByTestId('bean-pick-b1'));
-    await waitFor(() =>
-      expect(screen.getByTestId('shot-detail-bean')).toHaveTextContent(
-        'Onyx · Geisha',
-      ),
-    );
+    // Bean shows name over a muted roaster byline — assert both tokens (they're
+    // on separate lines now, not the old "roaster · name" single string).
+    await waitFor(() => {
+      const btn = screen.getByTestId('shot-detail-bean');
+      expect(btn).toHaveTextContent('Geisha');
+      expect(btn).toHaveTextContent('Onyx');
+    });
     fireEvent.click(screen.getByTestId('shot-detail-save'));
     await waitFor(() =>
       expect(updateShot).toHaveBeenCalledWith(

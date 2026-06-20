@@ -77,12 +77,6 @@ const seed = (s: GatewayShotSummary): Draft => {
   };
 };
 
-const beanLabel = (
-  roaster: string | undefined,
-  name: string | undefined,
-): string | null =>
-  name ? (roaster ? `${roaster} · ${name}` : name) : null;
-
 /**
  * Shots-history detail — the shared {@link ShotReview} in "review" mode:
  * read-only until an explicit Edit toggle, then a single Save persists once
@@ -265,59 +259,69 @@ export const ShotHistoryDetail: Component<{
     }
   };
 
-  // Coffee + Grind as two label-on-top fields, rendered the same way in view
-  // (value) and edit (control) so the left column reads uniformly. Returned as
-  // a fragment so they sit as peer fields beside Dose / Rate / Notes.
-  const coffeeSection = (
-    <>
+  // Bean (full-width card, top of the column) + Grind (paired beside Dose via
+  // ShotReview's `doseAdjacent` slot). Both use the shared field-card chrome
+  // and render the same way in view (value) and edit (control).
+  const beanCard = (
+    <div class="fieldcard">
+      <span class="fieldcard__label">Bean</span>
       <Show
         when={editing()}
         fallback={
-          <div class="shot-field">
-            <span class="review-field__label">Bean</span>
-            <span class="shot-field__value" data-testid="shot-detail-coffee">
-              <Show
-                when={coffeeName()}
-                fallback={<span class="muted">No bean</span>}
-              >
-                {coffeeName()}
+          <div class="fieldcard__bean" data-testid="shot-detail-coffee">
+            <Show
+              when={coffeeName()}
+              fallback={<span class="muted">No bean</span>}
+            >
+              <span class="fieldcard__bean-name">{coffeeName()}</span>
+              <Show when={coffeeRoaster()}>
+                <span
+                  class="fieldcard__bean-roaster"
+                  data-testid="shot-detail-roaster"
+                >
+                  {coffeeRoaster()}
+                </span>
               </Show>
-            </span>
-            <Show when={coffeeRoaster()}>
-              <span class="shot-field__sub" data-testid="shot-detail-roaster">
-                {coffeeRoaster()}
-              </span>
             </Show>
           </div>
         }
       >
-        {/* Edit re-picks the whole bean in one action, so it's a single
-            single control rather than split name/roaster fields. */}
-        <div class="shot-field">
-          <span class="review-field__label">Bean</span>
-          <button
-            type="button"
-            class="btn shot-coffee__bean"
-            data-testid="shot-detail-bean"
-            onClick={() => setBeanPickerOpen(true)}
-          >
-            {beanLabel(coffeeRoaster(), coffeeName()) ?? 'Choose bean'}
-          </button>
-        </div>
-      </Show>
-      <div class="shot-field">
-        <span class="review-field__label">Grind</span>
-        <Show
-          when={editing()}
-          fallback={
-            <span
-              class="shot-field__value"
-              data-testid="shot-detail-grind-value"
-            >
-              {grind() ?? '—'}
-            </span>
-          }
+        {/* Edit re-picks the whole bean in one action — name over a muted
+            roaster byline, mirroring the view layout so heights match. */}
+        <button
+          type="button"
+          class="fieldcard__pick fieldcard__bean"
+          data-testid="shot-detail-bean"
+          onClick={() => setBeanPickerOpen(true)}
         >
+          <Show
+            when={coffeeName()}
+            fallback={<span class="fieldcard__bean-name">Choose bean ▾</span>}
+          >
+            <span class="fieldcard__bean-name">
+              {coffeeName()} <span class="fieldcard__caret">▾</span>
+            </span>
+            <Show when={coffeeRoaster()}>
+              <span class="fieldcard__bean-roaster">{coffeeRoaster()}</span>
+            </Show>
+          </Show>
+        </button>
+      </Show>
+    </div>
+  );
+
+  const grindCard = (
+    <div class="fieldcard">
+      <span class="fieldcard__label">Grind</span>
+      <Show
+        when={editing()}
+        fallback={
+          <span class="fieldcard__value" data-testid="shot-detail-grind-value">
+            {grind() ?? '—'}
+          </span>
+        }
+      >
+        <span class="fieldcard__edit">
           <DebouncedNumberField
             value={grind()}
             onCommit={setGrind}
@@ -331,9 +335,9 @@ export const ShotHistoryDetail: Component<{
             class="rstat__input"
             debounceMs={0}
           />
-        </Show>
-      </div>
-    </>
+        </span>
+      </Show>
+    </div>
   );
 
   return (
@@ -358,7 +362,8 @@ export const ShotHistoryDetail: Component<{
         onDrinker={setDrinker}
         drinkerSuggestions={p.drinkerSuggestions}
         doseDebounceMs={0}
-        leadingLeft={coffeeSection}
+        leadingLeft={beanCard}
+        doseAdjacent={grindCard}
         headerLeading={
           <button
             type="button"
@@ -369,7 +374,7 @@ export const ShotHistoryDetail: Component<{
             ‹ Shots
           </button>
         }
-        belowStats={
+        headerActions={
           <Show
             when={editing()}
             fallback={

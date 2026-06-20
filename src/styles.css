@@ -3917,9 +3917,13 @@ html {
 
 .shot-review__head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+  /* Pinned top bar: stays put above the scrolling body. */
+  flex: none;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--border);
 }
 
 .shot-review__title {
@@ -4214,6 +4218,173 @@ html {
 }
 .rating__tier--on svg {
   opacity: 1;
+}
+
+/* Inline rating — face beside a (caption · bar · tiers) column, so the Rate
+   field card stays short. Used in the history-detail field-card layout. */
+.rating--inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.7rem;
+  width: auto;
+  margin: 0;
+}
+.rating--inline > .rating-face {
+  flex: none;
+}
+.rating--inline .rating__right {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.rating--inline .rating__caption {
+  margin: 0;
+  text-align: left;
+}
+/* Read-only inline: bar + tiers shown but disabled (dimmed, non-interactive). */
+.rating--ro .rating__bar,
+.rating--ro .rating__tiers {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* Shared field-card chrome (matches the brew-prep cards) — used across the
+   shot-view fields (Bean / Grind / Dose / Rate / Notes) so view and edit read
+   as one consistent column. Each card reserves a fixed content height so
+   toggling Edit never changes its height (no layout jump). */
+.fieldcard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.7rem 0.9rem;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.fieldcard__label {
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.fieldcard__value {
+  display: flex;
+  /* Top-align so the reserved height (for view/edit parity) sits as trailing
+     space at the bottom, not as a gap between the label and the value. */
+  align-items: flex-start;
+  gap: 0.3rem;
+  min-height: 2.1rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+.fieldcard__sub {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.fieldcard__unit {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+.fieldcard__edit {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2.1rem;
+}
+/* Grind | Dose side by side. */
+.fieldcard__pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+/* Bean re-pick — dashed pick button in edit, matching the input chrome. */
+.fieldcard__pick {
+  width: 100%;
+  min-height: 2.1rem;
+  display: flex;
+  align-items: center;
+  text-align: left;
+  background: var(--bg);
+  border: 1px dashed var(--border-strong);
+  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+  color: var(--fg);
+  cursor: pointer;
+}
+
+/* Bean field — name over a muted roaster byline (two lines). Used for both the
+   view value and the edit pick button so their heights match. */
+.fieldcard__bean {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 0.05rem;
+  /* Tall enough to hold the two lines + the pick button's padding/border, so
+     the view <div> and the edit <button> end up the same outer height (both
+     use this class). */
+  min-height: 2.7rem;
+}
+/* The bean pick button reuses .fieldcard__pick's padding; trim it vertically
+   so its two-line content + padding stays within the shared min-height (the
+   view div has no padding, so an untrimmed button would render taller). */
+.fieldcard__pick.fieldcard__bean {
+  padding-top: 0.15rem;
+  padding-bottom: 0.15rem;
+}
+.fieldcard__bean-name {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--fg);
+  line-height: 1.15;
+}
+.fieldcard__bean-roaster {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+.fieldcard__caret {
+  color: var(--muted);
+  font-weight: 400;
+}
+/* Notes card — reserve the editor's height so view (text) and edit (textarea)
+   match. */
+/* Notes: a fixed, modest height in both view and edit — long notes scroll
+   inside the field rather than growing the card (view) or pushing the column.
+   Same box height view↔edit so toggling Edit doesn't jump. */
+.fieldcard__notes-ro {
+  margin: 0;
+  height: 3.6rem;
+  overflow-y: auto;
+  font-size: 0.92rem;
+  color: var(--fg);
+  /* Preserve the line breaks the user typed in the textarea. */
+  white-space: pre-wrap;
+}
+.fieldcard__notes {
+  width: 100%;
+  height: 3.6rem;
+  overflow-y: auto;
+  resize: none;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--fg);
+  /* Distinct from the read-only text + card: a dashed input on the darker
+     base bg, matching the other editable controls. */
+  background: var(--bg);
+  border: 1px dashed var(--border-strong);
+  border-radius: 6px;
+  padding: 0.5rem 0.6rem;
+}
+.fieldcard__notes:focus {
+  outline: none;
+  border-color: var(--accent);
 }
 
 .rating-face {
@@ -4871,8 +5042,6 @@ html {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  flex-wrap: wrap;
-  margin-top: 0.4rem;
 }
 
 /* Equal width + height, icon-left with a consistent gap. */
@@ -4913,9 +5082,17 @@ html {
    right (the post-brew result keeps its chart-below layout instead). */
 .shot-review__split {
   display: grid;
-  grid-template-columns: minmax(200px, 280px) 1fr;
+  /* Wide enough for the Grind | Dose stepper fields without overflowing. */
+  grid-template-columns: minmax(220px, 320px) 1fr;
   column-gap: 2rem;
-  align-items: start;
+  align-items: stretch;
+  /* Breathing room below the pinned top bar so the profile title + first card
+     don't crowd the separator line. */
+  padding-top: 0.6rem;
+  /* Fill the scroll area's remaining height so the right column can pin the
+     facts at the bottom and let the chart take the space above. */
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .shot-review__left {
@@ -4927,11 +5104,73 @@ html {
 
 .shot-review__right {
   min-width: 0;
+  /* Column: title (top) · chart (fills) · facts (pinned bottom). */
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
-/* In the side layout the chart fills the taller right column. */
+/* The chart wrapper takes the leftover height; facts sit beneath it, fixed. */
+.shot-review__split .shot-review__chart-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+}
 .shot-review__split .shot-review__chart {
-  height: clamp(280px, 60vh, 560px);
+  flex: 1 1 auto;
+  min-height: 200px;
+  height: auto;
+}
+.shot-review__split .shot-review__facts {
+  flex: none;
+}
+
+/* Left column scrolls on its own if the edit form is taller than the area,
+   so the right column's pinned facts stay put. */
+.shot-review__left {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Let the Grind | Dose cards shrink inside the 2-col pair (and keep the
+   stepper field from overflowing the card). */
+.fieldcard {
+  min-width: 0;
+}
+.fieldcard__pair > * {
+  min-width: 0;
+}
+.fieldcard__edit .numfield,
+.fieldcard__edit .numfield__box {
+  min-width: 0;
+  max-width: 100%;
+}
+.fieldcard__edit .rstat__input {
+  width: 4ch;
+}
+/* Trim the stepper box so the edit row height matches the view value (2.4rem)
+   — otherwise the bordered box is a few px taller and pushes the card down. */
+.fieldcard__edit .numfield__box {
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+/* Keep the "For" autocomplete the same height as the other rows — trim its
+   padding so it fits the tightened 2.1rem row without growing taller. */
+.fieldcard .shot-filters__input {
+  min-height: 2.1rem;
+  padding: 0.3rem 0.6rem;
+  box-sizing: border-box;
+}
+
+/* #2: a little right inset so the rate bar/tiers don't crowd the card edge. */
+/* A bit more right inset so the bar + tiers don't crowd the card edge —
+   shrinks the bar slightly and gives the right side breathing room. */
+.rating--inline .rating__right {
+  padding-right: 1.25rem;
+}
+/* Read-only: the bar is a static indicator (fill edge + lit tier show the
+   value), so drop the draggable thumb. */
+.rating--ro .rating__thumb {
+  display: none;
 }
 
 /* A left-column field: label on top, value (view) or control (edit) below.
@@ -4973,7 +5212,9 @@ html {
   margin: 0.9rem 0 0;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.7rem 1.4rem;
+  /* row-gap | column-gap. Wider columns so the yield's "target …" sub doesn't
+     crowd the next column's label (e.g. Peak flow). */
+  gap: 0.7rem 1.8rem;
   font-variant-numeric: tabular-nums;
 }
 
@@ -4983,7 +5224,7 @@ html {
 .shot-review__facts .rstat {
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
+  gap: 0.02rem;
 }
 .shot-review__facts .rstat__value,
 .shot-review__facts .rstat__sub {
@@ -4992,6 +5233,17 @@ html {
 }
 .shot-review__facts .rstat__sub {
   font-size: 0.68rem;
+}
+/* Yield is the one editable fact. Reserve a fixed height for its value row so
+   it's identical whether it holds the read-only text or the edit input — keeps
+   the facts block height constant, so toggling Edit can't shove the chart.
+   Match the input's font to the value text so the reserve stays minimal. */
+.shot-review__split .shot-review__facts [data-testid$='stat-yield'] .rstat__value {
+  min-height: 1.5rem;
+}
+.shot-review__split .shot-review__facts [data-testid$='stat-yield'] .rstat__input {
+  font-size: 0.98rem;
+  padding: 0;
 }
 
 /* Left column = a consistent stack of label-over-value fields. The Dose

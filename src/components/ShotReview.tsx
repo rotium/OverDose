@@ -120,9 +120,12 @@ export const ShotReview: Component<{
   // Chrome slots.
   headerLeading?: JSX.Element;
   headerActions?: JSX.Element;
-  /** Rendered at the top of the data column (e.g. the editable Coffee
-   *  section on the history detail). */
+  /** Rendered at the top of the data column (e.g. the editable Bean
+   *  card on the history detail). */
   leadingLeft?: JSX.Element;
+  /** Card placed beside Dose in the history-detail layout (the host's Grind
+   *  field) so the two share one Grind │ Dose row. */
+  doseAdjacent?: JSX.Element;
   belowStats?: JSX.Element;
   footer?: JSX.Element;
   /** Prefixes every data-testid; defaults to the post-brew naming so the
@@ -202,7 +205,10 @@ export const ShotReview: Component<{
               min={0}
               step={1}
               decimal
-              steppers
+              // Steppers in the roomy post-brew rail; in the compact
+              // history-detail facts grid drop them so the edit input is the
+              // same height as the read-only value (no chart jump).
+              steppers={!p.chartSide}
               unit="g"
               recentsKey="yield"
               ariaLabel="Actual yield, grams"
@@ -329,6 +335,106 @@ export const ShotReview: Component<{
     </div>
   );
 
+  // ── History-detail field cards (chartSide only). Post-brew keeps the rail
+  //    blocks above; these mirror the brew-prep card chrome so the detail
+  //    column reads as one consistent set of fields, with fixed heights so
+  //    toggling Edit doesn't change card heights. ──
+  const doseCard = (): JSX.Element => (
+    <label class="fieldcard" data-testid={tid('stat-dose')}>
+      <span class="fieldcard__label">Dose</span>
+      <Show
+        when={p.editable()}
+        fallback={
+          <span class="fieldcard__value" data-testid={tid('dose-value')}>
+            {fmtStat(displayDose(), 1, ' g')}
+          </span>
+        }
+      >
+        <span class="fieldcard__edit">
+          <DebouncedNumberField
+            value={p.actualDose()}
+            onCommit={(v) => p.onActualDose(v)}
+            min={0}
+            step={1}
+            decimal
+            steppers
+            unit="g"
+            recentsKey="dose"
+            ariaLabel="Actual dose, grams"
+            testId={tid('dose-input')}
+            class="rstat__input"
+            debounceMs={p.doseDebounceMs}
+          />
+        </span>
+      </Show>
+    </label>
+  );
+
+  const rateCard = (): JSX.Element => (
+    <div class="fieldcard">
+      <span class="fieldcard__label">Rate</span>
+      <ShotRatingBar
+        value={p.enjoyment}
+        onChange={p.onEnjoyment}
+        editable={p.editable}
+        inline
+        testId={tid('rating')}
+      />
+    </div>
+  );
+
+  const forCard = (): JSX.Element => (
+    <div class="fieldcard">
+      <span class="fieldcard__label">For</span>
+      <Show
+        when={p.editable()}
+        fallback={
+          <span class="fieldcard__value" data-testid={tid('drinker-value')}>
+            {p.drinker().trim() || '—'}
+          </span>
+        }
+      >
+        <AutocompleteInput
+          value={p.drinker()}
+          suggestions={p.drinkerSuggestions?.() ?? []}
+          onInput={p.onDrinker}
+          placeholder="Who's it for?"
+          ariaLabel="Drinker name"
+          testId={tid('drinker')}
+          class="shot-filters__input"
+        />
+      </Show>
+    </div>
+  );
+
+  const notesCard = (): JSX.Element => (
+    <div class="fieldcard fieldcard--notes">
+      <span class="fieldcard__label">Notes</span>
+      <Show
+        when={p.editable()}
+        fallback={
+          <p class="fieldcard__notes-ro" data-testid={tid('notes-value')}>
+            <Show
+              when={p.notes().trim()}
+              fallback={<span class="muted">No notes</span>}
+            >
+              {p.notes()}
+            </Show>
+          </p>
+        }
+      >
+        <textarea
+          class="fieldcard__notes"
+          rows="3"
+          placeholder="Bright, jammy, a little sharp on the finish…"
+          data-testid={tid('notes')}
+          value={p.notes()}
+          onInput={(e) => p.onNotes(e.currentTarget.value)}
+        />
+      </Show>
+    </div>
+  );
+
   const chartBlock = (): JSX.Element => (
     <div class="shot-review__chart-wrap">
       <ShotChartLegend
@@ -361,6 +467,28 @@ export const ShotReview: Component<{
 
   return (
     <section class="shot-review" data-testid={tid('view')}>
+      {/* Pinned top bar — back + actions stay visible while the body scrolls. */}
+      <header class="shot-review__head">
+        {p.headerLeading}
+        {/* chartSide hosts the title as a chart caption on the right
+            instead of here, leaving a thin back-only top bar. */}
+        <Show when={!p.chartSide}>
+          <div class="shot-review__title">
+            <span class="shot-review__profile" data-testid={tid('headline')}>
+              {stats().headline}
+            </span>
+            <Show when={stats().subtitle && !p.hideSubtitle}>
+              <span
+                class="shot-review__subtitle"
+                data-testid={tid('subtitle')}
+              >
+                {stats().subtitle}
+              </span>
+            </Show>
+          </div>
+        </Show>
+        {p.headerActions}
+      </header>
       <div class="shot-review__scroll">
         <Show
           when={hasShot()}
@@ -374,30 +502,6 @@ export const ShotReview: Component<{
             </div>
           }
         >
-          <header class="shot-review__head">
-            {p.headerLeading}
-            {/* chartSide hosts the title as a chart caption on the right
-                instead of here, leaving a thin back-only top bar. */}
-            <Show when={!p.chartSide}>
-              <div class="shot-review__title">
-                <span
-                  class="shot-review__profile"
-                  data-testid={tid('headline')}
-                >
-                  {stats().headline}
-                </span>
-                <Show when={stats().subtitle && !p.hideSubtitle}>
-                  <span
-                    class="shot-review__subtitle"
-                    data-testid={tid('subtitle')}
-                  >
-                    {stats().subtitle}
-                  </span>
-                </Show>
-              </div>
-            </Show>
-            {p.headerActions}
-          </header>
 
           {/* Post-brew: data │ rate │ notes in a row, chart full-width below.
               (Solid compiles these children into lazy getters, so only the
@@ -423,11 +527,13 @@ export const ShotReview: Component<{
             <div class="shot-review__split" data-testid={tid('capture')}>
               <div class="shot-review__left">
                 {p.leadingLeft}
-                <dl class="shot-review__stats" data-testid={tid('stats')}>
-                  {doseStat()}
-                </dl>
-                {rateBlock()}
-                {notesBlock()}
+                <div class="fieldcard__pair">
+                  {p.doseAdjacent}
+                  {doseCard()}
+                </div>
+                {rateCard()}
+                {forCard()}
+                {notesCard()}
                 {p.belowStats}
               </div>
               <div class="shot-review__right">

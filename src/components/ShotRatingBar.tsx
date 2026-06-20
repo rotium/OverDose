@@ -1,4 +1,4 @@
-import { For, Show, type Accessor, type Component } from 'solid-js';
+import { For, Show, type Accessor, type Component, type JSX } from 'solid-js';
 import { ShotRatingFace } from './ShotRatingFace';
 
 /**
@@ -45,6 +45,10 @@ export const ShotRatingBar: Component<{
   editable: Accessor<boolean>;
   /** When set, the editable control carries this as its `data-testid`. */
   testId?: string;
+  /** Lay the face beside the bar (face │ caption·bar·tiers) instead of above
+   *  it — keeps the field short. Inline read-only shows the bar + tiers
+   *  disabled (dimmed) rather than hiding them. */
+  inline?: boolean;
 }> = (p) => {
   let barEl: HTMLDivElement | undefined;
 
@@ -74,65 +78,100 @@ export const ShotRatingBar: Component<{
     v() != null && (RATING_PRESETS as readonly number[]).includes(v()!) &&
     nearestRatingTier(v()!) === i;
 
-  return (
-    <div class="rating" data-testid={p.editable() ? p.testId : undefined}>
-      <ShotRatingFace value={v()} size={34} />
+  // Show the bar + tiers when editable, or always when inline (read-only inline
+  // shows them disabled). Stacked read-only stays compact (face + word only).
+  const showControls = (): boolean => p.editable() || !!p.inline;
 
-      <div class="rating__caption">
-        <Show
-          when={v() != null}
-          fallback={
-            <span class="rating__hint">
-              {p.editable() ? 'Tap to rate' : 'Unrated'}
-            </span>
-          }
-        >
-          <span class="rating__num">{v()}</span>
-          <span class="rating__word"> · {ratingWord(v()!)}</span>
+  const caption = (): JSX.Element => (
+    <div class="rating__caption">
+      <Show
+        when={v() != null}
+        fallback={
+          <span class="rating__hint">
+            {p.editable() ? 'Tap to rate' : 'Unrated'}
+          </span>
+        }
+      >
+        <span class="rating__num">{v()}</span>
+        <span class="rating__word"> · {ratingWord(v()!)}</span>
+      </Show>
+    </div>
+  );
+
+  const controls = (): JSX.Element => (
+    <>
+      <div
+        ref={barEl}
+        class="rating__bar"
+        role="slider"
+        aria-label="Enjoyment rating, 0 to 100"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={v() ?? undefined}
+        onPointerDown={p.editable() ? onPointerDown : undefined}
+        onPointerMove={p.editable() ? onPointerMove : undefined}
+      >
+        <div class="rating__fill" style={{ width: `${v() ?? 0}%` }} />
+        <For each={RATING_PRESETS}>
+          {(preset) => (
+            <div class="rating__tick" style={{ left: `${preset}%` }} />
+          )}
+        </For>
+        <Show when={v() != null}>
+          <div class="rating__thumb" style={{ left: `${v()}%` }} />
         </Show>
       </div>
 
-      <Show when={p.editable()}>
-        <div
-          ref={barEl}
-          class="rating__bar"
-          role="slider"
-          aria-label="Enjoyment rating, 0 to 100"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={v() ?? undefined}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-        >
-          <div class="rating__fill" style={{ width: `${v() ?? 0}%` }} />
-          <For each={RATING_PRESETS}>
-            {(preset) => (
-              <div class="rating__tick" style={{ left: `${preset}%` }} />
-            )}
-          </For>
-          <Show when={v() != null}>
-            <div class="rating__thumb" style={{ left: `${v()}%` }} />
-          </Show>
-        </div>
+      <div class="rating__tiers">
+        <For each={RATING_PRESETS}>
+          {(preset, i) => (
+            <button
+              type="button"
+              class="rating__tier"
+              classList={{ 'rating__tier--on': onTier(i()) }}
+              style={{ left: `${preset}%` }}
+              aria-label={`${RATING_WORDS[i()]} (${preset})`}
+              data-testid={
+                p.editable() && p.testId
+                  ? `${p.testId}-tier-${i() + 1}`
+                  : undefined
+              }
+              disabled={!p.editable()}
+              onClick={() => p.editable() && p.onChange(preset)}
+            >
+              <ShotRatingFace value={preset} size={14} />
+            </button>
+          )}
+        </For>
+      </div>
+    </>
+  );
 
-        <div class="rating__tiers">
-          <For each={RATING_PRESETS}>
-            {(preset, i) => (
-              <button
-                type="button"
-                class="rating__tier"
-                classList={{ 'rating__tier--on': onTier(i()) }}
-                style={{ left: `${preset}%` }}
-                aria-label={`${RATING_WORDS[i()]} (${preset})`}
-                data-testid={p.testId ? `${p.testId}-tier-${i() + 1}` : undefined}
-                onClick={() => p.onChange(preset)}
-              >
-                <ShotRatingFace value={preset} size={14} />
-              </button>
-            )}
-          </For>
+  const testId = (): string | undefined =>
+    p.editable() ? p.testId : undefined;
+
+  return (
+    <Show
+      when={p.inline}
+      fallback={
+        <div class="rating" data-testid={testId()}>
+          <ShotRatingFace value={v()} size={34} />
+          {caption()}
+          <Show when={showControls()}>{controls()}</Show>
         </div>
-      </Show>
-    </div>
+      }
+    >
+      <div
+        class="rating rating--inline"
+        classList={{ 'rating--ro': !p.editable() }}
+        data-testid={testId()}
+      >
+        <ShotRatingFace value={v()} size={34} />
+        <div class="rating__right">
+          {caption()}
+          <Show when={showControls()}>{controls()}</Show>
+        </div>
+      </div>
+    </Show>
   );
 };
