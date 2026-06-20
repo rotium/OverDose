@@ -7,18 +7,23 @@ import {
   nearestRatingTier,
 } from './ShotRatingBar';
 
-const renderBar = (initial: number | null, editable = true) => {
+const renderBar = (
+  initial: number | null,
+  editable = true,
+  inline = false,
+) => {
   const [value, setValue] = createSignal<number | null>(initial);
   const onChange = vi.fn((v: number) => setValue(v));
-  render(() => (
+  const { container } = render(() => (
     <ShotRatingBar
       value={value}
       onChange={onChange}
       editable={() => editable}
+      inline={inline}
       testId="rate"
     />
   ));
-  return { value, onChange };
+  return { value, onChange, container };
 };
 
 describe('ratingWord / nearestRatingTier', () => {
@@ -71,5 +76,30 @@ describe('ShotRatingBar — read-only', () => {
   it('shows "Unrated" when read-only and null', () => {
     renderBar(null, false);
     expect(screen.getByText('Unrated')).toBeInTheDocument();
+  });
+});
+
+describe('ShotRatingBar — inline', () => {
+  it('inline editable: shows the slider and tier taps set the preset', () => {
+    const { onChange, container } = renderBar(75, true, true);
+    expect(container.querySelector('.rating--inline')).toBeInTheDocument();
+    expect(screen.getByRole('slider')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('rate-tier-3')); // → 50
+    expect(onChange).toHaveBeenCalledWith(50);
+  });
+
+  it('inline read-only: keeps bar + tiers (disabled) but they do nothing', () => {
+    const { onChange, container } = renderBar(75, false, true);
+    // Inline RO carries the dimmed marker and still renders the bar/tiers
+    // (unlike the stacked read-only, which hides them).
+    expect(container.querySelector('.rating--ro')).toBeInTheDocument();
+    expect(screen.getByRole('slider')).toBeInTheDocument();
+    const tierButtons = container.querySelectorAll('.rating__tier');
+    expect(tierButtons.length).toBe(5);
+    // All disabled, and clicking is a no-op (no testid in RO either).
+    tierButtons.forEach((b) => expect(b).toBeDisabled());
+    fireEvent.click(tierButtons[0]!);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByText('· Good')).toBeInTheDocument();
   });
 });

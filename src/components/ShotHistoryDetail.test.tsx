@@ -77,6 +77,28 @@ describe('ShotHistoryDetail', () => {
     expect(screen.getByTestId('shot-detail-delete')).toBeInTheDocument();
   });
 
+  it('shows the For field in view with a dash when no drinker is set', () => {
+    setup(); // the mock shot has no drinkerName
+    const forVal = screen.getByTestId('shot-detail-drinker-value');
+    expect(forVal).toBeInTheDocument();
+    expect(forVal).toHaveTextContent('—');
+  });
+
+  it('view shows no roaster line until a bean with a roaster is picked', async () => {
+    setup(); // mock shot has coffeeName but no roaster
+    expect(screen.queryByTestId('shot-detail-roaster')).toBeNull();
+    // Re-pick a bean that has a roaster, save, and it returns to view with the
+    // roaster byline shown beneath the name.
+    fireEvent.click(screen.getByTestId('shot-detail-edit'));
+    fireEvent.click(screen.getByTestId('shot-detail-bean'));
+    fireEvent.click(await screen.findByTestId('bean-pick-b1'));
+    fireEvent.click(screen.getByTestId('shot-detail-save'));
+    await waitFor(() => {
+      const roaster = screen.getByTestId('shot-detail-roaster');
+      expect(roaster).toHaveTextContent('Onyx');
+    });
+  });
+
   it('Save persists edited annotations under {annotations} and returns to read-only', async () => {
     const { updateShot } = setup();
     fireEvent.click(screen.getByTestId('shot-detail-edit'));
