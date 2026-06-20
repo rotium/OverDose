@@ -1736,22 +1736,24 @@ const PostBrewView: Component<{
       drinkerSuggestions={() => drinkers() ?? []}
       doseDebounceMs={p.saveDebounceMs}
       headerActions={
-        <div class="shot-detail__actions">
-          <span
-            class="post-brew__save"
-            data-testid="post-brew-save-state"
-            data-state={saveState()}
-            aria-live="polite"
-          >
-            <Switch>
-              <Match when={saveState() === 'saving'}>Saving…</Match>
-              <Match when={saveState() === 'saved'}>Saved ✓</Match>
-              <Match when={saveState() === 'error'}>Couldn’t save</Match>
-            </Switch>
-          </span>
+        <span
+          class="post-brew__save"
+          data-testid="post-brew-save-state"
+          data-state={saveState()}
+          aria-live="polite"
+        >
+          <Switch>
+            <Match when={saveState() === 'saving'}>Saving…</Match>
+            <Match when={saveState() === 'saved'}>Saved ✓</Match>
+            <Match when={saveState() === 'error'}>Couldn’t save</Match>
+          </Switch>
+        </span>
+      }
+      footer={
+        <footer class="prep__action prep__action--row post-brew__actions">
           <button
             type="button"
-            class="btn shot-detail__btn"
+            class="btn prep__secondary"
             data-testid="post-brew-brew-again"
             onClick={p.onBrewAgain}
           >
@@ -1759,13 +1761,13 @@ const PostBrewView: Component<{
           </button>
           <button
             type="button"
-            class="btn btn--primary shot-detail__btn"
+            class="btn btn--primary prep__start"
             data-testid="post-brew-done"
             onClick={p.onDone}
           >
             Done
           </button>
-        </div>
+        </footer>
       }
     />
     <BeanPickerDialog
