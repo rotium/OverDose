@@ -18,8 +18,7 @@ import {
 import { shotDoseG, shotHeadline } from '../shotStats';
 import { ShotReview } from './ShotReview';
 import { PickerDialog } from './PickerDialog';
-import { BeanPicker } from './settings/sections/library/BeanPicker';
-import { DebouncedNumberField } from './settings/sections/library/DebouncedNumberField';
+import { BeanCard, GrindCard, BeanPickerDialog } from './ShotFieldCards';
 import { CheckIcon, CloseIcon, PencilIcon, TrashIcon } from './icons';
 
 /** Local time-of-day + date, for the delete-confirm subtitle. */
@@ -260,84 +259,24 @@ export const ShotHistoryDetail: Component<{
   };
 
   // Bean (full-width card, top of the column) + Grind (paired beside Dose via
-  // ShotReview's `doseAdjacent` slot). Both use the shared field-card chrome
-  // and render the same way in view (value) and edit (control).
+  // ShotReview's `doseAdjacent` slot). Shared with the post-brew summary.
   const beanCard = (
-    <div class="fieldcard">
-      <span class="fieldcard__label">Bean</span>
-      <Show
-        when={editing()}
-        fallback={
-          <div class="fieldcard__bean" data-testid="shot-detail-coffee">
-            <Show
-              when={coffeeName()}
-              fallback={<span class="muted">No bean</span>}
-            >
-              <span class="fieldcard__bean-name">{coffeeName()}</span>
-              <Show when={coffeeRoaster()}>
-                <span
-                  class="fieldcard__bean-roaster"
-                  data-testid="shot-detail-roaster"
-                >
-                  {coffeeRoaster()}
-                </span>
-              </Show>
-            </Show>
-          </div>
-        }
-      >
-        {/* Edit re-picks the whole bean in one action — name over a muted
-            roaster byline, mirroring the view layout so heights match. */}
-        <button
-          type="button"
-          class="fieldcard__pick fieldcard__bean"
-          data-testid="shot-detail-bean"
-          onClick={() => setBeanPickerOpen(true)}
-        >
-          <Show
-            when={coffeeName()}
-            fallback={<span class="fieldcard__bean-name">Choose bean ▾</span>}
-          >
-            <span class="fieldcard__bean-name">
-              {coffeeName()} <span class="fieldcard__caret">▾</span>
-            </span>
-            <Show when={coffeeRoaster()}>
-              <span class="fieldcard__bean-roaster">{coffeeRoaster()}</span>
-            </Show>
-          </Show>
-        </button>
-      </Show>
-    </div>
+    <BeanCard
+      editing={editing}
+      coffeeName={coffeeName}
+      coffeeRoaster={coffeeRoaster}
+      onPick={() => setBeanPickerOpen(true)}
+      testIdPrefix="shot-detail"
+    />
   );
 
   const grindCard = (
-    <div class="fieldcard">
-      <span class="fieldcard__label">Grind</span>
-      <Show
-        when={editing()}
-        fallback={
-          <span class="fieldcard__value" data-testid="shot-detail-grind-value">
-            {grind() ?? '—'}
-          </span>
-        }
-      >
-        <span class="fieldcard__edit">
-          <DebouncedNumberField
-            value={grind()}
-            onCommit={setGrind}
-            min={0}
-            step={1}
-            decimal
-            steppers
-            recentsKey="grinder"
-            ariaLabel="Grind setting"
-            testId="shot-detail-grind"
-            class="rstat__input"
-            debounceMs={0}
-          />
-        </span>
-      </Show>
-    </div>
+    <GrindCard
+      editing={editing}
+      grind={grind}
+      onGrind={setGrind}
+      testIdPrefix="shot-detail"
+    />
   );
 
   return (
@@ -429,20 +368,14 @@ export const ShotHistoryDetail: Component<{
         }
       />
 
-      <PickerDialog
-        open={beanPickerOpen()}
+      <BeanPickerDialog
+        open={beanPickerOpen}
         onClose={() => setBeanPickerOpen(false)}
-        title="Choose a bean"
-        description="Sets the bean recorded for this shot."
+        selectedId={beanId}
+        onSelect={(id) => void handleBeanSelect(id)}
+        loadBeans={p.loadBeans}
         testId="shot-detail-bean-dialog"
-      >
-        <BeanPicker
-          selectedId={beanId()}
-          onSelect={(id) => void handleBeanSelect(id)}
-          onCancel={() => setBeanPickerOpen(false)}
-          loadBeans={p.loadBeans}
-        />
-      </PickerDialog>
+      />
 
       <PickerDialog
         open={confirmOpen()}

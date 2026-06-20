@@ -1448,19 +1448,15 @@ describe('RecipeBrewScreen', () => {
       env.setMachineSnap(snapshotWithState('idle'));
       await waitFor(() => screen.getByTestId('post-brew-view'));
 
-      // Review identity: the distinct review surface (stats rail + rating +
-      // Visualizer placeholder) is what marks this as the completed shot, not
-      // a live-view clone.
-      expect(screen.getByTestId('post-brew-stats')).toBeInTheDocument();
+      // Review identity: the field-card review surface (capture columns +
+      // rating) marks this as the completed shot, not a live-view clone. Now
+      // the same field-card layout as the history detail (chartSide).
+      expect(screen.getByTestId('post-brew-capture')).toBeInTheDocument();
       expect(screen.getByTestId('post-brew-rating')).toBeInTheDocument();
-      expect(screen.getByTestId('post-brew-visualizer')).toBeInTheDocument();
       const headline = await waitFor(() =>
         screen.getByTestId('post-brew-headline'),
       );
       expect(headline).toHaveTextContent('Best Practice C+');
-      expect(screen.getByTestId('post-brew-subtitle')).toHaveTextContent(
-        'Cappuccino · Brazil',
-      );
       // Dose is now an inline-editable field, seeded from the derived dose.
       expect(screen.getByTestId('post-brew-dose-input')).toHaveValue('18');
       // Yield is now inline-editable, seeded from the measured last scale

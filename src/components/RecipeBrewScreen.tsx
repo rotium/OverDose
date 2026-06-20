@@ -39,11 +39,13 @@ import {
   type ShotAnnotationsPatch,
   type ShotPatch,
   type WorkflowUpdate,
+  type WorkflowContextUpdate,
 } from '../api';
 import { buildProfileCurve } from '../profile/curve';
 import { deriveShotStats } from '../shotStats';
 import { gatewayCaughtUp } from '../liveShotAdapter';
 import { ShotReview } from './ShotReview';
+import { BeanCard, GrindCard, BeanPickerDialog } from './ShotFieldCards';
 import { type AutoStopMode, type TraceVisibility } from '../prefs';
 import {
   autoStopLabel,
@@ -679,6 +681,8 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
                     saveDebounceMs={p.saveDebounceMs}
                     traceVisibility={p.traceVisibility}
                     fetchDrinkers={p.fetchDrinkers}
+                    loadBean={p.loadBeanById}
+                    loadBeans={p.loadBeans}
                   />
                 </Show>
               }
@@ -1473,6 +1477,10 @@ const PostBrewView: Component<{
   saveDebounceMs?: number;
   traceVisibility?: Accessor<TraceVisibility>;
   fetchDrinkers?: () => Promise<string[]>;
+  /** Resolve a bean by id (name + roaster) after a re-pick. */
+  loadBean?: (id: string) => Promise<Bean | null>;
+  /** Bean list for the picker. */
+  loadBeans?: () => Promise<Bean[]>;
 }> = (p) => {
   const [drinkers] = createResource<string[]>(() =>
     (p.fetchDrinkers ?? api.recentDrinkers)(),
@@ -1531,6 +1539,13 @@ const PostBrewView: Component<{
   const [actualDose, setActualDose] = createSignal<number | undefined>();
   const [actualYield, setActualYield] = createSignal<number | undefined>();
   const [drinker, setDrinker] = createSignal('');
+  // Bean + grind (workflow context) — editable here too, mirroring the
+  // history-detail layout. Seeded from the shot's prep context.
+  const [beanId, setBeanId] = createSignal<string | undefined>();
+  const [coffeeName, setCoffeeName] = createSignal<string | undefined>();
+  const [coffeeRoaster, setCoffeeRoaster] = createSignal<string | undefined>();
+  const [grind, setGrind] = createSignal<number | undefined>();
+  const [beanPickerOpen, setBeanPickerOpen] = createSignal(false);
   const [saveState, setSaveState] = createSignal<
     'idle' | 'saving' | 'saved' | 'error'
   >('idle');
@@ -1548,8 +1563,41 @@ const PostBrewView: Component<{
     setNotes(a?.espressoNotes ?? '');
     setActualDose(untrack(() => stats().doseG ?? undefined));
     setActualYield(typeof a?.actualYield === 'number' ? a.actualYield : undefined);
-    setDrinker(s.workflow?.context?.drinkerName ?? '');
+    const ctx = s.workflow?.context;
+    setDrinker(ctx?.drinkerName ?? '');
+    setCoffeeName(ctx?.coffeeName);
+    setCoffeeRoaster(ctx?.coffeeRoaster);
+    setBeanId(
+      typeof ctx?.extras?.['beanId'] === 'string'
+        ? (ctx.extras['beanId'] as string)
+        : undefined,
+    );
+    // grinderSetting is typed number but the gateway stores it as a string,
+    // so coerce defensively (mirrors ShotHistoryDetail's `num`).
+    const g: unknown = ctx?.grinderSetting;
+    setGrind(
+      typeof g === 'number'
+        ? g
+        : typeof g === 'string' && g.trim() !== '' && !Number.isNaN(Number(g))
+          ? Number(g)
+          : undefined,
+    );
   });
+
+  // Re-pick a bean → resolve its name/roaster, then autosave the trio.
+  const handleBeanSelect = async (id: string): Promise<void> => {
+    setBeanPickerOpen(false);
+    setBeanId(id);
+    beanTouched = true;
+    const b = await (p.loadBean ?? ((x) => api.beanById(x).catch(() => null)))(
+      id,
+    );
+    if (b) {
+      setCoffeeName(b.name);
+      setCoffeeRoaster(b.roaster);
+    }
+    scheduleSave();
+  };
 
   // Persist target: the *real* gateway id, and only once the gateway record
   // is the one on screen. While the optimistic record shows, summary() may
@@ -1565,6 +1613,8 @@ const PostBrewView: Component<{
   // rating-only save would write the target back as the measured actual.
   let doseTouched = false;
   let yieldTouched = false;
+  let beanTouched = false;
+  let grindTouched = false;
 
   const doSave = async (): Promise<void> => {
     if (!pending) return;
@@ -1580,9 +1630,20 @@ const PostBrewView: Component<{
       const y = actualYield();
       if (yieldTouched && y != null) ann.actualYield = y;
       const out: ShotPatch = { annotations: ann };
-      // Drinker → workflow.context. Only when set (never clear).
+      // workflow.context — drinker + the bean trio + grind, only what changed
+      // (gateway deep-merges, preserving the rest). Coffee trio written together.
+      const ctx: WorkflowContextUpdate = {};
       const dn = drinker().trim();
-      if (dn) out.workflow = { context: { drinkerName: dn } };
+      if (dn) ctx.drinkerName = dn; // never clear
+      if (beanTouched) {
+        ctx.coffeeName = coffeeName() ?? null;
+        ctx.coffeeRoaster = coffeeRoaster() ?? null;
+        ctx.extras = beanId() ? { beanId: beanId() } : null;
+      }
+      if (grindTouched) {
+        ctx.grinderSetting = grind() != null ? String(grind()) : null;
+      }
+      if (Object.keys(ctx).length > 0) out.workflow = { context: ctx };
       return out;
     });
     setSaveState('saving');
@@ -1615,12 +1676,36 @@ const PostBrewView: Component<{
   onCleanup(() => clearTimeout(saveTimer));
 
   return (
+    <>
     <ShotReview
       summary={displayedSummary}
       full={displayedFull}
       loading={() => summary.loading}
       editable={() => true}
+      chartSide={true}
       defaultVisibility={p.traceVisibility}
+      leadingLeft={
+        <BeanCard
+          editing={() => true}
+          coffeeName={coffeeName}
+          coffeeRoaster={coffeeRoaster}
+          onPick={() => setBeanPickerOpen(true)}
+          testIdPrefix="post-brew"
+        />
+      }
+      doseAdjacent={
+        <GrindCard
+          editing={() => true}
+          grind={grind}
+          onGrind={(v) => {
+            setGrind(v);
+            grindTouched = true;
+            scheduleSave();
+          }}
+          testIdPrefix="post-brew"
+          debounceMs={p.saveDebounceMs}
+        />
+      }
       enjoyment={enjoyment}
       onEnjoyment={(v) => {
         setEnjoyment(v);
@@ -1651,24 +1736,22 @@ const PostBrewView: Component<{
       drinkerSuggestions={() => drinkers() ?? []}
       doseDebounceMs={p.saveDebounceMs}
       headerActions={
-        <span
-          class="post-brew__save"
-          data-testid="post-brew-save-state"
-          data-state={saveState()}
-          aria-live="polite"
-        >
-          <Switch>
-            <Match when={saveState() === 'saving'}>Saving…</Match>
-            <Match when={saveState() === 'saved'}>Saved ✓</Match>
-            <Match when={saveState() === 'error'}>Couldn’t save</Match>
-          </Switch>
-        </span>
-      }
-      footer={
-        <footer class="prep__action prep__action--row post-brew__actions">
+        <div class="shot-detail__actions">
+          <span
+            class="post-brew__save"
+            data-testid="post-brew-save-state"
+            data-state={saveState()}
+            aria-live="polite"
+          >
+            <Switch>
+              <Match when={saveState() === 'saving'}>Saving…</Match>
+              <Match when={saveState() === 'saved'}>Saved ✓</Match>
+              <Match when={saveState() === 'error'}>Couldn’t save</Match>
+            </Switch>
+          </span>
           <button
             type="button"
-            class="btn prep__secondary"
+            class="btn shot-detail__btn"
             data-testid="post-brew-brew-again"
             onClick={p.onBrewAgain}
           >
@@ -1676,15 +1759,24 @@ const PostBrewView: Component<{
           </button>
           <button
             type="button"
-            class="btn btn--primary prep__start"
+            class="btn btn--primary shot-detail__btn"
             data-testid="post-brew-done"
             onClick={p.onDone}
           >
             Done
           </button>
-        </footer>
+        </div>
       }
     />
+    <BeanPickerDialog
+      open={beanPickerOpen}
+      onClose={() => setBeanPickerOpen(false)}
+      selectedId={beanId}
+      onSelect={(id) => void handleBeanSelect(id)}
+      loadBeans={p.loadBeans}
+      testId="post-brew-bean-dialog"
+    />
+    </>
   );
 };
 
