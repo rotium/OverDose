@@ -4274,9 +4274,9 @@ html {
   display: flex;
   /* Top-align so the reserved height (for view/edit parity) sits as trailing
      space at the bottom, not as a gap between the label and the value. */
-  align-items: flex-start;
+  align-items: center;
   gap: 0.3rem;
-  min-height: 2.1rem;
+  min-height: 1.7rem;
   font-size: 1.05rem;
   font-weight: 600;
   color: var(--fg);
@@ -4295,7 +4295,7 @@ html {
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  min-height: 2.1rem;
+  min-height: 1.7rem;
 }
 /* Grind | Dose side by side. */
 .fieldcard__pair {
@@ -4306,7 +4306,7 @@ html {
 /* Bean re-pick — dashed pick button in edit, matching the input chrome. */
 .fieldcard__pick {
   width: 100%;
-  min-height: 2.1rem;
+  min-height: 1.7rem;
   display: flex;
   align-items: center;
   text-align: left;
@@ -4326,17 +4326,17 @@ html {
   justify-content: center;
   align-items: flex-start;
   gap: 0.05rem;
-  /* Tall enough to hold the two lines + the pick button's padding/border, so
+  /* Just tall enough for the two lines + the pick button's padding/border, so
      the view <div> and the edit <button> end up the same outer height (both
-     use this class). */
-  min-height: 2.7rem;
+     use this class) without extra slack. */
+  min-height: 2.3rem;
 }
 /* The bean pick button reuses .fieldcard__pick's padding; trim it vertically
    so its two-line content + padding stays within the shared min-height (the
    view div has no padding, so an untrimmed button would render taller). */
 .fieldcard__pick.fieldcard__bean {
-  padding-top: 0.15rem;
-  padding-bottom: 0.15rem;
+  padding-top: 0.1rem;
+  padding-bottom: 0.1rem;
 }
 .fieldcard__bean-name {
   font-size: 1.05rem;
@@ -5147,17 +5147,16 @@ html {
 .fieldcard__edit .rstat__input {
   width: 4ch;
 }
-/* Trim the stepper box so the edit row height matches the view value (2.4rem)
-   — otherwise the bordered box is a few px taller and pushes the card down. */
+/* Trim the stepper box so the edit row hugs its content (~the view value
+   height) — keeps the Grind/Dose cards from reserving extra bottom space. */
 .fieldcard__edit .numfield__box {
-  padding-top: 0.25rem;
-  padding-bottom: 0.25rem;
+  padding-top: 0.12rem;
+  padding-bottom: 0.12rem;
 }
-/* Keep the "For" autocomplete the same height as the other rows — trim its
-   padding so it fits the tightened 2.1rem row without growing taller. */
+/* Keep the "For" autocomplete the same compact height as the other rows. */
 .fieldcard .shot-filters__input {
-  min-height: 2.1rem;
-  padding: 0.3rem 0.6rem;
+  min-height: 1.7rem;
+  padding: 0.2rem 0.6rem;
   box-sizing: border-box;
 }
 
