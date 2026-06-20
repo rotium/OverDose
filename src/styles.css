@@ -4125,31 +4125,95 @@ html {
 /* Rating: morphing face on top, slider, then the read-back — stacked so it
    fits the narrower Rate column. */
 .rating {
+  width: 120px;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.55rem;
 }
 
-.rating__slider {
-  width: 100%;
-  accent-color: var(--good-fg);
-}
-.rating__slider--unset {
-  accent-color: var(--muted);
-}
-
-.rating__value {
-  font-variant-numeric: tabular-nums;
+/* numeric + word, centered in the gap between the face and the bar */
+.rating__caption {
+  margin: 0.5rem 0;
+  font-size: 0.76rem;
   color: var(--muted);
+  text-align: center;
 }
 .rating__num {
-  font-size: 1.5rem;
+  font-size: 0.8rem;
   font-weight: 700;
   color: var(--fg);
+  font-variant-numeric: tabular-nums;
 }
-.rating__den {
-  font-size: 0.85rem;
+.rating__word {
+  color: var(--good-fg);
+}
+
+/* continuous 0–100 track with preset ticks + a draggable thumb */
+.rating__bar {
+  position: relative;
+  width: 100%;
+  height: 5px;
+  background: var(--border-strong);
+  border-radius: 3px;
+  cursor: pointer;
+  touch-action: none;
+}
+.rating__fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+}
+.rating__tick {
+  position: absolute;
+  top: 50%;
+  width: 2px;
+  height: 7px;
+  transform: translate(-50%, -50%);
+  background: #555;
+  border-radius: 1px;
+}
+.rating__thumb {
+  position: absolute;
+  top: 50%;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--accent);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* five tier faces below the bar — one tap sets the exact preset */
+.rating__tiers {
+  position: relative;
+  width: 100%;
+  height: 24px;
+  margin-top: 0.45rem;
+}
+.rating__tier {
+  position: absolute;
+  transform: translateX(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.1rem;
+  border-radius: 6px;
+  line-height: 0;
+}
+.rating__tier:hover {
+  background: #222;
+}
+.rating__tier svg {
+  opacity: 0.38;
+  transition: opacity 0.1s;
+}
+.rating__tier--on svg {
+  opacity: 1;
 }
 
 .rating-face {

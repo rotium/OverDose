@@ -1578,14 +1578,17 @@ describe('RecipeBrewScreen', () => {
       });
       await driveToResult(env);
 
-      const slider = await waitFor(() => screen.getByTestId('post-brew-rating'));
-      fireEvent.input(slider, { target: { value: '80' } });
+      // Tap the 4th tier face → preset 75 ("Good").
+      const tier = await waitFor(() =>
+        screen.getByTestId('post-brew-rating-tier-4'),
+      );
+      fireEvent.click(tier);
 
       await waitFor(() =>
         expect(env.updateShot).toHaveBeenCalledWith(
           'shot-real',
           expect.objectContaining({
-            annotations: expect.objectContaining({ enjoyment: 80 }),
+            annotations: expect.objectContaining({ enjoyment: 75 }),
           }),
         ),
       );
@@ -1680,8 +1683,10 @@ describe('RecipeBrewScreen', () => {
       });
       await driveToResult(env);
 
-      const slider = await waitFor(() => screen.getByTestId('post-brew-rating'));
-      fireEvent.input(slider, { target: { value: '60' } });
+      const tier = await waitFor(() =>
+        screen.getByTestId('post-brew-rating-tier-3'),
+      );
+      fireEvent.click(tier);
 
       await waitFor(() =>
         expect(screen.getByTestId('post-brew-save-state')).toHaveAttribute(
@@ -1707,8 +1712,10 @@ describe('RecipeBrewScreen', () => {
       });
       await driveToResult(env);
 
-      const slider = await waitFor(() => screen.getByTestId('post-brew-rating'));
-      fireEvent.input(slider, { target: { value: '70' } });
+      const tier = await waitFor(() =>
+        screen.getByTestId('post-brew-rating-tier-4'),
+      );
+      fireEvent.click(tier);
 
       // Let the (zero-delay) debounce + bounded poll churn.
       await Promise.resolve();

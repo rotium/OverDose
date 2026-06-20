@@ -10,7 +10,7 @@ import {
   type GatewayShotRecord,
   type GatewayShotSummary,
 } from '../api';
-import { ShotRatingFace } from './ShotRatingFace';
+import { ShotRatingBar } from './ShotRatingBar';
 import { ShotMiniChart } from './ShotMiniChart';
 import { ShotChartLegend } from './ShotChartLegend';
 import { ShotChartOverlay } from './ShotChartOverlay';
@@ -255,32 +255,12 @@ export const ShotReview: Component<{
   const rateBlock = (): JSX.Element => (
     <div class="review-col review-col--rate">
       <span class="review-field__label">Rate</span>
-      <div class="rating">
-        <ShotRatingFace value={p.enjoyment()} />
-        <Show when={p.editable()}>
-          <input
-            type="range"
-            class="rating__slider"
-            min="0"
-            max="100"
-            step="1"
-            value={p.enjoyment() ?? 50}
-            classList={{ 'rating__slider--unset': p.enjoyment() == null }}
-            aria-label="Enjoyment rating, 0 to 100"
-            data-testid={tid('rating')}
-            onInput={(e) => p.onEnjoyment(Number(e.currentTarget.value))}
-          />
-        </Show>
-        <div class="rating__value" data-testid={tid('rating-value')}>
-          <Show
-            when={p.enjoyment() != null}
-            fallback={p.editable() ? 'Drag to rate' : 'Unrated'}
-          >
-            <span class="rating__num">{p.enjoyment()}</span>
-            <span class="rating__den"> / 100</span>
-          </Show>
-        </div>
-      </div>
+      <ShotRatingBar
+        value={p.enjoyment}
+        onChange={p.onEnjoyment}
+        editable={p.editable}
+        testId={tid('rating')}
+      />
       {/* Who the beverage is for — only shown read-only when it has a value. */}
       <Show when={p.editable() || p.drinker().trim()}>
         <label class="review-field shot-review__for">
