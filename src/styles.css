@@ -4354,12 +4354,21 @@ html {
 }
 /* Notes card — reserve the editor's height so view (text) and edit (textarea)
    match. */
-/* Notes: a fixed, modest height in both view and edit — long notes scroll
-   inside the field rather than growing the card (view) or pushing the column.
-   Same box height view↔edit so toggling Edit doesn't jump. */
+/* Notes is the last field — let it grow to fill the left column's remaining
+   height (so on tall viewports it bottom-aligns with the chart instead of
+   leaving a gap), with a floor so it's never cramped. Long notes scroll
+   inside. View and edit both grow identically, so toggling Edit doesn't jump. */
+.fieldcard--notes {
+  flex: 1 1 auto;
+  min-height: 0;
+  /* Grow to fill the column on tablet/medium heights, but cap it so a short
+     note on a tall display doesn't become a big empty box. */
+  max-height: 8rem;
+}
 .fieldcard__notes-ro {
   margin: 0;
-  height: 3.6rem;
+  flex: 1 1 auto;
+  min-height: 3.6rem;
   overflow-y: auto;
   font-size: 0.92rem;
   color: var(--fg);
@@ -4368,7 +4377,8 @@ html {
 }
 .fieldcard__notes {
   width: 100%;
-  height: 3.6rem;
+  flex: 1 1 auto;
+  min-height: 3.6rem;
   overflow-y: auto;
   resize: none;
   font: inherit;
