@@ -1750,10 +1750,10 @@ const PostBrewView: Component<{
         </span>
       }
       footer={
-        <footer class="prep__action prep__action--row post-brew__actions">
+        <footer class="prep__actionbar post-brew__actions">
           <button
             type="button"
-            class="btn prep__secondary"
+            class="btn prep__start"
             data-testid="post-brew-brew-again"
             onClick={p.onBrewAgain}
           >

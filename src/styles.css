@@ -4106,14 +4106,16 @@ html {
 }
 
 /* Pinned action bar — always visible below the scroll region. */
+/* Post-brew bottom bar = the prep Start bar (.prep__actionbar) holding the two
+   flow buttons; just add the gap between them. */
 .post-brew__actions {
-  flex: 0 0 auto;
-  margin-top: 0.75rem;
-  padding-top: 0.85rem;
-  border-top: 1px solid var(--border);
+  gap: 0.75rem;
 }
 
 .post-brew__save {
+  /* Sits in the (chartSide) top bar with no other content — push it to the
+     right so it reads like the detail view's top-right save/edit area. */
+  margin-left: auto;
   font-size: 0.74rem;
   font-variant-numeric: tabular-nums;
   color: var(--muted);
@@ -4359,10 +4361,12 @@ html {
    leaving a gap), with a floor so it's never cramped. Long notes scroll
    inside. View and edit both grow identically, so toggling Edit doesn't jump. */
 .fieldcard--notes {
-  flex: 1 1 auto;
-  min-height: 0;
-  /* Grow to fill the column on tablet/medium heights, but cap it so a short
-     note on a tall display doesn't become a big empty box. */
+  /* Grow to fill the column on tall viewports, but NEVER shrink below the
+     textarea (flex-shrink: 0) — otherwise a short viewport collapses the card
+     and the textarea overflows it. When the column can't fit, it scrolls
+     (.shot-review__left is overflow-y: auto) instead. Capped so a short note
+     on a tall display isn't a big empty box. */
+  flex: 1 0 auto;
   max-height: 8rem;
 }
 .fieldcard__notes-ro {
