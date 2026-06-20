@@ -485,28 +485,33 @@ export const ShotReview: Component<{
 
   return (
     <section class="shot-review" data-testid={tid('view')}>
-      {/* Pinned top bar — back + actions stay visible while the body scrolls. */}
-      <header class="shot-review__head">
-        {p.headerLeading}
-        {/* chartSide hosts the title as a chart caption on the right
-            instead of here, leaving a thin back-only top bar. */}
-        <Show when={!p.chartSide}>
-          <div class="shot-review__title">
-            <span class="shot-review__profile" data-testid={tid('headline')}>
-              {stats().headline}
-            </span>
-            <Show when={stats().subtitle && !p.hideSubtitle}>
-              <span
-                class="shot-review__subtitle"
-                data-testid={tid('subtitle')}
-              >
-                {stats().subtitle}
+      {/* Pinned top bar — back + actions stay visible while the body scrolls.
+          Suppressed when there's nothing to show (post-brew passes no leading/
+          actions and hosts the title on the chart side; its top bar is the
+          parent BrewHeader). */}
+      <Show when={p.headerLeading || p.headerActions || !p.chartSide}>
+        <header class="shot-review__head">
+          {p.headerLeading}
+          {/* chartSide hosts the title as a chart caption on the right
+              instead of here, leaving a thin back-only top bar. */}
+          <Show when={!p.chartSide}>
+            <div class="shot-review__title">
+              <span class="shot-review__profile" data-testid={tid('headline')}>
+                {stats().headline}
               </span>
-            </Show>
-          </div>
-        </Show>
-        {p.headerActions}
-      </header>
+              <Show when={stats().subtitle && !p.hideSubtitle}>
+                <span
+                  class="shot-review__subtitle"
+                  data-testid={tid('subtitle')}
+                >
+                  {stats().subtitle}
+                </span>
+              </Show>
+            </div>
+          </Show>
+          {p.headerActions}
+        </header>
+      </Show>
       <div class="shot-review__scroll">
         <Show
           when={hasShot()}

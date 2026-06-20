@@ -11,6 +11,7 @@ import {
   untrack,
   type Accessor,
   type Component,
+  type JSX,
 } from 'solid-js';
 import {
   formatStepType,
@@ -621,6 +622,12 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
     setStatuses(Array.from({ length: steps().length }, () => 'pending'));
   };
 
+  // Post-brew autosave status, lifted out of PostBrewView so it can show in the
+  // BrewHeader (the screen's top bar) rather than a redundant second header.
+  const [postBrewSaveState, setPostBrewSaveState] = createSignal<
+    'idle' | 'saving' | 'saved' | 'error'
+  >('idle');
+
   return (
     <main class="brew-screen" data-testid="recipe-brew-screen">
       <BrewHeader
@@ -628,6 +635,24 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
         routine={routine}
         profileTitle={() => profile()?.profile?.title}
         onExit={p.onExit}
+        trailing={
+          <Show when={isFinished() && hasBrewStep()}>
+            <span
+              class="post-brew__save"
+              data-testid="post-brew-save-state"
+              data-state={postBrewSaveState()}
+              aria-live="polite"
+            >
+              <Switch>
+                <Match when={postBrewSaveState() === 'saving'}>Saving…</Match>
+                <Match when={postBrewSaveState() === 'saved'}>Saved ✓</Match>
+                <Match when={postBrewSaveState() === 'error'}>
+                  Couldn’t save
+                </Match>
+              </Switch>
+            </span>
+          </Show>
+        }
       />
 
       <Switch>
@@ -672,8 +697,7 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
                 // render nothing here; the effect above exits to Home.
                 <Show when={hasBrewStep()}>
                   <PostBrewView
-                    onDone={p.onExit}
-                    onBrewAgain={resetForBrewAgain}
+                    onSaveState={setPostBrewSaveState}
                     fetchLatestShot={p.fetchLatestShot}
                     fetchShot={p.fetchShot}
                     optimisticShot={p.optimisticShot}
@@ -731,6 +755,29 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
               onStart={startCurrentStep}
             />
           </Show>
+          {/* Post-brew flow actions — the same pinned bar as Start, at the
+              brew-screen level (full width, screen bottom) so they sit exactly
+              where Start did. */}
+          <Show when={isFinished() && hasBrewStep()}>
+            <footer class="prep__actionbar post-brew__actions">
+              <button
+                type="button"
+                class="btn prep__start"
+                data-testid="post-brew-brew-again"
+                onClick={resetForBrewAgain}
+              >
+                Brew again
+              </button>
+              <button
+                type="button"
+                class="btn btn--primary prep__start"
+                data-testid="post-brew-done"
+                onClick={p.onExit}
+              >
+                Done
+              </button>
+            </footer>
+          </Show>
         </Match>
       </Switch>
     </main>
@@ -745,6 +792,8 @@ const BrewHeader: Component<{
   /** Shown when the recipe has no name (ad-hoc Explore brew). */
   profileTitle?: Accessor<string | undefined>;
   onExit: () => void;
+  /** Right-aligned trailing content (e.g. the post-brew save status). */
+  trailing?: JSX.Element;
 }> = (p) => (
   <header class="brew-screen__header">
     <button
@@ -770,6 +819,7 @@ const BrewHeader: Component<{
         {p.routine()?.name ?? '…'}
       </span>
     </h1>
+    {p.trailing}
   </header>
 );
 
@@ -1468,8 +1518,10 @@ const SteamParamSlider: Component<{
  * to give the chart room.
  */
 const PostBrewView: Component<{
-  onDone: () => void;
-  onBrewAgain: () => void;
+  /** Reports autosave status up so the BrewHeader (the screen's top bar) can
+   *  show it — the flow actions (Brew again / Done) live in the brew-screen
+   *  action bar, not here. */
+  onSaveState?: (s: 'idle' | 'saving' | 'saved' | 'error') => void;
   fetchLatestShot?: () => Promise<GatewayShotSummary>;
   fetchShot?: (id: string) => Promise<GatewayShotRecord>;
   optimisticShot?: Accessor<GatewayShotRecord | null>;
@@ -1549,6 +1601,8 @@ const PostBrewView: Component<{
   const [saveState, setSaveState] = createSignal<
     'idle' | 'saving' | 'saved' | 'error'
   >('idle');
+  // Mirror save status up to the parent (shown in the BrewHeader).
+  createEffect(() => p.onSaveState?.(saveState()));
 
   // Seed the editable fields once, from whichever record paints first. A
   // just-finished shot carries no annotations, so this mostly just defaults
@@ -1735,40 +1789,6 @@ const PostBrewView: Component<{
       }}
       drinkerSuggestions={() => drinkers() ?? []}
       doseDebounceMs={p.saveDebounceMs}
-      headerActions={
-        <span
-          class="post-brew__save"
-          data-testid="post-brew-save-state"
-          data-state={saveState()}
-          aria-live="polite"
-        >
-          <Switch>
-            <Match when={saveState() === 'saving'}>Saving…</Match>
-            <Match when={saveState() === 'saved'}>Saved ✓</Match>
-            <Match when={saveState() === 'error'}>Couldn’t save</Match>
-          </Switch>
-        </span>
-      }
-      footer={
-        <footer class="prep__actionbar post-brew__actions">
-          <button
-            type="button"
-            class="btn prep__start"
-            data-testid="post-brew-brew-again"
-            onClick={p.onBrewAgain}
-          >
-            Brew again
-          </button>
-          <button
-            type="button"
-            class="btn btn--primary prep__start"
-            data-testid="post-brew-done"
-            onClick={p.onDone}
-          >
-            Done
-          </button>
-        </footer>
-      }
     />
     <BeanPickerDialog
       open={beanPickerOpen}
