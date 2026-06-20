@@ -4326,17 +4326,16 @@ html {
   justify-content: center;
   align-items: flex-start;
   gap: 0.05rem;
-  /* Just tall enough for the two lines + the pick button's padding/border, so
-     the view <div> and the edit <button> end up the same outer height (both
-     use this class) without extra slack. */
-  min-height: 2.3rem;
+  /* Two-line content measures ~32px (view) / ~34px (pick, +border); reserve
+     just above that so view <div> and edit <button> match without slack. */
+  min-height: 2.2rem;
 }
 /* The bean pick button reuses .fieldcard__pick's padding; trim it vertically
    so its two-line content + padding stays within the shared min-height (the
    view div has no padding, so an untrimmed button would render taller). */
 .fieldcard__pick.fieldcard__bean {
-  padding-top: 0.1rem;
-  padding-bottom: 0.1rem;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 .fieldcard__bean-name {
   font-size: 1.05rem;
@@ -5153,9 +5152,11 @@ html {
   padding-top: 0.12rem;
   padding-bottom: 0.12rem;
 }
-/* Keep the "For" autocomplete the same compact height as the other rows. */
+/* The "For" autocomplete is intrinsically ~36px (its own padding); force it to
+   the row height so it matches the view value and the other edit controls
+   (no jump on Edit). box-sizing: border-box keeps the text inside. */
 .fieldcard .shot-filters__input {
-  min-height: 1.7rem;
+  height: 1.7rem;
   padding: 0.2rem 0.6rem;
   box-sizing: border-box;
 }
