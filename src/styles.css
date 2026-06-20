@@ -5244,6 +5244,14 @@ html {
 .shot-review__facts .rstat__sub {
   font-size: 0.68rem;
 }
+/* Inline target/sub (history-detail facts): muted, on the value's line, so a
+   cell's "target …" no longer sits right above the next row's label. */
+.shot-review__facts .rstat__sub--inline {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--muted);
+  white-space: nowrap;
+}
 /* Yield is the one editable fact. Reserve a fixed height for its value row so
    it's identical whether it holds the read-only text or the edit input — keeps
    the facts block height constant, so toggling Edit can't shove the chart.

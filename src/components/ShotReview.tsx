@@ -52,12 +52,27 @@ const ReviewStat: Component<{
   label: string;
   testId: string;
   sub?: string;
+  /** Render the sub on the value's line (muted) instead of below it. Used in
+   *  the history-detail facts grid so a cell's "target …" doesn't sit right
+   *  above the next row's label. Post-brew rail leaves it stacked. */
+  inlineSub?: boolean;
   children: JSX.Element;
 }> = (p) => (
   <div class="rstat" data-testid={p.testId}>
     <dt class="rstat__label">{p.label}</dt>
-    <dd class="rstat__value">{p.children}</dd>
-    <Show when={p.sub}>
+    <dd class="rstat__value">
+      {p.children}
+      <Show when={p.sub && p.inlineSub}>
+        <span
+          class="rstat__sub rstat__sub--inline"
+          data-testid={`${p.testId}-target`}
+        >
+          {' · '}
+          {p.sub}
+        </span>
+      </Show>
+    </dd>
+    <Show when={p.sub && !p.inlineSub}>
       <dd class="rstat__sub" data-testid={`${p.testId}-target`}>{p.sub}</dd>
     </Show>
   </div>
@@ -188,6 +203,7 @@ export const ShotReview: Component<{
       <ReviewStat
         label="Yield"
         testId={tid('stat-yield')}
+        inlineSub={p.chartSide}
         sub={
           stats().targetYieldG != null
             ? `target ${fmtStat(stats().targetYieldG, 1, ' g')}`
@@ -230,6 +246,7 @@ export const ShotReview: Component<{
       <ReviewStat
         label="Water"
         testId={tid('stat-volume')}
+        inlineSub={p.chartSide}
         sub={
           stats().targetVolumeMl != null
             ? `target ${fmtStat(stats().targetVolumeMl, 0, ' mL')}`
@@ -242,6 +259,7 @@ export const ShotReview: Component<{
         <ReviewStat
           label="In cup"
           testId={tid('stat-counted-volume')}
+          inlineSub={p.chartSide}
           sub={`from step ${stats().volumeCountStart}`}
         >
           {fmtEst(stats().countedVolumeMl, 0, ' mL')}
