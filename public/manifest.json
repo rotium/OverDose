@@ -2,7 +2,7 @@
   "id": "overdose",
   "name": "OverDose",
   "description": "Recipe-driven espresso UI for Decent Espresso machines.",
-  "version": "0.0.1",
+  "version": "0.0.8",
   "author": "rotium",
   "repository": "https://github.com/rotium/OverDose"
 }
