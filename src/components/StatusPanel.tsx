@@ -100,20 +100,25 @@ export const StatusPanel: Component<StatusPanelProps> = (p) => {
           <span>Steam</span>
         </dt>
         <dd class="status__row">
-          <span data-testid="status-steam-temp">
-            {fmtTemp(p.machine()?.steamTemperature, 0)}
+          {/* Off is the notable state (the heater is meant to be on to steam),
+              so flag it on the value; the switch shows the real state. */}
+          <span
+            class="status__steam-value"
+            data-testid="status-steam-temp"
+            data-on={steamOn() ? 'true' : 'false'}
+          >
+            {steamOn() ? fmtTemp(p.machine()?.steamTemperature, 0) : 'Off'}
           </span>
           <button
             type="button"
-            class="toggle"
-            data-on={steamOn()}
+            class="switch"
+            role="switch"
+            data-on={steamOn() ? 'true' : undefined}
             aria-label="Toggle steam heater"
-            aria-pressed={steamOn()}
+            aria-checked={steamOn()}
             disabled={p.shotSettings() === null}
             onClick={() => p.onSteamToggle(!steamOn())}
-          >
-            {steamOn() ? 'on' : 'off'}
-          </button>
+          />
         </dd>
 
         <dt data-severity={p.waterSeverity()}>

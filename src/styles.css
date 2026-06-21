@@ -393,24 +393,58 @@ html {
   gap: 0.5rem;
 }
 
-.toggle {
-  background: var(--bg-elev);
-  color: var(--fg);
-  border: 1px solid var(--border-strong);
-  border-radius: 999px;
-  padding: 0.1rem 0.5rem;
-  font-size: 0.75rem;
+/* Toggle switch — track + sliding knob (mirrors the brew-prep auto-stop
+   toggle). Off = grey/left, on = accent/right; the position carries the state
+   so no on/off text is needed. */
+.switch {
+  flex: none;
+  position: relative;
+  width: 38px;
+  height: 22px;
+  border-radius: 99px;
+  background: #2a2a2a;
+  border: 1px solid transparent;
+  padding: 0;
   cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
 }
 
-.toggle[data-on='true'] {
-  background: var(--good);
-  border-color: var(--good);
+.switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ccc;
+  transition:
+    left 0.15s,
+    background 0.15s;
 }
 
-.toggle:disabled {
+.switch[data-on='true'] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.switch[data-on='true']::after {
+  left: 16px;
+  background: #fff;
+}
+
+.switch:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* Steam value: when the heater is off (the abnormal/blocking state, since the
+   boiler is meant to be on to steam), show a soft-amber "Off" heads-up. */
+.status__steam-value[data-on='false'] {
+  color: var(--warn-fg);
+  font-weight: 600;
 }
 
 .bar {

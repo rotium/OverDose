@@ -170,7 +170,7 @@ describe('Home', () => {
         onUpdate,
       }),
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Toggle steam heater' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Toggle steam heater' }));
     expect(onUpdate).toHaveBeenCalledWith({ ...settings, steamSetting: 1 });
   });
 
@@ -178,7 +178,7 @@ describe('Home', () => {
     const onUpdate = vi.fn();
     render(() => buildHome({ onUpdate }));
     // Steam button is disabled when settings === null
-    expect(screen.getByRole('button', { name: 'Toggle steam heater' })).toBeDisabled();
+    expect(screen.getByRole('switch', { name: 'Toggle steam heater' })).toBeDisabled();
     expect(onUpdate).not.toHaveBeenCalled();
   });
 

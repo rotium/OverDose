@@ -189,38 +189,39 @@ describe('StatusPanel', () => {
     });
   });
 
-  describe('steam toggle', () => {
+  describe('steam switch', () => {
     it('is disabled until shotSettings arrive', () => {
       setup();
-      const btn = screen.getByRole('button', { name: 'Toggle steam heater' });
-      expect(btn).toBeDisabled();
+      const sw = screen.getByRole('switch', { name: 'Toggle steam heater' });
+      expect(sw).toBeDisabled();
     });
 
-    it('reflects current steamSetting > 0 as "on"', () => {
+    it('reflects current steamSetting > 0 as on (shows the temp)', () => {
       setup({ shotSettings: settingsSample({ steamSetting: 1 }) });
-      const btn = screen.getByRole('button', { name: 'Toggle steam heater' });
-      expect(btn).toHaveAttribute('aria-pressed', 'true');
-      expect(btn).toHaveTextContent('on');
+      const sw = screen.getByRole('switch', { name: 'Toggle steam heater' });
+      expect(sw).toHaveAttribute('aria-checked', 'true');
+      // On → the value shows the steam temperature, not "Off".
+      expect(screen.getByTestId('status-steam-temp')).not.toHaveTextContent('Off');
     });
 
-    it('reflects steamSetting === 0 as "off"', () => {
+    it('reflects steamSetting === 0 as off (shows "Off")', () => {
       setup({ shotSettings: settingsSample({ steamSetting: 0 }) });
-      const btn = screen.getByRole('button', { name: 'Toggle steam heater' });
-      expect(btn).toHaveAttribute('aria-pressed', 'false');
-      expect(btn).toHaveTextContent('off');
+      const sw = screen.getByRole('switch', { name: 'Toggle steam heater' });
+      expect(sw).toHaveAttribute('aria-checked', 'false');
+      expect(screen.getByTestId('status-steam-temp')).toHaveTextContent('Off');
     });
 
     it('invokes onSteamToggle(true) when off → on', () => {
       const onSteamToggle = vi.fn();
       setup({ shotSettings: settingsSample({ steamSetting: 0 }), onSteamToggle });
-      fireEvent.click(screen.getByRole('button', { name: 'Toggle steam heater' }));
+      fireEvent.click(screen.getByRole('switch', { name: 'Toggle steam heater' }));
       expect(onSteamToggle).toHaveBeenCalledWith(true);
     });
 
     it('invokes onSteamToggle(false) when on → off', () => {
       const onSteamToggle = vi.fn();
       setup({ shotSettings: settingsSample({ steamSetting: 1 }), onSteamToggle });
-      fireEvent.click(screen.getByRole('button', { name: 'Toggle steam heater' }));
+      fireEvent.click(screen.getByRole('switch', { name: 'Toggle steam heater' }));
       expect(onSteamToggle).toHaveBeenCalledWith(false);
     });
   });
