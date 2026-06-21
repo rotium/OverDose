@@ -1111,40 +1111,48 @@ const BrewPrep: Component<{
             data-testid="prep-card-bean-change"
             onClick={() => setBeanDialogOpen(true)}
           >
-            <Show
-              when={hasBeanId()}
-              fallback={
-                <span class="prep__bean-empty" data-testid="prep-card-bean-empty">
-                  Choose a bean
-                </span>
-              }
-            >
+            <span class="prep__bean-stack">
               <Show
-                when={p.bean()}
+                when={hasBeanId()}
                 fallback={
                   <span
                     class="prep__bean-empty"
-                    data-testid="prep-card-bean-missing"
+                    data-testid="prep-card-bean-empty"
                   >
-                    {p.beanLoading()
-                      ? 'Loading…'
-                      : `(missing bean — ${p.draft()?.beanId})`}
+                    Choose a bean
                   </span>
                 }
               >
-                <span class="prep__bean-name" data-testid="prep-card-bean-name">
-                  {p.bean()!.roaster} — {p.bean()!.name}
-                  <Show when={p.bean()!.decaf}>
-                    <span class="bean-tree__badge">decaf</span>
-                  </Show>
-                  <Show when={p.bean()!.archived}>
-                    <span class="bean-tree__badge bean-tree__badge--muted">
-                      archived
+                <Show
+                  when={p.bean()}
+                  fallback={
+                    <span
+                      class="prep__bean-empty"
+                      data-testid="prep-card-bean-missing"
+                    >
+                      {p.beanLoading()
+                        ? 'Loading…'
+                        : `(missing bean — ${p.draft()?.beanId})`}
                     </span>
-                  </Show>
-                </span>
+                  }
+                >
+                  {/* Name over a muted roaster byline — same shape as the
+                      shot-card bean field. */}
+                  <span class="prep__bean-name" data-testid="prep-card-bean-name">
+                    {p.bean()!.name}
+                    <Show when={p.bean()!.decaf}>
+                      <span class="bean-tree__badge">decaf</span>
+                    </Show>
+                    <Show when={p.bean()!.archived}>
+                      <span class="bean-tree__badge bean-tree__badge--muted">
+                        archived
+                      </span>
+                    </Show>
+                  </span>
+                  <span class="prep__bean-roaster">{p.bean()!.roaster}</span>
+                </Show>
               </Show>
-            </Show>
+            </span>
             <span class="prep__bean-chevron" aria-hidden="true">
               ›
             </span>

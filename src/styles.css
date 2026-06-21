@@ -1747,7 +1747,32 @@ html {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  padding-bottom: 0.5rem;
+  /* Inset to match the dialog header/footer (1.25rem sides) so the search and
+     roaster tree don't sit flush against the dialog edges. */
+  padding: 0 1.25rem 0.85rem;
+}
+
+/* Sticky so it stays reachable while the roaster tree scrolls underneath. The
+   top margin gives breathing room under the header at rest; it pins flush when
+   the list scrolls. A sticky band of the picker's own background keeps rows
+   from peeking above it. */
+.bean-picker__search {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0.85rem 0 0;
+  padding: 0.55rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
+  color: var(--fg);
+  font-size: 0.95rem;
+}
+
+.bean-picker__search::placeholder {
+  color: var(--muted);
 }
 
 .library-list {
@@ -4239,7 +4264,8 @@ html {
   grid-template-columns: 1fr 1fr;
   gap: 0.6rem;
 }
-/* Bean re-pick — dashed pick button in edit, matching the input chrome. */
+/* Bean re-pick — same solid pick chrome as the brew-prep bean field and the
+   recipe-editor profile field (left-aligned value, right chevron). */
 .fieldcard__pick {
   width: 100%;
   min-height: 1.7rem;
@@ -4247,15 +4273,21 @@ html {
   align-items: center;
   text-align: left;
   background: var(--bg);
-  border: 1px dashed var(--border-strong);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 0.4rem 0.6rem;
   color: var(--fg);
   cursor: pointer;
 }
+.fieldcard__pick:hover,
+.fieldcard__pick:focus-visible {
+  border-color: var(--border-strong);
+  background: rgba(255, 255, 255, 0.03);
+}
 
-/* Bean field — name over a muted roaster byline (two lines). Used for both the
-   view value and the edit pick button so their heights match. */
+/* Bean field — name over a muted roaster byline (two lines). The view value is
+   this column directly; the edit pick button puts the same column in a
+   .fieldcard__bean-stack with a trailing chevron, so the two heights match. */
 .fieldcard__bean {
   display: flex;
   flex-direction: column;
@@ -4266,27 +4298,53 @@ html {
      just above that so view <div> and edit <button> match without slack. */
   min-height: 2.2rem;
 }
-/* The bean pick button reuses .fieldcard__pick's padding; trim it vertically
-   so its two-line content + padding stays within the shared min-height (the
-   view div has no padding, so an untrimmed button would render taller). */
+/* The pick button lays the value stack against a right chevron, and reuses
+   .fieldcard__pick's padding trimmed vertically so its two-line content +
+   padding stays within the shared min-height (the view div has no padding, so
+   an untrimmed button would render taller). */
 .fieldcard__pick.fieldcard__bean {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
   padding-top: 0;
   padding-bottom: 0;
+}
+.fieldcard__bean-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  min-width: 0;
 }
 .fieldcard__bean-name {
   font-size: 1.05rem;
   font-weight: 600;
   color: var(--fg);
   line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.fieldcard__bean-name--empty {
+  font-weight: 400;
+  font-style: italic;
+  color: var(--muted);
 }
 .fieldcard__bean-roaster {
   font-size: 0.72rem;
   font-weight: 400;
   color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
-.fieldcard__caret {
+.fieldcard__chev {
+  flex: none;
   color: var(--muted);
-  font-weight: 400;
+  font-size: 1.3rem;
+  line-height: 1;
 }
 /* Notes card — reserve the editor's height so view (text) and edit (textarea)
    match. */
@@ -4685,7 +4743,11 @@ html {
   justify-content: space-between;
   gap: 0.5rem;
   width: 100%;
-  padding: 0.25rem 0.5rem;
+  /* Zero vertical padding so the two-line value (name + roaster byline) centres
+     within the shared 2.2rem control height instead of growing the card —
+     keeps the Bean card level with Dose/Grind and stops it pushing Profile
+     down. Matches the shot-card pick button's approach. */
+  padding: 0 0.5rem;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -4694,14 +4756,25 @@ html {
   text-align: left;
   cursor: pointer;
   line-height: 1.1;
-  /* Match the Dose/Grind field height so the top row is even. */
+  /* Shared control height (matches .prep__stat-edit) so Bean / Dose / Grind
+     line up. */
   min-height: 2.2rem;
 }
 
 .prep__bean-button:hover,
 .prep__bean-button:focus-visible {
-  border-color: var(--accent);
+  border-color: var(--border-strong);
+  background: rgba(255, 255, 255, 0.03);
   outline: none;
+}
+
+/* Value stack — name over a muted roaster byline, mirroring the shot-card
+   bean field so the two pickers read the same. */
+.prep__bean-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  min-width: 0;
 }
 
 .prep__bean-name {
@@ -4709,11 +4782,22 @@ html {
   font-weight: 600;
   display: inline-flex;
   align-items: baseline;
-  /* Stay one line — wrapping made the Bean card taller than Dose/Grind. */
   flex-wrap: nowrap;
-  overflow: hidden;
   gap: 0.3rem;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prep__bean-roaster {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
 
 .prep__bean-empty {

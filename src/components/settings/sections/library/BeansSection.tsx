@@ -16,6 +16,7 @@ import {
   type BeanCreate,
   type BeanPatch,
 } from '../../../../api';
+import { groupBeansByRoaster } from '../../../../beans';
 import { AutocompleteInput } from './AutocompleteInput';
 import { BeanEditor } from './BeanEditor';
 
@@ -56,22 +57,7 @@ export const BeansSection: Component<BeansSectionProps> = (props) => {
       }),
   );
 
-  const grouped = createMemo(() => {
-    const byRoaster = new Map<string, Bean[]>();
-    for (const b of beans() ?? []) {
-      const arr = byRoaster.get(b.roaster);
-      if (arr) arr.push(b);
-      else byRoaster.set(b.roaster, [b]);
-    }
-    return [...byRoaster.entries()]
-      .map(([roaster, items]) => ({
-        roaster,
-        beans: items
-          .slice()
-          .sort((a, b) => a.name.localeCompare(b.name)),
-      }))
-      .sort((a, b) => a.roaster.localeCompare(b.roaster));
-  });
+  const grouped = createMemo(() => groupBeansByRoaster(beans() ?? []));
 
   // Distinct values the user has already entered, per field — feeds every
   // text field's autocomplete (the editor merges these with any built-in

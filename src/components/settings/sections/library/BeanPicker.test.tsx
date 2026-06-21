@@ -15,24 +15,44 @@ const mkBean = (over: Partial<Bean> = {}): Bean => ({
 });
 
 describe('BeanPicker', () => {
-  it('lists beans alphabetically by name', async () => {
+  it('groups beans by roaster (roasters sorted, names nested and sorted)', async () => {
     const beans = [
       mkBean({ id: 'b1', roaster: 'Square Mile', name: 'Sweetshop' }),
-      mkBean({ id: 'b2', roaster: 'Has Bean', name: 'Jailbreak' }),
+      mkBean({ id: 'b2', roaster: 'Square Mile', name: 'Red Brick' }),
       mkBean({ id: 'b3', roaster: 'Onyx', name: 'Geometry' }),
     ];
     render(() => (
       <BeanPicker onSelect={vi.fn()} onCancel={vi.fn()} loadBeans={async () => beans} />
     ));
     await waitFor(() => screen.getByTestId('bean-picker-list'));
-    const rows = screen
-      .getByTestId('bean-picker-list')
-      .querySelectorAll('.library-list__name');
-    expect([...rows].map((r) => r.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
-      'Onyx — Geometry',
-      'Has Bean — Jailbreak',
-      'Square Mile — Sweetshop',
-    ]);
+    const list = screen.getByTestId('bean-picker-list');
+    // Roaster group headers, in sorted order.
+    const roasters = [...list.querySelectorAll('.bean-tree__roaster')].map((r) =>
+      r.textContent?.trim(),
+    );
+    expect(roasters).toEqual(['Onyx', 'Square Mile']);
+    // Bean names, nested under their roaster, sorted within each group.
+    const names = [...list.querySelectorAll('.library-list__name')].map((r) =>
+      r.textContent?.replace(/\s+/g, ' ').trim(),
+    );
+    expect(names).toEqual(['Geometry', 'Red Brick', 'Sweetshop']);
+  });
+
+  it('search filters by roaster or bean name', async () => {
+    const beans = [
+      mkBean({ id: 'b1', roaster: 'Square Mile', name: 'Sweetshop' }),
+      mkBean({ id: 'b2', roaster: 'Onyx', name: 'Geometry' }),
+    ];
+    render(() => (
+      <BeanPicker onSelect={vi.fn()} onCancel={vi.fn()} loadBeans={async () => beans} />
+    ));
+    const input = await waitFor(() => screen.getByTestId('bean-picker-search'));
+    fireEvent.input(input, { target: { value: 'onyx' } });
+    await waitFor(() => screen.getByTestId('bean-pick-b2'));
+    expect(screen.queryByTestId('bean-pick-b1')).toBeNull();
+    // A query that matches nothing shows the no-match state.
+    fireEvent.input(input, { target: { value: 'zzz' } });
+    await waitFor(() => screen.getByText(/No beans match/i));
   });
 
   it('selecting a row calls onSelect with the bean id', async () => {

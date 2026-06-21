@@ -45,25 +45,34 @@ export const BeanCard: Component<{
         </div>
       }
     >
-      {/* Edit re-picks the whole bean in one action — name over a muted
-          roaster byline, mirroring the view layout so heights match. */}
+      {/* Edit re-picks the whole bean in one action. Same pick chrome as the
+          brew-prep bean field and recipe-editor profile field: name over a
+          muted roaster byline on the left, a right-aligned chevron on the
+          right. View layout mirrors the left stack so heights match. */}
       <button
         type="button"
         class="fieldcard__pick fieldcard__bean"
         data-testid={`${p.testIdPrefix}-bean`}
         onClick={p.onPick}
       >
-        <Show
-          when={p.coffeeName()}
-          fallback={<span class="fieldcard__bean-name">Choose bean ▾</span>}
-        >
-          <span class="fieldcard__bean-name">
-            {p.coffeeName()} <span class="fieldcard__caret">▾</span>
-          </span>
-          <Show when={p.coffeeRoaster()}>
-            <span class="fieldcard__bean-roaster">{p.coffeeRoaster()}</span>
+        <span class="fieldcard__bean-stack">
+          <Show
+            when={p.coffeeName()}
+            fallback={
+              <span class="fieldcard__bean-name fieldcard__bean-name--empty">
+                Choose a bean
+              </span>
+            }
+          >
+            <span class="fieldcard__bean-name">{p.coffeeName()}</span>
+            <Show when={p.coffeeRoaster()}>
+              <span class="fieldcard__bean-roaster">{p.coffeeRoaster()}</span>
+            </Show>
           </Show>
-        </Show>
+        </span>
+        <span class="fieldcard__chev" aria-hidden="true">
+          ›
+        </span>
       </button>
     </Show>
   </div>
