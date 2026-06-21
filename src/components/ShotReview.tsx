@@ -554,8 +554,8 @@ export const ShotReview: Component<{
                   {p.doseAdjacent}
                   {doseCard()}
                 </div>
-                {rateCard()}
                 {forCard()}
+                {rateCard()}
                 {notesCard()}
                 {p.belowStats}
               </div>
