@@ -39,8 +39,38 @@ export const AutocompleteInput: Component<AutocompleteInputProps> = (p) => {
   const [text, setText] = createSignal(p.value);
   const [open, setOpen] = createSignal(false);
   const [highlight, setHighlight] = createSignal(-1);
+  // Flip the suggestion list above the input when there isn't room below it —
+  // e.g. the soft keyboard covering the lower half — so the list stays visible.
+  const [dropUp, setDropUp] = createSignal(false);
   let focused = false;
   let blurTimer: number | undefined;
+  let dirTimer: number | undefined;
+  let wrapEl: HTMLSpanElement | undefined;
+
+  /** Choose drop direction from the space below the input within the visible
+   *  viewport (visualViewport shrinks when the keyboard is open). Drop up only
+   *  when below is too tight AND there's more room above. */
+  const measureDir = (): void => {
+    const input = wrapEl?.querySelector('input');
+    if (!input) return;
+    const r = input.getBoundingClientRect();
+    const vv = window.visualViewport;
+    const top = vv?.offsetTop ?? 0;
+    const bottom = (vv?.offsetTop ?? 0) + (vv?.height ?? window.innerHeight);
+    const NEEDED_PX = 200; // ~5 options + padding
+    const below = bottom - r.bottom;
+    const above = r.top - top;
+    setDropUp(below < NEEDED_PX && above > below);
+  };
+
+  /** Measure now, next frame, and after the keyboard settles (it animates in
+   *  after focus, and the WebView doesn't fire a resize for it). */
+  const scheduleMeasure = (): void => {
+    measureDir();
+    requestAnimationFrame(measureDir);
+    if (dirTimer !== undefined) clearTimeout(dirTimer);
+    dirTimer = window.setTimeout(measureDir, 350);
+  };
 
   // Snap to an external value change (e.g. a refetch) only while unfocused, so
   // a save round-trip mid-type doesn't clobber what's being written.
@@ -70,10 +100,11 @@ export const AutocompleteInput: Component<AutocompleteInputProps> = (p) => {
 
   onCleanup(() => {
     if (blurTimer !== undefined) clearTimeout(blurTimer);
+    if (dirTimer !== undefined) clearTimeout(dirTimer);
   });
 
   return (
-    <span class={`autocomplete ${p.wrapperClass ?? ''}`}>
+    <span ref={wrapEl} class={`autocomplete ${p.wrapperClass ?? ''}`}>
       <input
         ref={p.inputRef}
         type="text"
@@ -88,6 +119,7 @@ export const AutocompleteInput: Component<AutocompleteInputProps> = (p) => {
         onFocus={() => {
           focused = true;
           setOpen(true);
+          scheduleMeasure();
         }}
         onBlur={() => {
           focused = false;
@@ -102,6 +134,7 @@ export const AutocompleteInput: Component<AutocompleteInputProps> = (p) => {
           p.onInput?.(e.currentTarget.value);
           setOpen(true);
           setHighlight(-1);
+          measureDir();
         }}
         onKeyDown={(e) => {
           if (e.key === 'ArrowDown') {
@@ -129,6 +162,7 @@ export const AutocompleteInput: Component<AutocompleteInputProps> = (p) => {
       <Show when={showList()}>
         <ul
           class="autocomplete__list"
+          classList={{ 'autocomplete__list--up': dropUp() }}
           role="listbox"
           data-testid={p.testId ? `${p.testId}-list` : undefined}
         >

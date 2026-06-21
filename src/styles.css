@@ -4596,6 +4596,14 @@ html {
   overflow-y: auto;
 }
 
+/* Drop-up: list rendered above the input when there's no room below (keyboard
+   covering the lower half). */
+.autocomplete__list--up {
+  top: auto;
+  bottom: 100%;
+  margin: 0 0 0.2rem;
+}
+
 .autocomplete__option {
   padding: 0.4rem 0.6rem;
   border-radius: 4px;
