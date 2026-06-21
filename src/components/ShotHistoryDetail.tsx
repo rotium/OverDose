@@ -283,7 +283,6 @@ export const ShotHistoryDetail: Component<{
     <>
       <ShotReview
         testIdPrefix="shot-detail"
-        chartSide={true}
         defaultVisibility={p.traceVisibility}
         summary={summary}
         full={() => full() ?? null}

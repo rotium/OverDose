@@ -51,18 +51,16 @@ export const fmtEst = (
 const ReviewStat: Component<{
   label: string;
   testId: string;
+  /** Optional muted "target …" shown inline on the value's line, so it doesn't
+   *  sit right above the next row's label in the facts grid. */
   sub?: string;
-  /** Render the sub on the value's line (muted) instead of below it. Used in
-   *  the history-detail facts grid so a cell's "target …" doesn't sit right
-   *  above the next row's label. Post-brew rail leaves it stacked. */
-  inlineSub?: boolean;
   children: JSX.Element;
 }> = (p) => (
   <div class="rstat" data-testid={p.testId}>
     <dt class="rstat__label">{p.label}</dt>
     <dd class="rstat__value">
       {p.children}
-      <Show when={p.sub && p.inlineSub}>
+      <Show when={p.sub}>
         <span
           class="rstat__sub rstat__sub--inline"
           data-testid={`${p.testId}-target`}
@@ -72,9 +70,6 @@ const ReviewStat: Component<{
         </span>
       </Show>
     </dd>
-    <Show when={p.sub && !p.inlineSub}>
-      <dd class="rstat__sub" data-testid={`${p.testId}-target`}>{p.sub}</dd>
-    </Show>
   </div>
 );
 
@@ -88,14 +83,13 @@ const ReviewStat: Component<{
  *  - post-brew → always editable, debounced auto-save (`editable` always true);
  *  - history   → read-only until an explicit Edit toggle flips `editable`.
  *
- * Layout: post-brew lays the data/rate/notes out in a row with the chart
- * full-width *below* (the chart is the hero continuation of the live view).
- * History (`chartSide`) stacks data/rate/notes/Delete in a left column with
- * the chart in a second column on the right.
+ * Layout: a left column of field cards (Bean / Grind │ Dose / For / Rate /
+ * Notes) beside the chart + read-only facts on the right.
  *
  * Slots let each host place its own chrome: `headerLeading` (e.g. a back
- * chevron), `headerActions` (save-state vs Edit/Save/Cancel), `belowStats`
- * (e.g. a Delete button) and `footer` (e.g. Done / Brew again).
+ * chevron), `headerActions` (save-state vs Edit/Save/Cancel), `leadingLeft`
+ * (Bean card), `doseAdjacent` (Grind card), `belowStats` (e.g. a Delete
+ * button) and `footer` (e.g. Done / Brew again).
  */
 export const ShotReview: Component<{
   summary: Accessor<GatewayShotSummary | null>;
@@ -122,16 +116,10 @@ export const ShotReview: Component<{
   drinkerSuggestions?: Accessor<string[]>;
   /** Debounce for the number fields' commit (host decides; 0 = immediate). */
   doseDebounceMs?: number;
-  /** Two-column layout with the chart on the right (history detail). When
-   *  false/omitted, the chart sits full-width below (post-brew). */
-  chartSide?: boolean;
   /** Saved default trace visibility (the user's Settings). Seeds the chart's
    *  starting show/hide; legend toggles stay session-local. Falls back to
    *  all-on when omitted. */
   defaultVisibility?: Accessor<TraceVisibility>;
-  /** Hide the headline's subtitle (e.g. when the coffee moves into a
-   *  left-column section instead of the header). */
-  hideSubtitle?: boolean;
   // Chrome slots.
   headerLeading?: JSX.Element;
   headerActions?: JSX.Element;
@@ -167,43 +155,12 @@ export const ShotReview: Component<{
   // Full-mode (enlarged) chart overlay.
   const [expanded, setExpanded] = createSignal(false);
 
-  // Dose — the one editable number. Stays with the editable fields.
-  const doseStat = (): JSX.Element => (
-    <ReviewStat label="Dose" testId={tid('stat-dose')}>
-      <Show
-        when={p.editable()}
-        fallback={
-          <span data-testid={tid('dose-value')}>
-            {fmtStat(displayDose(), 1, ' g')}
-          </span>
-        }
-      >
-        <span class="rstat__edit">
-          <DebouncedNumberField
-            value={p.actualDose()}
-            onCommit={(v) => p.onActualDose(v)}
-            min={0}
-            step={1}
-            decimal
-            steppers
-            unit="g"
-            recentsKey="dose"
-            ariaLabel="Actual dose, grams"
-            testId={tid('dose-input')}
-            class="rstat__input"
-            debounceMs={p.doseDebounceMs}
-          />        </span>
-      </Show>
-    </ReviewStat>
-  );
-
   // Read-only facts — what the machine recorded. Never editable.
   const factStats = (): JSX.Element => (
     <>
       <ReviewStat
         label="Yield"
         testId={tid('stat-yield')}
-        inlineSub={p.chartSide}
         sub={
           stats().targetYieldG != null
             ? `target ${fmtStat(stats().targetYieldG, 1, ' g')}`
@@ -221,10 +178,8 @@ export const ShotReview: Component<{
               min={0}
               step={1}
               decimal
-              // Steppers in the roomy post-brew rail; in the compact
-              // history-detail facts grid drop them so the edit input is the
-              // same height as the read-only value (no chart jump).
-              steppers={!p.chartSide}
+              // No steppers in the compact facts grid — the edit input matches
+              // the read-only value's height (no chart jump).
               unit="g"
               recentsKey="yield"
               ariaLabel="Actual yield, grams"
@@ -246,7 +201,6 @@ export const ShotReview: Component<{
       <ReviewStat
         label="Water"
         testId={tid('stat-volume')}
-        inlineSub={p.chartSide}
         sub={
           stats().targetVolumeMl != null
             ? `target ${fmtStat(stats().targetVolumeMl, 0, ' mL')}`
@@ -259,7 +213,6 @@ export const ShotReview: Component<{
         <ReviewStat
           label="In cup"
           testId={tid('stat-counted-volume')}
-          inlineSub={p.chartSide}
           sub={`from step ${stats().volumeCountStart}`}
         >
           {fmtEst(stats().countedVolumeMl, 0, ' mL')}
@@ -268,95 +221,9 @@ export const ShotReview: Component<{
     </>
   );
 
-  // Post-brew shows dose + facts together in one rail.
-  const statsBlock = (): JSX.Element => (
-    <dl class="shot-review__stats" data-testid={tid('stats')}>
-      {doseStat()}
-      {factStats()}
-    </dl>
-  );
-
-  const rateBlock = (): JSX.Element => (
-    <div class="review-col review-col--rate">
-      <span class="review-field__label">Rate</span>
-      <ShotRatingBar
-        value={p.enjoyment}
-        onChange={p.onEnjoyment}
-        editable={p.editable}
-        testId={tid('rating')}
-      />
-      {/* Who the beverage is for — only shown read-only when it has a value. */}
-      <Show when={p.editable() || p.drinker().trim()}>
-        <label class="review-field shot-review__for">
-          <span class="review-field__label">For</span>
-          <Show
-            when={p.editable()}
-            fallback={
-              <span class="shot-field__value" data-testid={tid('drinker-value')}>
-                {p.drinker()}
-              </span>
-            }
-          >
-            <AutocompleteInput
-              value={p.drinker()}
-              suggestions={p.drinkerSuggestions?.() ?? []}
-              onInput={p.onDrinker}
-              placeholder="Who's it for?"
-              ariaLabel="Drinker name"
-              testId={tid('drinker')}
-              class="shot-filters__input"
-            />
-          </Show>
-        </label>
-      </Show>
-    </div>
-  );
-
-  const notesBlock = (): JSX.Element => (
-    <div class="review-col review-col--notes">
-      <label class="review-field">
-        <span class="review-field__label">Notes</span>
-        <Show
-          when={p.editable()}
-          fallback={
-            <p class="post-brew__notes-ro" data-testid={tid('notes-value')}>
-              <Show
-                when={p.notes().trim()}
-                fallback={<span class="muted">No notes</span>}
-              >
-                {p.notes()}
-              </Show>
-            </p>
-          }
-        >
-          <textarea
-            class="post-brew__notes"
-            rows="4"
-            placeholder="Bright, jammy, a little sharp on the finish…"
-            data-testid={tid('notes')}
-            value={p.notes()}
-            onInput={(e) => p.onNotes(e.currentTarget.value)}
-          />
-        </Show>
-      </label>
-      <Show when={p.editable()}>
-        <button
-          type="button"
-          class="btn shot-review__viz"
-          data-testid={tid('visualizer')}
-          disabled
-          title="Coming soon"
-        >
-          Upload to Visualizer
-        </button>
-      </Show>
-    </div>
-  );
-
-  // ── History-detail field cards (chartSide only). Post-brew keeps the rail
-  //    blocks above; these mirror the brew-prep card chrome so the detail
-  //    column reads as one consistent set of fields, with fixed heights so
-  //    toggling Edit doesn't change card heights. ──
+  // ── Field cards — mirror the brew-prep card chrome so the column reads as
+  //    one consistent set of fields, with fixed heights so toggling Edit
+  //    doesn't change card heights. ──
   const doseCard = (): JSX.Element => (
     <label class="fieldcard" data-testid={tid('stat-dose')}>
       <span class="fieldcard__label">Dose</span>
@@ -486,29 +353,12 @@ export const ShotReview: Component<{
   return (
     <section class="shot-review" data-testid={tid('view')}>
       {/* Pinned top bar — back + actions stay visible while the body scrolls.
-          Suppressed when there's nothing to show (post-brew passes no leading/
-          actions and hosts the title on the chart side; its top bar is the
-          parent BrewHeader). */}
-      <Show when={p.headerLeading || p.headerActions || !p.chartSide}>
+          The profile title is a caption on the chart side, so this bar only
+          holds leading/actions; suppressed when there's neither (post-brew,
+          whose top bar is the parent BrewHeader). */}
+      <Show when={p.headerLeading || p.headerActions}>
         <header class="shot-review__head">
           {p.headerLeading}
-          {/* chartSide hosts the title as a chart caption on the right
-              instead of here, leaving a thin back-only top bar. */}
-          <Show when={!p.chartSide}>
-            <div class="shot-review__title">
-              <span class="shot-review__profile" data-testid={tid('headline')}>
-                {stats().headline}
-              </span>
-              <Show when={stats().subtitle && !p.hideSubtitle}>
-                <span
-                  class="shot-review__subtitle"
-                  data-testid={tid('subtitle')}
-                >
-                  {stats().subtitle}
-                </span>
-              </Show>
-            </div>
-          </Show>
           {p.headerActions}
         </header>
       </Show>
@@ -526,53 +376,33 @@ export const ShotReview: Component<{
           }
         >
 
-          {/* Post-brew: data │ rate │ notes in a row, chart full-width below.
-              (Solid compiles these children into lazy getters, so only the
-              active branch's blocks — and its single chart — are created.) */}
-          <Show when={!p.chartSide}>
-            <>
+          {/* Editable fields (+ actions) on the left; the recorded shot on the
+              right — profile caption, curve, then the read-only facts. */}
+          <div class="shot-review__split" data-testid={tid('capture')}>
+            <div class="shot-review__left">
               {p.leadingLeft}
-              <div class="shot-review__cols" data-testid={tid('capture')}>
-                {statsBlock()}
-                <div class="shot-review__divider" aria-hidden="true" />
-                {rateBlock()}
-                {notesBlock()}
+              <div class="fieldcard__pair">
+                {p.doseAdjacent}
+                {doseCard()}
               </div>
+              {forCard()}
+              {rateCard()}
+              {notesCard()}
               {p.belowStats}
-              {chartBlock()}
-            </>
-          </Show>
-
-          {/* History detail: editable fields (+ actions) on the left; the
-              recorded shot on the right — profile caption, curve, then the
-              read-only facts beneath it. */}
-          <Show when={p.chartSide}>
-            <div class="shot-review__split" data-testid={tid('capture')}>
-              <div class="shot-review__left">
-                {p.leadingLeft}
-                <div class="fieldcard__pair">
-                  {p.doseAdjacent}
-                  {doseCard()}
-                </div>
-                {forCard()}
-                {rateCard()}
-                {notesCard()}
-                {p.belowStats}
-              </div>
-              <div class="shot-review__right">
-                <div
-                  class="shot-review__chart-title"
-                  data-testid={tid('headline')}
-                >
-                  {stats().headline}
-                </div>
-                {chartBlock()}
-                <dl class="shot-review__facts" data-testid={tid('facts')}>
-                  {factStats()}
-                </dl>
-              </div>
             </div>
-          </Show>
+            <div class="shot-review__right">
+              <div
+                class="shot-review__chart-title"
+                data-testid={tid('headline')}
+              >
+                {stats().headline}
+              </div>
+              {chartBlock()}
+              <dl class="shot-review__facts" data-testid={tid('facts')}>
+                {factStats()}
+              </dl>
+            </div>
+          </div>
         </Show>
       </div>
 

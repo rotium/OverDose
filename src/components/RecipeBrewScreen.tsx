@@ -1736,7 +1736,6 @@ const PostBrewView: Component<{
       full={displayedFull}
       loading={() => summary.loading}
       editable={() => true}
-      chartSide={true}
       defaultVisibility={p.traceVisibility}
       leadingLeft={
         <BeanCard
