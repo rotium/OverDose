@@ -80,4 +80,55 @@ describe('AutocompleteInput', () => {
     fireEvent.keyDown(input, { key: 'Escape' });
     expect(onEscape).toHaveBeenCalled();
   });
+
+  describe('caret (browse without keyboard)', () => {
+    it('tapping the caret opens the full list without focusing the input', () => {
+      render(() => (
+        // value equals a suggestion — browse must still show ALL options
+        // (typing-mode would filter the exact match out).
+        <AutocompleteInput value="Onyx" suggestions={SUGGESTIONS} testId="ac" />
+      ));
+      const input = screen.getByTestId('ac') as HTMLInputElement;
+      fireEvent.click(screen.getByTestId('ac-caret'));
+      const list = screen.getByTestId('ac-list');
+      expect(list.querySelectorAll('li')).toHaveLength(3);
+      expect(document.activeElement).not.toBe(input);
+    });
+
+    it('tapping the caret again closes the list', () => {
+      render(() => (
+        <AutocompleteInput value="Onyx" suggestions={SUGGESTIONS} testId="ac" />
+      ));
+      fireEvent.click(screen.getByTestId('ac-caret'));
+      expect(screen.queryByTestId('ac-list')).toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('ac-caret'));
+      expect(screen.queryByTestId('ac-list')).toBeNull();
+    });
+
+    it('selecting from the caret-opened list commits it', () => {
+      const onInput = vi.fn();
+      render(() => (
+        <AutocompleteInput
+          value=""
+          suggestions={SUGGESTIONS}
+          testId="ac"
+          onInput={onInput}
+        />
+      ));
+      fireEvent.click(screen.getByTestId('ac-caret'));
+      fireEvent.mouseDown(screen.getByTestId('ac-option-1')); // Onyx
+      expect(onInput).toHaveBeenCalledWith('Onyx');
+      expect(screen.queryByTestId('ac-list')).toBeNull();
+    });
+
+    it('an outside tap closes the caret-opened list', () => {
+      render(() => (
+        <AutocompleteInput value="Onyx" suggestions={SUGGESTIONS} testId="ac" />
+      ));
+      fireEvent.click(screen.getByTestId('ac-caret'));
+      expect(screen.queryByTestId('ac-list')).toBeInTheDocument();
+      fireEvent.pointerDown(document.body);
+      expect(screen.queryByTestId('ac-list')).toBeNull();
+    });
+  });
 });

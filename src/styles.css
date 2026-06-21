@@ -4577,6 +4577,34 @@ html {
 
 .autocomplete > input {
   width: 100%;
+  /* Room for the caret affordance on the right. */
+  padding-right: 2.3rem;
+}
+
+/* Caret = "open the suggestion list to browse" without focusing the input
+   (so the soft keyboard stays closed). A divider sets it apart from the
+   type-here area, like a native select. */
+.autocomplete__caret {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: 2.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-left: 1px solid var(--border-strong);
+  color: var(--muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.autocomplete__caret:hover {
+  color: var(--fg);
+}
+.autocomplete__caret[data-open] {
+  color: var(--accent);
 }
 
 .autocomplete__list {

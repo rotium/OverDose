@@ -42,6 +42,9 @@ export const AutocompleteInput: Component<AutocompleteInputProps> = (p) => {
   // Flip the suggestion list above the input when there isn't room below it —
   // e.g. the soft keyboard covering the lower half — so the list stays visible.
   const [dropUp, setDropUp] = createSignal(false);
+  // True when the list was opened via the caret (browse) rather than by typing:
+  // show the *full* list and don't focus the input, so no native keyboard.
+  const [browseAll, setBrowseAll] = createSignal(false);
   let focused = false;
   let blurTimer: number | undefined;
   let dirTimer: number | undefined;
@@ -80,8 +83,10 @@ export const AutocompleteInput: Component<AutocompleteInputProps> = (p) => {
   });
 
   const matches = createMemo(() => {
-    const q = text().trim().toLowerCase();
     const all = p.suggestions ?? [];
+    // Caret browse: show the full list (it scrolls) so picking needs no typing.
+    if (browseAll()) return all;
+    const q = text().trim().toLowerCase();
     const filtered =
       q === '' ? all : all.filter((s) => s.toLowerCase().includes(q));
     // Nothing useful to offer once the text already equals a suggestion.
@@ -90,13 +95,49 @@ export const AutocompleteInput: Component<AutocompleteInputProps> = (p) => {
 
   const showList = () => open() && matches().length > 0;
 
+  const close = (): void => {
+    setOpen(false);
+    setBrowseAll(false);
+    setHighlight(-1);
+  };
+
   const select = (s: string) => {
     setText(s);
     p.onInput?.(s);
     p.onChange?.(s);
-    setOpen(false);
-    setHighlight(-1);
+    close();
   };
+
+  /** Caret toggle: open the full list for browsing WITHOUT focusing the input,
+   *  so the native keyboard stays closed. Tapping again (or outside) closes. */
+  const toggleCaret = (): void => {
+    if (open()) {
+      close();
+      return;
+    }
+    setBrowseAll(true);
+    setOpen(true);
+    setHighlight(-1);
+    scheduleMeasure(); // no keyboard → drops down
+  };
+
+  // The caret-opened list has no input focus, so blur won't close it — handle
+  // outside-tap and Escape at the document level while open.
+  createEffect(() => {
+    if (!open()) return;
+    const onDown = (e: PointerEvent) => {
+      if (wrapEl && !wrapEl.contains(e.target as Node)) close();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close();
+    };
+    document.addEventListener('pointerdown', onDown, true);
+    document.addEventListener('keydown', onKey);
+    onCleanup(() => {
+      document.removeEventListener('pointerdown', onDown, true);
+      document.removeEventListener('keydown', onKey);
+    });
+  });
 
   onCleanup(() => {
     if (blurTimer !== undefined) clearTimeout(blurTimer);
@@ -118,6 +159,7 @@ export const AutocompleteInput: Component<AutocompleteInputProps> = (p) => {
         autocomplete="off"
         onFocus={() => {
           focused = true;
+          setBrowseAll(false);
           setOpen(true);
           scheduleMeasure();
         }}
@@ -132,6 +174,7 @@ export const AutocompleteInput: Component<AutocompleteInputProps> = (p) => {
         onInput={(e) => {
           setText(e.currentTarget.value);
           p.onInput?.(e.currentTarget.value);
+          setBrowseAll(false);
           setOpen(true);
           setHighlight(-1);
           measureDir();
@@ -159,6 +202,19 @@ export const AutocompleteInput: Component<AutocompleteInputProps> = (p) => {
           }
         }}
       />
+      <button
+        type="button"
+        class="autocomplete__caret"
+        aria-label={open() ? 'Hide suggestions' : 'Show suggestions'}
+        aria-expanded={open()}
+        data-open={open() ? 'true' : undefined}
+        data-testid={p.testId ? `${p.testId}-caret` : undefined}
+        // Don't steal focus from / blur the input — keep the keyboard closed.
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={toggleCaret}
+      >
+        {open() ? '▴' : '▾'}
+      </button>
       <Show when={showList()}>
         <ul
           class="autocomplete__list"
