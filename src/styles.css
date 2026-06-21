@@ -3729,47 +3729,60 @@ html {
   color: var(--muted);
 }
 
-/* Pitcher chips — compact preset selectors (name + capacity). */
-.pitcher-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+/* Pitcher cards — the hero of steam prep: a wrapping grid of preset cards
+   (name + capacity + the machine params each loads). Sized so they fill the
+   width and wrap for any number of pitchers. */
+.steam-pitchers {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+  gap: 0.6rem;
 }
 
-.pitcher-chip {
+.steam-pitcher {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 0.05rem;
-  padding: 0.4rem 0.75rem;
+  gap: 0.2rem;
+  min-height: 5rem;
+  padding: 0.75rem 0.85rem;
   background: var(--bg-elev);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: 10px;
   color: var(--fg);
   font: inherit;
+  text-align: left;
   cursor: pointer;
   transition:
     border-color 0.12s ease,
     background 0.12s ease;
 }
 
-.pitcher-chip:hover {
+.steam-pitcher:hover {
   border-color: var(--border-strong);
 }
 
-.pitcher-chip[data-selected='true'] {
+.steam-pitcher[data-selected='true'] {
   border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 14%, var(--bg-elev));
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-elev));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
-.pitcher-chip__name {
-  font-weight: 600;
-  font-size: 0.9rem;
+.steam-pitcher__name {
+  font-weight: 700;
 }
 
-.pitcher-chip__cap {
-  font-size: 0.75rem;
+.steam-pitcher__cap {
+  font-size: 0.78rem;
   color: var(--muted);
+}
+
+.steam-pitcher__params {
+  margin-top: auto;
+  font-size: 0.72rem;
+  color: var(--muted-2);
+}
+
+.steam-pitcher[data-selected='true'] .steam-pitcher__params {
+  color: var(--accent);
 }
 
 /* Developer section action buttons. */
@@ -3798,32 +3811,45 @@ html {
   word-break: break-all;
 }
 
-/* Compact steam parameter sliders below the chips. Constrained width + a
-   small label-then-slider row so they read as a minor fine-tune, not a
-   full-width control. */
+/* Steam params under a divider: the editable Duration (+ Flow when the pref
+   is on) as cards (reusing .prep__stat), with a quiet read-only machine
+   readout (steam temp, plus flow when its card is hidden) top-aligned and
+   centred beside them. */
 .steam-params {
   display: flex;
-  flex-direction: column;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-top: 0.4rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
+}
+
+.steam-params__cards {
+  display: flex;
   gap: 0.6rem;
-  margin-top: 0.3rem;
-  max-width: 28rem;
 }
 
-.steam-param {
-  display: grid;
-  grid-template-columns: 4rem 1fr;
-  align-items: center;
-  gap: 0.5rem;
+/* Read-only machine facts (steam temp, plus flow when its card is hidden) —
+   borderless label-over-value like the shot facts, pushed to the right and
+   top-aligned with the editable cards. The pitcher's machine params, changed
+   in Library → Steam, not here. */
+.steam-facts-ro {
+  margin: 0 0 0 auto;
+  display: flex;
+  gap: 1.6rem;
 }
 
-.steam-param__label {
-  font-size: 0.75rem;
-  color: var(--muted);
+.steam-facts-ro .rstat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.02rem;
+  text-align: right;
 }
 
-/* No size overrides — use the default .slider-field track/thumb so the steam
-   sliders match the ones in Settings (the compact variant was too small to
-   grab during a brew). */
+.steam-facts-ro .rstat__value {
+  text-align: right;
+  font-size: 0.98rem;
+}
 
 .prep__action {
   display: flex;

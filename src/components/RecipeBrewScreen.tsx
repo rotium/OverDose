@@ -59,7 +59,6 @@ import { ProfilePicker } from './settings/sections/library/ProfilePicker';
 import { BeanPicker } from './settings/sections/library/BeanPicker';
 import { PickerDialog } from './PickerDialog';
 import { DebouncedNumberField } from './settings/sections/library/DebouncedNumberField';
-import { DebouncedSliderField } from './settings/DebouncedSliderField';
 import { dlog } from '../debugLog';
 
 /**
@@ -737,6 +736,7 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
                 steamReady={steamReady}
                 steamDuration={steamDurationSec}
                 steamFlow={steamFlow}
+                steamTemp={steamTempC}
                 showFlowSlider={() => p.showFlowSlider?.() ?? false}
                 onChangeSteamDuration={(v) => editSteam(setSteamDurationSec, v)}
                 onChangeSteamFlow={(v) => editSteam(setSteamFlow, v)}
@@ -930,6 +930,7 @@ const PrepCard: Component<{
   steamReady: Accessor<boolean>;
   steamDuration: Accessor<number | null>;
   steamFlow: Accessor<number | null>;
+  steamTemp: Accessor<number | null>;
   showFlowSlider: Accessor<boolean>;
   onChangeSteamDuration: (v: number) => void;
   onChangeSteamFlow: (v: number) => void;
@@ -967,6 +968,7 @@ const PrepCard: Component<{
             ready={p.steamReady}
             duration={p.steamDuration}
             flow={p.steamFlow}
+            steamTemp={p.steamTemp}
             showFlow={p.showFlowSlider}
             onChangeDuration={p.onChangeSteamDuration}
             onChangeFlow={p.onChangeSteamFlow}
@@ -1407,12 +1409,12 @@ const BrewPrep: Component<{
 };
 
 /**
- * Steam-step prep: pick a pitcher (a preset), then fine-tune on the compact
- * sliders. Pitcher chips show name + capacity only; tapping one loads its
- * parameters. Moving a slider detaches from the pitcher (values become
- * custom). Duration is always editable; the flow slider appears only when the
- * "show steam-flow slider" pref is on (flow is still applied from the pitcher
- * either way). Temperature comes from the pitcher and isn't edited here.
+ * Steam-step prep: the pitcher cards are the hero — tapping one loads its
+ * params. Duration (and Flow, when the steam-flow pref is on) are editable
+ * numeric cards, consistent with brew prep's fields; editing one detaches from
+ * the pitcher (values become custom). Steam temperature — and flow when its
+ * card is hidden — stay a quiet read-only readout: the machine values the
+ * pitcher set, edited in Library → Steam, not here.
  */
 const SteamPrep: Component<{
   pitchers: Accessor<Pitcher[]>;
@@ -1422,102 +1424,121 @@ const SteamPrep: Component<{
   ready: Accessor<boolean>;
   duration: Accessor<number | null>;
   flow: Accessor<number | null>;
+  steamTemp: Accessor<number | null>;
   showFlow: Accessor<boolean>;
   onChangeDuration: (v: number) => void;
   onChangeFlow: (v: number) => void;
-}> = (p) => (
-  <div class="steam-prep" data-testid="steam-prep">
-    <span class="prep__field-label">Pitcher</span>
-    <Show
-      when={!p.loading()}
-      fallback={<p class="prep__no-params">loading pitchers…</p>}
-    >
+}> = (p) => {
+  const tempReadout = (): string => {
+    const t = p.steamTemp();
+    return t == null ? '—' : `${Math.round(t)} °C`;
+  };
+  const flowReadout = (): string => {
+    const f = p.flow();
+    return f == null ? '—' : `${f.toFixed(1)} mL/s`;
+  };
+  return (
+    <div class="steam-prep" data-testid="steam-prep">
+      <span class="prep__field-label">Pitcher</span>
       <Show
-        when={p.pitchers().length > 0}
-        fallback={
-          <p class="prep__no-params" data-testid="steam-prep-empty">
-            No pitchers yet — add one in Library → Steam.
-          </p>
-        }
+        when={!p.loading()}
+        fallback={<p class="prep__no-params">loading pitchers…</p>}
       >
-        <div class="pitcher-chips" role="group" aria-label="Pitcher">
-          <For each={p.pitchers()}>
-            {(pt) => (
-              <button
-                type="button"
-                class="pitcher-chip"
-                data-testid={`pitcher-${pt.id}`}
-                data-selected={p.selectedId() === pt.id ? 'true' : undefined}
-                aria-pressed={p.selectedId() === pt.id}
-                onClick={() => p.onSelect(pt.id)}
-              >
-                <span class="pitcher-chip__name">{pt.name}</span>
-                <span class="pitcher-chip__cap">{pt.capacityMl} mL</span>
-              </button>
-            )}
-          </For>
+        <Show
+          when={p.pitchers().length > 0}
+          fallback={
+            <p class="prep__no-params" data-testid="steam-prep-empty">
+              No pitchers yet — add one in Library → Steam.
+            </p>
+          }
+        >
+          <div class="steam-pitchers" role="group" aria-label="Pitcher">
+            <For each={p.pitchers()}>
+              {(pt) => (
+                <button
+                  type="button"
+                  class="steam-pitcher"
+                  data-testid={`pitcher-${pt.id}`}
+                  data-selected={p.selectedId() === pt.id ? 'true' : undefined}
+                  aria-pressed={p.selectedId() === pt.id}
+                  onClick={() => p.onSelect(pt.id)}
+                >
+                  <span class="steam-pitcher__name">{pt.name}</span>
+                  <span class="steam-pitcher__cap">{pt.capacityMl} mL</span>
+                  <span class="steam-pitcher__params">
+                    {Math.round(pt.steamTempC)}°C · {pt.steamFlow.toFixed(1)} mL/s
+                  </span>
+                </button>
+              )}
+            </For>
+          </div>
+        </Show>
+      </Show>
+
+      {/* Editable cards (seeded from the pitcher / machine), under a divider;
+          steam temp + the hidden flow stay a quiet read-only readout. */}
+      <Show when={p.ready()}>
+        <div class="steam-params" data-testid="steam-params">
+          <div class="steam-params__cards">
+            <label class="prep__stat">
+              <span class="prep__stat-label">Duration</span>
+              <span class="prep__stat-edit">
+                <DebouncedNumberField
+                  value={p.duration() ?? undefined}
+                  onCommit={(v) => v !== undefined && p.onChangeDuration(v)}
+                  min={5}
+                  max={120}
+                  step={5}
+                  steppers
+                  unit="s"
+                  recentsKey="steamDuration"
+                  debounceMs={0}
+                  ariaLabel="Steam duration (seconds)"
+                  testId="steam-param-duration"
+                  class="prep__stat-input"
+                />
+              </span>
+            </label>
+            <Show when={p.showFlow()}>
+              <label class="prep__stat">
+                <span class="prep__stat-label">Flow</span>
+                <span class="prep__stat-edit">
+                  <DebouncedNumberField
+                    value={p.flow() ?? undefined}
+                    onCommit={(v) => v !== undefined && p.onChangeFlow(v)}
+                    min={0.4}
+                    max={2}
+                    step={0.1}
+                    decimal
+                    steppers
+                    unit="mL/s"
+                    recentsKey="steamFlow"
+                    debounceMs={0}
+                    ariaLabel="Steam flow (mL/s)"
+                    testId="steam-param-flow"
+                    class="prep__stat-input"
+                  />
+                </span>
+              </label>
+            </Show>
+          </div>
+          <dl class="steam-facts-ro" data-testid="steam-machine">
+            <Show when={!p.showFlow()}>
+              <div class="rstat">
+                <dt class="rstat__label">Flow</dt>
+                <dd class="rstat__value">{flowReadout()}</dd>
+              </div>
+            </Show>
+            <div class="rstat">
+              <dt class="rstat__label">Steam temp</dt>
+              <dd class="rstat__value">{tempReadout()}</dd>
+            </div>
+          </dl>
         </div>
       </Show>
-    </Show>
-
-    {/* Compact parameter sliders — seeded from the pitcher (or the machine's
-        current settings). Editing detaches from the pitcher. */}
-    <Show when={p.ready()}>
-      <div class="steam-params" data-testid="steam-params">
-        <SteamParamSlider
-          label="Duration"
-          testId="steam-param-duration"
-          value={p.duration}
-          onChange={p.onChangeDuration}
-          min={5}
-          max={120}
-          step={1}
-          format={(v) => `${v.toFixed(0)} s`}
-        />
-        <Show when={p.showFlow()}>
-          <SteamParamSlider
-            label="Flow"
-            testId="steam-param-flow"
-            value={p.flow}
-            onChange={p.onChangeFlow}
-            min={0.4}
-            max={2}
-            step={0.1}
-            format={(v) => `${v.toFixed(1)} mL/s`}
-          />
-        </Show>
-      </div>
-    </Show>
-  </div>
-);
-
-/** One compact labelled steam-parameter slider row. */
-const SteamParamSlider: Component<{
-  label: string;
-  testId: string;
-  value: Accessor<number | null>;
-  onChange: (v: number) => void;
-  min: number;
-  max: number;
-  step: number;
-  format: (v: number) => string;
-}> = (p) => (
-  <div class="steam-param">
-    <span class="steam-param__label">{p.label}</span>
-    <DebouncedSliderField
-      class="steam-param__field"
-      testId={p.testId}
-      value={p.value() ?? undefined}
-      onCommit={p.onChange}
-      min={p.min}
-      max={p.max}
-      step={p.step}
-      debounceMs={0}
-      ariaLabel={p.label}
-      formatValue={p.format}
-    />
-  </div>
-);
+    </div>
+  );
+};
 
 /**
  * Post-brew result — the shared {@link ShotReview} in its always-editable

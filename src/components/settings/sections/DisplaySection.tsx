@@ -109,7 +109,7 @@ export const DisplaySection: Component = () => {
               prefs.setShowSteamFlowSlider(e.currentTarget.checked)
             }
           />
-          <span>Show steam-flow slider during steaming</span>
+          <span>Show steam-flow control during steaming</span>
         </label>
         <label class="settings-checkbox">
           <input
