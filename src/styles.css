@@ -1740,6 +1740,16 @@ html {
 /* Library list rows — Routines / Recipes / Beans / … list views.
    Compact, name-led; meta column right-aligned in muted text. Add row
    states (hover/active) when the editor wires in. */
+/* Bean chooser inside a PickerDialog. The dialog body is a bounded,
+   overflow-hidden flex region, so the list must scroll itself — otherwise a
+   long bean list overflows the body and is clipped (some beans unreachable). */
+.bean-picker {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 0.5rem;
+}
+
 .library-list {
   list-style: none;
   margin: 0.75rem 0 0;
