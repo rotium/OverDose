@@ -3936,24 +3936,6 @@ html {
   border-bottom: 1px solid var(--border);
 }
 
-.shot-review__title {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-  min-width: 0;
-}
-
-.shot-review__profile {
-  font-size: 1.15rem;
-  font-weight: 700;
-}
-
-.shot-review__subtitle {
-  font-size: 0.82rem;
-  color: var(--muted);
-}
-
-/* Supporting curve: full width, modest height (it's not the hero). */
 .shot-review__chart-wrap {
   display: flex;
   flex-direction: column;
@@ -3970,37 +3952,6 @@ html {
   min-width: 0;
   /* Taller than a thumbnail — the scroll area absorbs the height. */
   height: clamp(240px, 44vh, 460px);
-}
-
-/* Data │ Rate │ Notes. A vertical rule separates the objective shot data
-   (left) from the user feedback (rate + notes, right). Data gets a roomy
-   band so its label↔value rows breathe; Rate is a moderate band; Notes
-   fills the remaining width. */
-.shot-review__cols {
-  display: grid;
-  grid-template-columns:
-    minmax(220px, 300px) /* Data */
-    1px /* divider */
-    minmax(190px, 210px) /* Rate */
-    1fr; /* Notes — fills the rest */
-  column-gap: 2.75rem;
-  row-gap: 1rem;
-  align-items: start;
-}
-
-/* Full-height hairline between data and feedback. */
-.shot-review__divider {
-  align-self: stretch;
-  width: 1px;
-  background: var(--border);
-}
-
-.shot-review__stats {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
-  font-variant-numeric: tabular-nums;
 }
 
 .rstat {
@@ -4073,33 +4024,6 @@ html {
   color: var(--muted);
 }
 
-/* Each of the Rate / Notes columns. */
-.review-col {
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
-  min-width: 0;
-}
-
-.review-field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.review-field__label {
-  font-size: 0.72rem;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-/* Upload to Visualizer — placeholder, wired in a later pass. */
-.shot-review__viz {
-  align-self: flex-start;
-}
-
-
 .post-brew__empty {
   flex: 1 1 auto;
   display: flex;
@@ -4123,8 +4047,8 @@ html {
 }
 
 .post-brew__save {
-  /* Sits in the (chartSide) top bar with no other content — push it to the
-     right so it reads like the detail view's top-right save/edit area. */
+  /* Sits in the top bar with no other content — push it right so it reads like
+     the detail view's top-right save/edit area. */
   margin-left: auto;
   font-size: 0.74rem;
   font-variant-numeric: tabular-nums;
@@ -4426,25 +4350,6 @@ html {
     color 160ms ease;
 }
 
-/* Tasting notes */
-.post-brew__notes {
-  font: inherit;
-  font-size: 0.9rem;
-  color: var(--fg);
-  background: var(--bg-elev);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.5rem 0.6rem;
-  resize: vertical;
-  min-height: 3.4rem;
-}
-.post-brew__notes:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-.post-brew__notes::placeholder {
-  color: var(--muted-2);
-}
 
 @media (prefers-reduced-motion: reduce) {
   .rating-face__mouth,
@@ -5130,12 +5035,6 @@ html {
   line-height: 1.5;
 }
 
-/* Read-only notes (history detail, view mode) */
-.post-brew__notes-ro {
-  margin: 0;
-  white-space: pre-wrap;
-  color: var(--fg);
-}
 
 /* History detail: data/rate/notes/Delete in a left column, chart on the
    right (the post-brew result keeps its chart-below layout instead). */
@@ -5233,33 +5132,6 @@ html {
   display: none;
 }
 
-/* A left-column field: label on top, value (view) or control (edit) below.
-   Shared by Coffee + Grind so view and edit read identically, matching the
-   Dose / Rate / Notes fields. */
-.shot-field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.shot-field__value {
-  font-size: 1.05rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-/* Secondary line under a field's value — e.g. the roaster beneath the coffee
-   name (roaster is metadata of the coffee, not its own field). */
-.shot-field__sub {
-  font-size: 0.78rem;
-  color: var(--muted);
-}
-
-.shot-coffee__bean {
-  width: 100%;
-  text-align: left;
-}
-
 /* History detail right column: profile caption above the curve, read-only
    facts in a compact grid beneath it. */
 .shot-review__chart-title {
@@ -5314,18 +5186,7 @@ html {
   padding: 0;
 }
 
-/* Left column = a consistent stack of label-over-value fields. The Dose
-   stat drops its right-aligned rail layout to match Coffee / Rate / Notes. */
-.shot-review__left .shot-review__stats .rstat {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-.shot-review__left .shot-review__stats .rstat__value,
-.shot-review__left .shot-review__stats .rstat__sub {
-  text-align: left;
-}
-/* Dose + grind share the dashed number-input look, left-aligned in the rail. */
+/* Dose + grind inputs (left column) share the dashed number look, left-aligned. */
 .shot-review__left .rstat__input {
   text-align: left;
 }
