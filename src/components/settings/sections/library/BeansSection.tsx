@@ -16,9 +16,10 @@ import {
   type BeanCreate,
   type BeanPatch,
 } from '../../../../api';
-import { groupBeansByRoaster } from '../../../../beans';
+import { beanRating, groupBeansByRoaster } from '../../../../beans';
+import { ShotRatingFace } from '../../../ShotRatingFace';
 import { AutocompleteInput } from './AutocompleteInput';
-import { BeanEditor } from './BeanEditor';
+import { BeanEditor, type BeanEditorProps } from './BeanEditor';
 
 const SHEET_ANIM_MS = 280;
 
@@ -30,6 +31,8 @@ export interface BeansSectionProps {
   loadBean?: (id: string) => Promise<Bean | null>;
   saveBean?: (id: string, patch: BeanPatch) => Promise<void>;
   deleteBean?: (id: string) => Promise<void>;
+  /** Forwarded to BeanEditor for the derived "Recent shots" rating. */
+  loadShots?: BeanEditorProps['loadShots'];
   debounceMs?: number;
 }
 
@@ -296,17 +299,25 @@ export const BeansSection: Component<BeansSectionProps> = (props) => {
                                         </span>
                                       </Show>
                                     </span>
-                                    <Show
-                                      when={[b.country, b.region]
-                                        .filter(Boolean)
-                                        .join(', ')}
-                                    >
-                                      {(meta) => (
-                                        <span class="library-list__meta">
-                                          {meta()}
-                                        </span>
-                                      )}
-                                    </Show>
+                                    <span class="bean-tree__trailing">
+                                      <Show
+                                        when={[b.country, b.region]
+                                          .filter(Boolean)
+                                          .join(', ')}
+                                      >
+                                        {(meta) => (
+                                          <span class="library-list__meta">
+                                            {meta()}
+                                          </span>
+                                        )}
+                                      </Show>
+                                      <Show when={beanRating(b) != null}>
+                                        <ShotRatingFace
+                                          value={beanRating(b)}
+                                          size={20}
+                                        />
+                                      </Show>
+                                    </span>
                                   </button>
                                 </li>
                               )}
@@ -355,6 +366,7 @@ export const BeansSection: Component<BeansSectionProps> = (props) => {
               loadBean={props.loadBean}
               saveBean={props.saveBean}
               deleteBean={props.deleteBean}
+              loadShots={props.loadShots}
               existing={existing()}
               debounceMs={props.debounceMs}
             />

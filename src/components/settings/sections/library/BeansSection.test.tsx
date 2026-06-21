@@ -59,6 +59,7 @@ describe('BeansSection', () => {
         loadBeans={async () => []}
         createBean={createBean}
         loadBean={async () => created}
+        loadShots={async () => ({ items: [], total: 0, limit: 100, offset: 0 })}
       />
     ));
     fireEvent.click(await waitFor(() => screen.getByTestId('open-new-bean')));

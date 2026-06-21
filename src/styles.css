@@ -4653,6 +4653,16 @@ html {
   opacity: 0.6;
 }
 
+/* Trailing edge of a bean row: the country/region meta and the read-only
+   rating face, kept together and right-aligned. align-items:center so the
+   small face sits level with the meta text (the row itself is baseline). */
+.bean-tree__trailing {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: none;
+}
+
 /* Bean editor — stacked label + full-width input, matching the app's text
    inputs (.routine-editor__name) rather than the compact numeric
    .step-field__input (which is 4.5rem and right-aligned). */
@@ -4689,6 +4699,18 @@ html {
   cursor: pointer;
   font-weight: 600;
   color: var(--fg);
+}
+
+/* Read-only "Recent shots" readout: face + caption on one row. */
+.bean-editor__readout {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.bean-editor__readout-caption {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .bean-editor__altitude {

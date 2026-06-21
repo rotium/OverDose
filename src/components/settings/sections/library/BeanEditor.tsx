@@ -3,11 +3,23 @@ import {
   Match,
   Show,
   Switch,
+  createEffect,
   createResource,
   createSignal,
+  onCleanup,
   type Component,
 } from 'solid-js';
-import { api, type Bean, type BeanPatch } from '../../../../api';
+import {
+  api,
+  type Bean,
+  type BeanPatch,
+  type GatewayShotsPage,
+  type ShotListParams,
+} from '../../../../api';
+import { beanRating } from '../../../../beans';
+import { meanEnjoyment } from '../../../../shotStats';
+import { ShotRatingBar } from '../../../ShotRatingBar';
+import { ShotRatingFace } from '../../../ShotRatingFace';
 import { AutocompleteInput } from './AutocompleteInput';
 import { DebouncedNumberField } from './DebouncedNumberField';
 
@@ -48,6 +60,9 @@ export interface BeanEditorProps {
   saveBean?: (id: string, patch: BeanPatch) => Promise<void>;
   /** Test seam — permanently delete. Defaults to the gateway. */
   deleteBean?: (id: string) => Promise<void>;
+  /** Test seam — fetch shots for the derived "Recent shots" rating. Defaults
+   *  to the gateway's paginated list. */
+  loadShots?: (params: ShotListParams) => Promise<GatewayShotsPage>;
   /** Distinct values already entered on other beans, per field — feeds each
    *  text field's autocomplete (merged with any built-in defaults). */
   existing?: Partial<Record<BeanSuggestField, string[]>>;
@@ -73,6 +88,48 @@ export const BeanEditor: Component<BeanEditorProps> = (p) => {
   const [saveFailed, setSaveFailed] = createSignal(false);
   const [confirmingDelete, setConfirmingDelete] = createSignal(false);
 
+  // Derived "Recent shots" rating: average enjoyment of this bean's most-recent
+  // shots. Keyed on a stable roaster/name string so it refetches only when the
+  // identity changes, not on every field edit. Bounded to one page (recency
+  // window) — see plan: no full-history pagination. `total` is the exact
+  // lifetime count (cheap), the mean/count are over the returned window.
+  const fetchShots = p.loadShots ?? ((params) => api.shotsList(params));
+  const [shotAgg] = createResource(
+    () => {
+      const b = bean();
+      // Stable string key (JSON) so the resource refetches only when
+      // roaster/name change, not on every field-save refetch of `bean()`.
+      return b ? JSON.stringify([b.roaster, b.name]) : undefined;
+    },
+    async (key: string) => {
+      const [roaster, name] = JSON.parse(key) as [string, string];
+      const page = await fetchShots({
+        coffeeName: name,
+        coffeeRoaster: roaster,
+        limit: 100,
+        order: 'desc',
+      });
+      return { ...meanEnjoyment(page.items), total: page.total };
+    },
+  );
+  const recentMean = (): number | null => shotAgg()?.mean ?? null;
+  const recentCount = (): number => shotAgg()?.count ?? 0;
+  const recentTotal = (): number => shotAgg()?.total ?? 0;
+  // Caption for the derived rating. Avoids "avg of 1" (a single rating isn't an
+  // average) and only says "recent" when we actually windowed — i.e. there are
+  // more shots than the one page we fetched, so unseen older ratings exist.
+  const recentCaption = (): string => {
+    const mean = recentMean();
+    if (mean == null) return '';
+    const windowed = recentTotal() > 100;
+    const r = windowed ? 'recent ' : '';
+    const basis =
+      recentCount() === 1
+        ? `from 1 ${r}rating`
+        : `avg of ${recentCount()} ${r}ratings`;
+    return `${mean} · ${basis}`;
+  };
+
   // Autocomplete suggestions for a field: built-in defaults merged with the
   // distinct values already entered on other beans.
   const sugg = (field: BeanSuggestField, defaults: string[] = []) =>
@@ -90,6 +147,30 @@ export const BeanEditor: Component<BeanEditorProps> = (p) => {
       return false;
     }
   };
+
+  // Rating (0–100, same scale as a shot). A local signal so a tap repaints the
+  // face instantly; it re-syncs from the record after each save's refetch
+  // (which also reverts the face if a save fails, since refetch returns the old
+  // value). Stored in `extras.rating` — spread the rest of extras so we don't
+  // clobber other keys.
+  const [rating, setRating] = createSignal<number | null>(null);
+  createEffect(() => {
+    p.beanId; // re-seed when the editor is reused for a different bean
+    const b = bean();
+    if (b) setRating(beanRating(b));
+  });
+  // Dragging the bar fires onChange on every pointer-move tick, so debounce the
+  // persist (same default as DebouncedNumberField) — the face repaints on every
+  // tick, but only the settled value is written to the gateway.
+  let ratingTimer: ReturnType<typeof setTimeout> | undefined;
+  const onRating = (v: number) => {
+    setRating(v);
+    clearTimeout(ratingTimer);
+    ratingTimer = setTimeout(() => {
+      void patch({ extras: { ...(bean()?.extras ?? {}), rating: v } });
+    }, p.debounceMs ?? 500);
+  };
+  onCleanup(() => clearTimeout(ratingTimer));
 
   // Required text (roaster/name): empty input keeps the prior value.
   const setRequired = (key: 'roaster' | 'name', raw: string) => {
@@ -235,6 +316,53 @@ export const BeanEditor: Component<BeanEditorProps> = (p) => {
                   />
                 </label>
               </section>
+
+              <details class="settings-section bean-editor__group">
+                <summary>Rating &amp; notes</summary>
+                <div class="bean-editor__field">
+                  <span class="bean-editor__field-label">Rating</span>
+                  <ShotRatingBar
+                    value={rating}
+                    onChange={onRating}
+                    editable={() => true}
+                    inline
+                    testId="bean-rating"
+                  />
+                </div>
+                <div class="bean-editor__field" data-testid="bean-recent-shots">
+                  <span class="bean-editor__field-label">Recent shots</span>
+                  <Show
+                    when={!shotAgg.loading}
+                    fallback={<span class="muted">…</span>}
+                  >
+                    <Show
+                      when={recentMean() != null}
+                      fallback={
+                        <span class="muted">No rated shots yet</span>
+                      }
+                    >
+                      <div class="bean-editor__readout">
+                        <ShotRatingFace value={recentMean()} size={28} />
+                        <span class="bean-editor__readout-caption">
+                          {recentCaption()}
+                        </span>
+                      </div>
+                    </Show>
+                  </Show>
+                </div>
+                <div class="bean-editor__field">
+                  <span class="bean-editor__field-label">Notes</span>
+                  <textarea
+                    class="bean-editor__notes"
+                    rows={3}
+                    value={b().notes ?? ''}
+                    placeholder="chocolate, red fruit…"
+                    aria-label="Notes"
+                    data-testid="bean-notes-input"
+                    onChange={(e) => setOptional('notes', e.currentTarget.value)}
+                  />
+                </div>
+              </details>
 
               <details class="settings-section bean-editor__group">
                 <summary>Origin &amp; details</summary>
@@ -422,19 +550,6 @@ export const BeanEditor: Component<BeanEditorProps> = (p) => {
                     </span>
                   </div>
                 </div>
-              </details>
-
-              <details class="settings-section bean-editor__group">
-                <summary>Tasting notes</summary>
-                <textarea
-                  class="bean-editor__notes"
-                  rows={3}
-                  value={b().notes ?? ''}
-                  placeholder="chocolate, red fruit…"
-                  aria-label="Tasting notes"
-                  data-testid="bean-notes-input"
-                  onChange={(e) => setOptional('notes', e.currentTarget.value)}
-                />
               </details>
 
               <section class="settings-section">

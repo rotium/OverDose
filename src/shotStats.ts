@@ -20,6 +20,24 @@ import type { GatewayShotRecord, GatewayShotSummary } from './api';
 const num = (v: unknown): number | null =>
   typeof v === 'number' && !Number.isNaN(v) ? v : null;
 
+/**
+ * Mean enjoyment (0–100) over a list of shot summaries, ignoring unrated ones.
+ * Used for a bean's derived "Recent shots" readout — the caller passes a bounded
+ * recency window (e.g. the most-recent page), so this never iterates full
+ * history. Returns `mean: null` when none are rated.
+ */
+export function meanEnjoyment(shots: GatewayShotSummary[]): {
+  mean: number | null;
+  count: number;
+} {
+  const vals = shots
+    .map((s) => s.annotations?.enjoyment)
+    .filter((v): v is number => typeof v === 'number');
+  if (!vals.length) return { mean: null, count: 0 };
+  const sum = vals.reduce((a, b) => a + b, 0);
+  return { mean: Math.round(sum / vals.length), count: vals.length };
+}
+
 /** Profile title → workflow name → coffee name → "Shot". */
 export const shotHeadline = (summary: GatewayShotSummary | null): string =>
   summary?.workflow?.profile?.title ??

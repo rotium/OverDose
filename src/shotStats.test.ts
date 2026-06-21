@@ -7,6 +7,7 @@ import type {
 } from './api';
 import {
   deriveShotStats,
+  meanEnjoyment,
   shotCountedVolumeMl,
   shotDoseG,
   shotDurationSec,
@@ -264,5 +265,30 @@ describe('shotReadoutAt', () => {
     expect(shotReadoutAt(rec, null)).toBeNull();
     expect(shotReadoutAt(rec, -1)).toBeNull();
     expect(shotReadoutAt(rec, 5)).toBeNull();
+  });
+});
+
+describe('meanEnjoyment', () => {
+  const shot = (enjoyment?: number | null): GatewayShotSummary =>
+    ({ id: 'x', timestamp: '', annotations: { enjoyment } }) as GatewayShotSummary;
+
+  it('averages the rated shots and rounds', () => {
+    // (80 + 60 + 71) / 3 = 70.33 → 70
+    expect(meanEnjoyment([shot(80), shot(60), shot(71)])).toEqual({
+      mean: 70,
+      count: 3,
+    });
+  });
+
+  it('ignores unrated shots (null / missing enjoyment)', () => {
+    expect(meanEnjoyment([shot(90), shot(null), shot(), { id: 'y', timestamp: '' } as GatewayShotSummary])).toEqual({
+      mean: 90,
+      count: 1,
+    });
+  });
+
+  it('returns null mean when nothing is rated', () => {
+    expect(meanEnjoyment([])).toEqual({ mean: null, count: 0 });
+    expect(meanEnjoyment([shot(null), shot()])).toEqual({ mean: null, count: 0 });
   });
 });

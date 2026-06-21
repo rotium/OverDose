@@ -15,6 +15,8 @@ const mkBean = (over: Partial<Bean> = {}): Bean => ({
 });
 
 /** In-memory bean the editor reads/writes through, so refetch sees saves. */
+const emptyShotsPage = { items: [], total: 0, limit: 100, offset: 0 };
+
 const makeFake = (initial: Bean) => {
   let bean: Bean = { ...initial };
   return {
@@ -22,6 +24,8 @@ const makeFake = (initial: Bean) => {
     saveBean: vi.fn(async (_id: string, patch: BeanPatch) => {
       bean = { ...bean, ...patch } as Bean;
     }),
+    // Default: no shots. Tests that exercise the derived rating pass their own.
+    loadShots: vi.fn(async () => ({ ...emptyShotsPage })),
     current: () => bean,
   };
 };
@@ -37,6 +41,7 @@ const renderEditor = (
       onClose={onClose}
       loadBean={fake.loadBean}
       saveBean={fake.saveBean}
+      loadShots={fake.loadShots}
       existing={existing}
       debounceMs={0}
     />
@@ -104,6 +109,7 @@ describe('BeanEditor', () => {
         onClose={vi.fn()}
         loadBean={fake.loadBean}
         saveBean={fake.saveBean}
+        loadShots={fake.loadShots}
         existing={{ variety: ['Bourbon', 'Catuaí', 'Gesha'] }}
         debounceMs={0}
       />
@@ -150,6 +156,7 @@ describe('BeanEditor', () => {
         onClose={onClose}
         loadBean={fake.loadBean}
         saveBean={fake.saveBean}
+        loadShots={fake.loadShots}
         deleteBean={deleteBean}
         debounceMs={0}
       />
@@ -249,6 +256,7 @@ describe('BeanEditor', () => {
         onClose={vi.fn()}
         loadBean={fake.loadBean}
         saveBean={fake.saveBean}
+        loadShots={fake.loadShots}
         existing={{ processing: ['Carbonic Maceration'] }}
         debounceMs={0}
       />
@@ -261,6 +269,89 @@ describe('BeanEditor', () => {
       screen.getByTestId('bean-processing-input-option-0'),
     );
     expect(option.textContent).toBe('Carbonic Maceration');
+  });
+
+  it('persists a tapped rating into extras', async () => {
+    const fake = makeFake(mkBean());
+    renderEditor(fake);
+    // tier-4 = the "Good" preset (75) on the 0/25/50/75/100 scale.
+    fireEvent.click(await waitFor(() => screen.getByTestId('bean-rating-tier-4')));
+    await waitFor(() =>
+      expect(fake.saveBean).toHaveBeenCalledWith('b1', {
+        extras: { rating: 75 },
+      }),
+    );
+  });
+
+  it('preserves existing extras keys when rating', async () => {
+    const fake = makeFake(mkBean({ extras: { beanId: 'src-1' } }));
+    renderEditor(fake);
+    fireEvent.click(await waitFor(() => screen.getByTestId('bean-rating-tier-5')));
+    await waitFor(() =>
+      expect(fake.saveBean).toHaveBeenCalledWith('b1', {
+        extras: { beanId: 'src-1', rating: 100 },
+      }),
+    );
+  });
+
+  it('coalesces rapid rating changes into a single debounced save', async () => {
+    const fake = makeFake(mkBean());
+    renderEditor(fake); // debounceMs={0}
+    fireEvent.click(await waitFor(() => screen.getByTestId('bean-rating-tier-3'))); // 50
+    fireEvent.click(screen.getByTestId('bean-rating-tier-5')); // 100
+    await waitFor(() =>
+      expect(fake.saveBean).toHaveBeenCalledWith('b1', { extras: { rating: 100 } }),
+    );
+    // Only the settled value is persisted — the intermediate 50 is dropped.
+    expect(fake.saveBean).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the derived rating averaged from the bean\'s shots', async () => {
+    const fake = makeFake(mkBean());
+    fake.loadShots.mockResolvedValueOnce({
+      items: [
+        { id: 's1', timestamp: '', annotations: { enjoyment: 80 } },
+        { id: 's2', timestamp: '', annotations: { enjoyment: 60 } },
+        { id: 's3', timestamp: '', annotations: {} }, // unrated — ignored
+      ],
+      total: 312, // > 100 → windowed, so "recent"
+      limit: 100,
+      offset: 0,
+    } as never);
+    renderEditor(fake);
+    const readout = await waitFor(() => screen.getByTestId('bean-recent-shots'));
+    // mean of 80 & 60 = 70 over 2 rated; windowed → "recent"; no lifetime total.
+    await waitFor(() =>
+      expect(readout.textContent).toContain('70 · avg of 2 recent ratings'),
+    );
+    expect(readout.textContent).not.toContain('total');
+    // queried by the bean's denormalized name + roaster.
+    expect(fake.loadShots).toHaveBeenCalledWith(
+      expect.objectContaining({ coffeeName: 'Red Brick', coffeeRoaster: 'Square Mile' }),
+    );
+  });
+
+  it('uses singular, non-windowed wording for a single rating within all shots', async () => {
+    const fake = makeFake(mkBean());
+    fake.loadShots.mockResolvedValueOnce({
+      items: [{ id: 's1', timestamp: '', annotations: { enjoyment: 78 } }],
+      total: 27, // <= 100 → all shots seen, so no "recent"
+      limit: 100,
+      offset: 0,
+    } as never);
+    renderEditor(fake);
+    const readout = await waitFor(() => screen.getByTestId('bean-recent-shots'));
+    await waitFor(() =>
+      expect(readout.textContent).toContain('78 · from 1 rating'),
+    );
+    expect(readout.textContent).not.toContain('recent');
+  });
+
+  it('shows "No rated shots yet" and no summary echo when there are no rated shots', async () => {
+    const fake = makeFake(mkBean()); // default loadShots → empty page
+    renderEditor(fake);
+    const readout = await waitFor(() => screen.getByTestId('bean-recent-shots'));
+    await waitFor(() => expect(readout.textContent).toContain('No rated shots yet'));
   });
 
   it('surfaces an inline error when a save fails', async () => {
