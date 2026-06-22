@@ -8,6 +8,7 @@ import {
   type WaterLevelsSnapshot,
 } from '../snapshot';
 import { useUserPrefs } from '../UserPrefsContext';
+import { isSteamOn } from '../steam';
 import { mmToMl, waterPct, type WaterSeverity } from '../water';
 import type { WaterUnit } from '../prefs';
 import {
@@ -49,9 +50,10 @@ const formatWaterLevel = (mm: number, unit: WaterUnit): string => {
  * state, group/steam temps, water level, scale, and a steam on/off toggle.
  *
  * All inputs are signals so the panel reacts at the granularity of the data
- * source. Steam toggle invokes `onSteamToggle(nextOn)` with the desired state
- * — the parent decides how to POST to the gateway (typically by composing the
- * current `ShotSettingsSnapshot` and overwriting `steamSetting`).
+ * source. Steam toggle invokes `onSteamToggle(nextOn)` with the desired state —
+ * the parent composes the `ShotSettingsSnapshot` and sets `targetSteamTemp`
+ * (the desired temp to enable, 0 to disable; the DE1 has no separate steam flag,
+ * so steam is on when `targetSteamTemp >= 130`).
  */
 export interface StatusPanelProps {
   machine: Accessor<MachineSnapshot | null>;
@@ -69,7 +71,9 @@ export interface StatusPanelProps {
 
 export const StatusPanel: Component<StatusPanelProps> = (p) => {
   const prefs = useUserPrefs();
-  const steamOn = () => (p.shotSettings()?.steamSetting ?? 0) > 0;
+  // The DE1 has no "steam enabled" flag — steam is on when the machine's target
+  // steam temp is at/above the firmware threshold, off at 0.
+  const steamOn = () => isSteamOn(p.shotSettings());
   const scaleData = () => dataFrame(p.scale());
 
   return (

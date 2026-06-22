@@ -94,13 +94,19 @@ export const Home: Component<HomeProps> = (p) => {
   const shotSettings = p.shotSettingsStream();
   const waterLevels = p.waterLevelsStream();
 
+  const prefs = useUserPrefs();
+
+  // Steam on/off is the steam *target temperature* (the DE1 has no enable flag):
+  // push the skin's desired temp to enable, 0 to disable. The desired is the
+  // skin's memory (UserPrefs), not read back from the machine.
   const handleSteamToggle = (next: boolean) => {
     const current = shotSettings.latest();
     if (!current) return;
-    p.onUpdateShotSettings({ ...current, steamSetting: next ? 1 : 0 });
+    p.onUpdateShotSettings({
+      ...current,
+      targetSteamTemp: next ? prefs.steamTargetTemp() : 0,
+    });
   };
-
-  const prefs = useUserPrefs();
 
   // Ids of due cleanings, for the Explore-row tile highlight (derived from the
   // same due list the header pill uses).

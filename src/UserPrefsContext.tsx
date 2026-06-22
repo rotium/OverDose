@@ -17,6 +17,7 @@ import {
   DEFAULT_SOUND_CUES,
   DEFAULT_STEAM_AUTO_FLUSH_SEC,
   DEFAULT_STEAM_PURGE_STRATEGY,
+  DEFAULT_STEAM_TARGET_TEMP,
   DEFAULT_TRACE_VISIBILITY,
   DEFAULT_WATER_UNIT,
   type AutoStopMode,
@@ -79,6 +80,7 @@ interface PersistedPrefs {
   steamPurgeStrategy?: SteamPurgeStrategy;
   steamAutoFlushSec?: number;
   autoStopMode?: AutoStopMode;
+  steamTargetTemp?: number;
 }
 
 export interface UserPrefsContextValue {
@@ -128,6 +130,13 @@ export interface UserPrefsContextValue {
   /** Global default auto-stop mode; overridable per shot in the prep card. */
   autoStopMode: Accessor<AutoStopMode>;
   setAutoStopMode: (v: AutoStopMode) => void;
+  /**
+   * Desired steam-boiler target temp (°C) — the skin owns this. The status
+   * steam toggle pushes it to the machine (on) or 0 (off), and the machine is
+   * re-synced to it on focus; only the on/off state is read back. Default 170.
+   */
+  steamTargetTemp: Accessor<number>;
+  setSteamTargetTemp: (v: number) => void;
 }
 
 const Ctx = createContext<UserPrefsContextValue>();
@@ -200,6 +209,9 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
   const [autoStopMode, setAutoStopMode] = createSignal<AutoStopMode>(
     initial.autoStopMode ?? DEFAULT_AUTO_STOP_MODE,
   );
+  const [steamTargetTemp, setSteamTargetTemp] = createSignal<number>(
+    initial.steamTargetTemp ?? DEFAULT_STEAM_TARGET_TEMP,
+  );
 
   const setTraceVisible = (k: keyof TraceVisibility, v: boolean) =>
     setTraceVisibility({ ...traceVisibility(), [k]: v });
@@ -221,6 +233,7 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
       steamPurgeStrategy: steamPurgeStrategy(),
       steamAutoFlushSec: steamAutoFlushSec(),
       autoStopMode: autoStopMode(),
+      steamTargetTemp: steamTargetTemp(),
     };
     storage.setItem(STORAGE_KEY, JSON.stringify(shape));
   });
@@ -312,6 +325,8 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
     setSteamAutoFlushSec,
     autoStopMode,
     setAutoStopMode,
+    steamTargetTemp,
+    setSteamTargetTemp,
   };
 
   return <Ctx.Provider value={value}>{p.children}</Ctx.Provider>;

@@ -162,16 +162,31 @@ describe('Home', () => {
     expect(onSleep).not.toHaveBeenCalled();
   });
 
-  it('steam toggle composes the current settings with steamSetting flipped', () => {
+  it('steam toggle pushes the desired steam temp when turning on', () => {
     const onUpdate = vi.fn();
     render(() =>
       buildHome({
-        stubs: { settings: { ...settings, steamSetting: 0 } },
+        // Off: machine steam temp 0.
+        stubs: { settings: { ...settings, targetSteamTemp: 0 } },
         onUpdate,
       }),
     );
     fireEvent.click(screen.getByRole('switch', { name: 'Toggle steam heater' }));
-    expect(onUpdate).toHaveBeenCalledWith({ ...settings, steamSetting: 1 });
+    // Enables by pushing the skin's desired temp (default 170).
+    expect(onUpdate).toHaveBeenCalledWith({ ...settings, targetSteamTemp: 170 });
+  });
+
+  it('steam toggle sets targetSteamTemp 0 when turning off', () => {
+    const onUpdate = vi.fn();
+    render(() =>
+      buildHome({
+        // On: machine steam temp at a heated value.
+        stubs: { settings: { ...settings, targetSteamTemp: 150 } },
+        onUpdate,
+      }),
+    );
+    fireEvent.click(screen.getByRole('switch', { name: 'Toggle steam heater' }));
+    expect(onUpdate).toHaveBeenCalledWith({ ...settings, targetSteamTemp: 0 });
   });
 
   it('does not call onUpdateShotSettings if no current settings are loaded', () => {

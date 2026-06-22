@@ -196,16 +196,16 @@ describe('StatusPanel', () => {
       expect(sw).toBeDisabled();
     });
 
-    it('reflects current steamSetting > 0 as on (shows the temp)', () => {
-      setup({ shotSettings: settingsSample({ steamSetting: 1 }) });
+    it('reflects targetSteamTemp >= 130 as on (shows the temp)', () => {
+      setup({ shotSettings: settingsSample({ targetSteamTemp: 150 }) });
       const sw = screen.getByRole('switch', { name: 'Toggle steam heater' });
       expect(sw).toHaveAttribute('aria-checked', 'true');
       // On → the value shows the steam temperature, not "Off".
       expect(screen.getByTestId('status-steam-temp')).not.toHaveTextContent('Off');
     });
 
-    it('reflects steamSetting === 0 as off (shows "Off")', () => {
-      setup({ shotSettings: settingsSample({ steamSetting: 0 }) });
+    it('reflects targetSteamTemp 0 as off (shows "Off")', () => {
+      setup({ shotSettings: settingsSample({ targetSteamTemp: 0 }) });
       const sw = screen.getByRole('switch', { name: 'Toggle steam heater' });
       expect(sw).toHaveAttribute('aria-checked', 'false');
       expect(screen.getByTestId('status-steam-temp')).toHaveTextContent('Off');
@@ -213,14 +213,14 @@ describe('StatusPanel', () => {
 
     it('invokes onSteamToggle(true) when off → on', () => {
       const onSteamToggle = vi.fn();
-      setup({ shotSettings: settingsSample({ steamSetting: 0 }), onSteamToggle });
+      setup({ shotSettings: settingsSample({ targetSteamTemp: 0 }), onSteamToggle });
       fireEvent.click(screen.getByRole('switch', { name: 'Toggle steam heater' }));
       expect(onSteamToggle).toHaveBeenCalledWith(true);
     });
 
     it('invokes onSteamToggle(false) when on → off', () => {
       const onSteamToggle = vi.fn();
-      setup({ shotSettings: settingsSample({ steamSetting: 1 }), onSteamToggle });
+      setup({ shotSettings: settingsSample({ targetSteamTemp: 150 }), onSteamToggle });
       fireEvent.click(screen.getByRole('switch', { name: 'Toggle steam heater' }));
       expect(onSteamToggle).toHaveBeenCalledWith(false);
     });

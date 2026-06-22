@@ -74,6 +74,19 @@ export const DEFAULT_WATER_UNIT: WaterUnit = 'mL';
 export const DEFAULT_HAS_SCALE = true;
 
 /**
+ * Desired steam-boiler target temperature (°C) — OverDose owns this value (the
+ * skin's "memory"). The DE1 has no "steam enabled" flag: steam is on when the
+ * machine's `targetSteamTemp >= 130` and off when it's 0, so turning steam off
+ * zeroes the machine value and would otherwise lose the configured temperature.
+ * We keep the desired here, push it to the machine on enable (and re-assert it
+ * on focus), and only read the on/off *state* back from the machine. Default to
+ * the DE1 steam ceiling; the editor clamps to 130–170 (see SteamSection).
+ */
+export const DEFAULT_STEAM_TARGET_TEMP = 170;
+export const STEAM_TEMP_MIN = 130;
+export const STEAM_TEMP_MAX = 170;
+
+/**
  * Developer console/debug logging. Default off. When on, key flow events
  * (machine state/activity transitions, steam duration changes, brew-step and
  * steam-stop events) are written to the console and an in-memory buffer

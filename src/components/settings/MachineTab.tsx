@@ -4,6 +4,7 @@ import type { ShotSettingsSnapshot } from '../../snapshot';
 import type { WsStream } from '../../streams';
 import type { SteamPurgeStrategy } from '../../prefs';
 import { useUserPrefs } from '../../UserPrefsContext';
+import { isSteamOn } from '../../steam';
 import { DebouncedSliderField } from './DebouncedSliderField';
 
 const PURGE_STRATEGY_OPTIONS: {
@@ -139,10 +140,15 @@ export const MachineTab: Component<MachineTabProps> = (p) => {
                       </label>
                       <DebouncedSliderField
                         testId="machine-steam-temp"
-                        value={sh().targetSteamTemp}
-                        onCommit={(targetSteamTemp) =>
-                          commitShot({ targetSteamTemp })
-                        }
+                        // The desired temp is the skin's own value (so it never
+                        // shows 0 when steam is off, where the machine reports
+                        // targetSteamTemp 0). Editing updates the skin's memory
+                        // and, when steam is currently on, applies it live.
+                        value={prefs.steamTargetTemp()}
+                        onCommit={(v) => {
+                          prefs.setSteamTargetTemp(v);
+                          if (isSteamOn(sh())) commitShot({ targetSteamTemp: v });
+                        }}
                         min={130}
                         max={170}
                         step={1}

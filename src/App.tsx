@@ -55,6 +55,7 @@ import {
   type WaterLevelsSnapshot,
 } from './snapshot';
 import type { WsStream } from './streams';
+import { steamReassertShot } from './steam';
 
 // One library sync for the app: owns the local repos (the mirror) and the
 // gateway push/pull. `syncNow` runs on load + focus; see docs/storage-sync.md.
@@ -196,9 +197,28 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
     cleanings();
     armReminderTimer();
   });
+
+  // Steam: the skin owns the desired steam temp (a pref); the machine follows
+  // it. When the app comes back on screen we re-push the skin's desired so an
+  // external app/skin's change is corrected back. Only acts when the machine is
+  // **idle** (never interrupts a live steam/espresso/water/flush) and only when
+  // steam is on and the value actually differs (no write otherwise), so it's a
+  // cheap no-op on the common case.
+  const reassertSteamTemp = (): void => {
+    const body = steamReassertShot(
+      p.streams.shotSettings.latest(),
+      prefs.steamTargetTemp(),
+      p.streams.machine.latest()?.state.state === 'idle',
+    );
+    if (body) void onUpdateShotSettings(body);
+  };
+
   onMount(() => {
     const onVisible = () => {
-      if (!document.hidden) armReminderTimer();
+      if (!document.hidden) {
+        armReminderTimer();
+        reassertSteamTemp();
+      }
     };
     document.addEventListener('visibilitychange', onVisible);
     onCleanup(() => {
