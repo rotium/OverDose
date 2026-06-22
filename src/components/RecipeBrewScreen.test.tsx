@@ -928,6 +928,23 @@ describe('RecipeBrewScreen', () => {
       expect(screen.queryByTestId('steam-param-temp')).not.toBeInTheDocument();
     });
 
+    it('seeds the pitcher params without waiting on machineSettings (slow BLE read)', async () => {
+      // Regression: the params section was gated on machineSettings.loading
+      // even for the pitcher path, leaving Duration/Flow/Steam-temp blank for
+      // ~1-2s on real hardware. With a recipe pitcher, it must seed immediately
+      // even if the machine-settings read never resolves.
+      renderScreen({
+        routines: [steamRoutine()],
+        recipes: [sampleRecipe({ pitcherId: 'p-large' })],
+        loadPitchers: () => Promise.resolve(PITCHERS),
+        loadMachineSettings: () => new Promise(() => {}), // never resolves
+      });
+      // Duration appears from the pitcher (50) without the machine read.
+      await waitFor(() =>
+        expect(sliderValue('steam-param-duration')).toBe('50'),
+      );
+    });
+
     it('hides the flow slider unless the pref is on', async () => {
       renderScreen({
         routines: [steamRoutine()],

@@ -517,17 +517,23 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
   createEffect(() => {
     if (steamReady()) return;
     const list = pitchers();
-    if (!list || bundle.loading || machineSettings.loading) return;
+    if (!list || bundle.loading) return;
     const rec = bundle()?.recipe;
     const pt = rec?.pitcherId
       ? list.find((x) => x.id === rec.pitcherId)
       : undefined;
     if (pt) {
+      // The pitcher carries duration/temp/flow, so seed immediately — don't
+      // wait on `machineSettings` (a slow DE1 MMR read over BLE), which is only
+      // needed by the no-pitcher fallback below. Waiting here left the params
+      // section blank for ~1–2s on real hardware.
       loadFromPitcher(pt);
       return;
     }
     // No recipe pitcher: seed sliders from the machine's current settings.
-    // Needs a shotSettings frame for temp/duration; wait for it.
+    // Needs the machine's steam flow (machineSettings) + a shotSettings frame
+    // for temp/duration; wait for both so the seeded values are accurate.
+    if (machineSettings.loading) return;
     const ss = p.shotSettingsStream?.().latest();
     if (!ss) return;
     setSteamDurationSec(ss.targetSteamDuration);
