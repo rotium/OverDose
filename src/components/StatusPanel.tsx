@@ -111,7 +111,11 @@ export const StatusPanel: Component<StatusPanelProps> = (p) => {
             data-testid="status-steam-temp"
             data-on={steamOn() ? 'true' : 'false'}
           >
-            {steamOn() ? fmtTemp(p.machine()?.steamTemperature, 0) : 'Off'}
+            {/* DEBUG (revert): show the live boiler temp even when off, to
+                validate the off switch and watch heat-up time. */}
+            {steamOn()
+              ? fmtTemp(p.machine()?.steamTemperature, 0)
+              : `Off · ${fmtTemp(p.machine()?.steamTemperature, 0)}`}
           </span>
           <button
             type="button"
