@@ -27,7 +27,7 @@ describe('ExploreTray', () => {
     expect(onSelect).toHaveBeenLastCalledWith('brew');
   });
 
-  it('disables steam/water/flush with a droplet icon when blockReason is water-critical; brew stays enabled', () => {
+  it('disables water/flush with a droplet icon when blockReason is water-critical; brew + steam stay enabled', () => {
     const onSelect = vi.fn();
     render(() => (
       <ExploreTray
@@ -35,8 +35,10 @@ describe('ExploreTray', () => {
         blockReason={() => 'water-critical'}
       />
     ));
+    // brew + steam open a prep screen, so their tiles stay navigable.
     expect(screen.getByTestId('explore-brew')).not.toBeDisabled();
-    for (const op of ['steam', 'water', 'flush']) {
+    expect(screen.getByTestId('explore-steam')).not.toBeDisabled();
+    for (const op of ['water', 'flush']) {
       const tile = screen.getByTestId(`explore-${op}`);
       expect(tile).toBeDisabled();
       expect(tile).toHaveAttribute('data-block-reason', 'water-critical');
@@ -46,20 +48,30 @@ describe('ExploreTray', () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
-  it('disables steam/water/flush with a power icon when blockReason is heater-off', () => {
+  it('disables water/flush with a power icon when blockReason is heater-off; brew + steam stay enabled', () => {
     render(() => (
       <ExploreTray
         onSelect={() => {}}
         blockReason={() => 'heater-off'}
       />
     ));
-    for (const op of ['steam', 'water', 'flush']) {
+    for (const op of ['water', 'flush']) {
       const tile = screen.getByTestId(`explore-${op}`);
       expect(tile).toBeDisabled();
       expect(tile).toHaveAttribute('data-block-reason', 'heater-off');
     }
-    // Brew remains tappable — its prep screen does its own heater-off gate.
+    // Brew + steam remain tappable — their prep screens do their own gating.
     expect(screen.getByTestId('explore-brew')).not.toBeDisabled();
+    expect(screen.getByTestId('explore-steam')).not.toBeDisabled();
+  });
+
+  it('lets steam through to its prep screen even when blocked', () => {
+    const onSelect = vi.fn();
+    render(() => (
+      <ExploreTray onSelect={onSelect} blockReason={() => 'heater-off'} />
+    ));
+    fireEvent.click(screen.getByTestId('explore-steam'));
+    expect(onSelect).toHaveBeenCalledWith('steam');
   });
 
   it('is fully enabled by default (no blockReason)', () => {
@@ -100,7 +112,7 @@ describe('ExploreTray', () => {
           cleanings={() => [cleaning('c1', 'Daily Rinse')]}
         />
       ));
-      expect(screen.getByTestId('explore-steam')).toBeDisabled();
+      expect(screen.getByTestId('explore-flush')).toBeDisabled();
       expect(screen.getByTestId('explore-cleaning-c1')).not.toBeDisabled();
     });
 

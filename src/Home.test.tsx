@@ -273,10 +273,12 @@ describe('Home', () => {
       buildHome({ stubs: { water: { currentLevel: 2, refillLevel: 5 } } }),
     );
     await waitFor(() => screen.getByTestId('explore-brew'));
-    // Brew tile stays navigable — gating happens at the prep Start.
+    // Brew + steam tiles stay navigable — they open a prep screen and gate at
+    // its Start button.
     expect(screen.getByTestId('explore-brew')).not.toBeDisabled();
-    // Steam/water/flush block since their tap IS the action.
-    for (const op of ['steam', 'water', 'flush']) {
+    expect(screen.getByTestId('explore-steam')).not.toBeDisabled();
+    // Water/flush block since their tap IS the action (no prep screen yet).
+    for (const op of ['water', 'flush']) {
       const tile = screen.getByTestId(`explore-${op}`);
       expect(tile).toBeDisabled();
       expect(tile).toHaveAttribute('data-block-reason', 'water-critical');
@@ -319,7 +321,9 @@ describe('Home', () => {
     expect(waterCell.contains(screen.getByTestId('status-water-alert'))).toBe(
       true,
     );
-    expect(screen.getByTestId('explore-steam')).toBeDisabled();
+    // Direct ops (water/flush) lock; steam stays navigable to its prep.
+    expect(screen.getByTestId('explore-flush')).toBeDisabled();
+    expect(screen.getByTestId('explore-steam')).not.toBeDisabled();
   });
 
   it('refetches the last shot when machine state transitions out of `espresso`', async () => {

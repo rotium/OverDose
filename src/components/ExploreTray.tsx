@@ -15,21 +15,22 @@ import {
  * The four machine operations a Recipe is built from, run directly — no
  * recipe, no curation. A slim tray pinned under the Recipe picker on Home
  * (see Home's left column). Tapping an op:
- *   - brew  → opens the ad-hoc brew prep → live → summary (App). Always
- *             enabled; gating happens at the prep-screen Start button.
- *   - steam / water / flush → start the action immediately (no prep
- *             intermediate). These are blocked when the machine isn't
- *             ready, with an icon explaining why.
+ *   - brew / steam → open a prep screen → live → summary (App). Always
+ *             enabled; gating happens at the prep-screen Start button (steam
+ *             prep also shows the live boiler temp warming toward target).
+ *   - water / flush → start the action immediately (no prep screen yet).
+ *             These are blocked when the machine isn't ready, with an icon
+ *             explaining why.
  *
- * Defaults come from current gateway state (the brew prep reads the current
- * workflow; steam/water/flush use the firmware settings), so there's nothing
- * to configure here — just four buttons.
+ * Defaults come from current gateway state (the prep screens read the current
+ * workflow / firmware settings), so there's nothing to configure here — just
+ * four buttons.
  */
 export type ExploreOp = 'brew' | 'steam' | 'water' | 'flush';
 
 /**
- * Reasons the direct-op tiles (steam/water/flush) can be disabled. The
- * brew tile is always enabled — its action is the prep-screen Start
+ * Reasons the direct-op tiles (water/flush) can be disabled. The brew and
+ * steam tiles are always enabled — their action is a prep-screen Start
  * button, which has its own gating.
  */
 export type ExploreBlockReason = 'water-critical' | 'heater-off';
@@ -54,9 +55,9 @@ const REASON_LABEL: Record<ExploreBlockReason, string> = {
 export interface ExploreTrayProps {
   /** Invoked with the chosen op. Brew routes to prep; the rest start live. */
   onSelect: (op: ExploreOp) => void;
-  /** When non-null, the steam/water/flush tiles render disabled with an
-   *  icon explaining why. The brew tile is unaffected — its prep-screen
-   *  Start does its own gating. */
+  /** When non-null, the water/flush tiles render disabled with an icon
+   *  explaining why. The brew and steam tiles are unaffected — they open a
+   *  prep screen whose Start button does its own gating. */
   blockReason?: Accessor<ExploreBlockReason | null>;
   /** Home-visible (non-hidden) cleanings, rendered after a divider as
    *  quick-launch tiles. Tapping one opens its wizard directly (like Brew,
@@ -79,7 +80,10 @@ export const ExploreTray: Component<ExploreTrayProps> = (p) => {
         <For each={OPS}>
           {(o) => {
             const Icon = o.icon;
-            const isDirect = o.op !== 'brew';
+            // brew + steam open a prep screen (gate at its Start button), so
+            // their tiles stay navigable; only water/flush fire directly and
+            // get the readiness lock here.
+            const isDirect = o.op === 'water' || o.op === 'flush';
             const isDisabled = () => isDirect && reason() !== null;
             const ReasonIcon = () => {
               const r = reason();
