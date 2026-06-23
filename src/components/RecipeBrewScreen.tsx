@@ -743,6 +743,7 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
                 steamDuration={steamDurationSec}
                 steamFlow={steamFlow}
                 steamTemp={steamTempC}
+                currentSteamTemp={() => machine.latest()?.steamTemperature ?? null}
                 showFlowSlider={() => p.showFlowSlider?.() ?? false}
                 onChangeSteamDuration={(v) => editSteam(setSteamDurationSec, v)}
                 onChangeSteamFlow={(v) => editSteam(setSteamFlow, v)}
@@ -937,6 +938,8 @@ const PrepCard: Component<{
   steamDuration: Accessor<number | null>;
   steamFlow: Accessor<number | null>;
   steamTemp: Accessor<number | null>;
+  /** Live steam-boiler temperature (machine snapshot) for the "now" readout. */
+  currentSteamTemp: Accessor<number | null>;
   showFlowSlider: Accessor<boolean>;
   onChangeSteamDuration: (v: number) => void;
   onChangeSteamFlow: (v: number) => void;
@@ -975,6 +978,7 @@ const PrepCard: Component<{
             duration={p.steamDuration}
             flow={p.steamFlow}
             steamTemp={p.steamTemp}
+            currentTemp={p.currentSteamTemp}
             showFlow={p.showFlowSlider}
             onChangeDuration={p.onChangeSteamDuration}
             onChangeFlow={p.onChangeSteamFlow}
@@ -1431,6 +1435,10 @@ const SteamPrep: Component<{
   duration: Accessor<number | null>;
   flow: Accessor<number | null>;
   steamTemp: Accessor<number | null>;
+  /** Live steam-boiler temperature (machine snapshot). Shown as a "now" line
+   *  under the target so the read-only target reads as a target, not a live
+   *  value. ≤0 means "no reading" (off / no data) — the line is hidden. */
+  currentTemp: Accessor<number | null>;
   showFlow: Accessor<boolean>;
   onChangeDuration: (v: number) => void;
   onChangeFlow: (v: number) => void;
@@ -1442,6 +1450,22 @@ const SteamPrep: Component<{
   const flowReadout = (): string => {
     const f = p.flow();
     return f == null ? '—' : `${f.toFixed(1)} mL/s`;
+  };
+  // Live boiler temp, or null when there's no usable reading (off / no data).
+  const liveTemp = (): number | null => {
+    const c = p.currentTemp();
+    return c == null || c <= 0 ? null : c;
+  };
+  // "At target" within ±10% of the target — a wide-enough band that the
+  // machine can compensate while running.
+  const tempReady = (): boolean => {
+    const t = p.steamTemp();
+    const c = liveTemp();
+    return t != null && c != null && Math.abs(c - t) <= t * 0.1;
+  };
+  const nowReadout = (): string | null => {
+    const c = liveTemp();
+    return c == null ? null : `now ${Math.round(c)}°C`;
   };
   return (
     <div class="steam-prep" data-testid="steam-prep">
@@ -1481,10 +1505,15 @@ const SteamPrep: Component<{
         </Show>
       </Show>
 
-      {/* Editable cards (seeded from the pitcher / machine), under a divider;
-          steam temp + the hidden flow stay a quiet read-only readout. */}
+      {/* "Steam targets" — the setpoints for this steam, under a divider. The
+          editable cards (seeded from the pitcher / machine) sit beside a quiet
+          read-only readout; the heading marks the whole block as targets, so
+          the steam-temp value reads as a target with a live "now" line — not a
+          live reading. */}
       <Show when={p.ready()}>
         <div class="steam-params" data-testid="steam-params">
+          <span class="steam-params__head">Steam targets</span>
+          <div class="steam-params__row">
           <div class="steam-params__cards">
             <label class="prep__stat">
               <span class="prep__stat-label">Duration</span>
@@ -1535,11 +1564,27 @@ const SteamPrep: Component<{
                 <dd class="rstat__value">{flowReadout()}</dd>
               </div>
             </Show>
-            <div class="rstat">
+            <div class="rstat rstat--paired">
               <dt class="rstat__label">Steam temp</dt>
-              <dd class="rstat__value">{tempReadout()}</dd>
+              <dd class="rstat__value">
+                {tempReadout()}
+                <Show when={nowReadout()}>
+                  <span
+                    class="rstat__now"
+                    classList={{
+                      'rstat__now--ready': tempReady(),
+                      'rstat__now--warm': !tempReady(),
+                    }}
+                    data-testid="steam-temp-now"
+                  >
+                    {nowReadout()}
+                    {tempReady() ? ' ✓' : ''}
+                  </span>
+                </Show>
+              </dd>
             </div>
           </dl>
+          </div>
         </div>
       </Show>
     </div>

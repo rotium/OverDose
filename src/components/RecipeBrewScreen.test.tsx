@@ -1120,6 +1120,112 @@ describe('RecipeBrewScreen', () => {
       const card = await waitFor(() => screen.getByTestId('prep-card'));
       expect(card).toHaveTextContent(/no prep needed/i);
     });
+
+    describe('steam temp readout (target + live "now")', () => {
+      // The p-large pitcher seeds a 160°C target, so the ±10% readiness band
+      // is 16°C wide → ready anywhere from 144 to 176°C.
+      const steamSnap = (steamTemperature: number): MachineSnapshot => ({
+        ...snapshotWithState('idle'),
+        steamTemperature,
+      });
+      const renderSteam = (boilerTemp?: number) => {
+        const env = renderScreen({
+          routines: [steamRoutine()],
+          recipes: [sampleRecipe({ pitcherId: 'p-large' })],
+          loadPitchers: () => Promise.resolve(PITCHERS),
+        });
+        if (boilerTemp !== undefined) env.setMachineSnap(steamSnap(boilerTemp));
+        return env;
+      };
+
+      it('heads the block "Steam targets"', async () => {
+        renderSteam(150);
+        expect(
+          await waitFor(() => screen.getByTestId('steam-params')),
+        ).toHaveTextContent(/steam targets/i);
+      });
+
+      it('shows the target as the headline, with the live temp only on the "now" line', async () => {
+        renderSteam(120);
+        // Target (160) is the read-only value even though the boiler is at 120.
+        expect(
+          await waitFor(() => screen.getByTestId('steam-machine')),
+        ).toHaveTextContent('160 °C');
+        expect(screen.getByTestId('steam-temp-now')).toHaveTextContent(
+          'now 120°C',
+        );
+      });
+
+      it('hides the "now" line when there is no machine snapshot', async () => {
+        renderScreen({
+          routines: [steamRoutine()],
+          recipes: [sampleRecipe({ pitcherId: 'p-large' })],
+          loadPitchers: () => Promise.resolve(PITCHERS),
+        });
+        await waitFor(() => screen.getByTestId('steam-param-duration'));
+        expect(screen.queryByTestId('steam-temp-now')).not.toBeInTheDocument();
+      });
+
+      it('hides the "now" line when the boiler reads 0 (off / no data)', async () => {
+        renderSteam(0);
+        await waitFor(() => screen.getByTestId('steam-param-duration'));
+        expect(screen.queryByTestId('steam-temp-now')).not.toBeInTheDocument();
+      });
+
+      it('reads "warming" (amber, no check) outside ±10%', async () => {
+        renderSteam(120); // delta 40 > 16
+        const now = await waitFor(() => screen.getByTestId('steam-temp-now'));
+        expect(now).toHaveTextContent('now 120°C');
+        expect(now).not.toHaveTextContent('✓');
+        expect(now).toHaveClass('rstat__now--warm');
+        expect(now).not.toHaveClass('rstat__now--ready');
+      });
+
+      it('reads "ready" (green, check) within ±10% below target', async () => {
+        renderSteam(150); // delta 10 ≤ 16
+        const now = await waitFor(() => screen.getByTestId('steam-temp-now'));
+        expect(now).toHaveTextContent('now 150°C');
+        expect(now).toHaveTextContent('✓');
+        expect(now).toHaveClass('rstat__now--ready');
+        expect(now).not.toHaveClass('rstat__now--warm');
+      });
+
+      it('reads "ready" when overshooting above target but within ±10%', async () => {
+        renderSteam(170); // delta 10 ≤ 16 (symmetric band)
+        expect(
+          await waitFor(() => screen.getByTestId('steam-temp-now')),
+        ).toHaveClass('rstat__now--ready');
+      });
+
+      it('treats exactly ±10% as ready (inclusive boundary)', async () => {
+        renderSteam(144); // delta 16 == 160 * 0.1
+        expect(
+          await waitFor(() => screen.getByTestId('steam-temp-now')),
+        ).toHaveClass('rstat__now--ready');
+      });
+
+      it('reads "warming" just outside the ±10% boundary', async () => {
+        renderSteam(143); // delta 17 > 16
+        expect(
+          await waitFor(() => screen.getByTestId('steam-temp-now')),
+        ).toHaveClass('rstat__now--warm');
+      });
+
+      it('flips warming → ready live as the boiler heats', async () => {
+        const env = renderSteam(120);
+        const now = await waitFor(() => screen.getByTestId('steam-temp-now'));
+        expect(now).toHaveClass('rstat__now--warm');
+        env.setMachineSnap(steamSnap(158)); // delta 2 ≤ 16
+        await waitFor(() =>
+          expect(screen.getByTestId('steam-temp-now')).toHaveClass(
+            'rstat__now--ready',
+          ),
+        );
+        expect(screen.getByTestId('steam-temp-now')).toHaveTextContent(
+          'now 158°C',
+        );
+      });
+    });
   });
 
   describe('state machine — single step', () => {

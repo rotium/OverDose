@@ -3845,17 +3845,32 @@ html {
   word-break: break-all;
 }
 
-/* Steam params under a divider: the editable Duration (+ Flow when the pref
-   is on) as cards (reusing .prep__stat), with a quiet read-only machine
-   readout (steam temp, plus flow when its card is hidden) top-aligned and
-   centred beside them. */
+/* Steam params under a divider, headed "Steam targets": the editable Duration
+   (+ Flow when the pref is on) as cards (reusing .prep__stat), with a quiet
+   read-only machine readout (steam temp, plus flow when its card is hidden)
+   top-aligned beside them. The heading marks the block as setpoints, so the
+   steam-temp value reads as a target alongside its live "now" line. */
 .steam-params {
   display: flex;
-  align-items: flex-start;
-  gap: 1rem;
+  flex-direction: column;
+  gap: 0.6rem;
   margin-top: 0.4rem;
   padding-top: 0.9rem;
   border-top: 1px solid var(--border);
+}
+
+.steam-params__head {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.steam-params__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
 }
 
 .steam-params__cards {
@@ -3883,6 +3898,38 @@ html {
 .steam-facts-ro .rstat__value {
   text-align: right;
   font-size: 0.98rem;
+}
+
+/* Paired steam-temp readout: target as the headline value, a small live "now"
+   line under it. Left-aligned as a column (label / target / now all flush
+   left), so the live value reads clearly as belonging to its target. Muted
+   while warming, green + check once within ±10% of the target (a band wide
+   enough for the machine to compensate while running). */
+.steam-facts-ro .rstat--paired {
+  text-align: left;
+}
+
+.steam-facts-ro .rstat--paired .rstat__value {
+  text-align: left;
+}
+
+.rstat__now {
+  display: block;
+  margin-top: 0.05rem;
+  text-align: left;
+  font-size: 0.74rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The "not ready yet" line is the one that warrants attention (hold on,
+   don't steam): amber while warming, green + check once at target. */
+.rstat__now--warm {
+  color: var(--warn-fg);
+}
+
+.rstat__now--ready {
+  color: var(--good-fg);
 }
 
 .prep__action {
