@@ -1226,6 +1226,80 @@ describe('RecipeBrewScreen', () => {
         );
       });
     });
+
+    describe('steam Start readiness lock', () => {
+      // p-large seeds a 160°C target → ±10% band = 144–176.
+      const steamSnap = (steamTemperature: number): MachineSnapshot => ({
+        ...snapshotWithState('idle'),
+        steamTemperature,
+      });
+      const renderSteam = (boilerTemp?: number) => {
+        const env = renderScreen({
+          routines: [steamRoutine()],
+          recipes: [sampleRecipe({ pitcherId: 'p-large' })],
+          loadPitchers: () => Promise.resolve(PITCHERS),
+        });
+        if (boilerTemp !== undefined) env.setMachineSnap(steamSnap(boilerTemp));
+        return env;
+      };
+
+      it('locks Start (amber "Heating steam…") while below the ±10% band', async () => {
+        renderSteam(120); // delta 40 > 16
+        const start = await waitFor(() => screen.getByTestId('prep-card-start'));
+        await waitFor(() => expect(start).toBeDisabled());
+        expect(start).toHaveAttribute('data-steam-not-ready', 'true');
+        expect(start).toHaveTextContent(/heating steam/i);
+      });
+
+      it('unlocks Start ("Start steam") once within the ±10% band', async () => {
+        renderSteam(150); // delta 10 ≤ 16
+        const start = await waitFor(() => screen.getByTestId('prep-card-start'));
+        await waitFor(() => expect(start).not.toBeDisabled());
+        expect(start).not.toHaveAttribute('data-steam-not-ready');
+        expect(start).toHaveTextContent(/start steam/i);
+      });
+
+      it('fails open: Start enabled when the boiler temp is unknown (no snapshot)', async () => {
+        renderSteam(); // machine.latest() === null
+        await waitFor(() => screen.getByTestId('steam-param-duration'));
+        const start = screen.getByTestId('prep-card-start');
+        expect(start).not.toBeDisabled();
+        expect(start).not.toHaveAttribute('data-steam-not-ready');
+      });
+
+      it('fails open: Start enabled when the boiler reads 0 (off / no data)', async () => {
+        renderSteam(0);
+        await waitFor(() => screen.getByTestId('steam-param-duration'));
+        expect(screen.getByTestId('prep-card-start')).not.toBeDisabled();
+      });
+
+      it('unlocks Start live as the boiler heats into the band', async () => {
+        const env = renderSteam(120);
+        const start = await waitFor(() => screen.getByTestId('prep-card-start'));
+        await waitFor(() => expect(start).toBeDisabled());
+        env.setMachineSnap(steamSnap(155)); // delta 5 ≤ 16
+        await waitFor(() =>
+          expect(screen.getByTestId('prep-card-start')).not.toBeDisabled(),
+        );
+      });
+
+      it('does not gate a brew step on steam temp (steam-step-only)', async () => {
+        const env = renderScreen({
+          routines: [
+            {
+              id: 'bev-cap',
+              name: 'Cappuccino',
+              steps: [routineStep('brew', {}, 'step-brew')],
+            },
+          ],
+          recipes: [sampleRecipe()],
+        });
+        env.setMachineSnap(steamSnap(120)); // cold steam boiler
+        const start = await waitFor(() => screen.getByTestId('prep-card-start'));
+        expect(start).not.toHaveAttribute('data-steam-not-ready');
+        expect(start).not.toBeDisabled();
+      });
+    });
   });
 
   describe('state machine — single step', () => {

@@ -3974,7 +3974,9 @@ html {
    .btn--primary because the user shouldn't tap Start before the machine
    is at temperature. */
 .prep__start[data-warming='true'],
-.prep__start[data-warming='true']:hover {
+.prep__start[data-warming='true']:hover,
+.prep__start[data-steam-not-ready='true'],
+.prep__start[data-steam-not-ready='true']:hover {
   background: var(--warn);
   border-color: var(--warn);
   color: #fff;

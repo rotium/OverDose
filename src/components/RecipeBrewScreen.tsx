@@ -29,7 +29,7 @@ import {
   type MachineState,
   type ShotSettingsSnapshot,
 } from '../snapshot';
-import { PowerIcon, ThermometerIcon, WaterDropIcon } from './icons';
+import { PowerIcon, SteamIcon, ThermometerIcon, WaterDropIcon } from './icons';
 import type { WsStream } from '../streams';
 import {
   api,
@@ -490,6 +490,20 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
   const [steamTouched, setSteamTouched] = createSignal(false);
   const steamReady = (): boolean => steamDurationSec() !== null;
 
+  // Start-button gate (steam steps only): block until the steam boiler is
+  // within ±10% of the target temp — the same symmetric band as the SteamPrep
+  // "now" readout, so the lock and the amber/green readout always agree.
+  // Fails open when the live reading is unknown (no snapshot / ≤0) so a
+  // missing reading can never strand Start.
+  const steamNotReady = (): boolean => {
+    const step = steps()[currentIdx()];
+    if (!step || step.type !== 'steam') return false;
+    const target = steamTempC();
+    const live = machine.latest()?.steamTemperature ?? null;
+    if (target == null || live == null || live <= 0) return false;
+    return Math.abs(live - target) > target * 0.1;
+  };
+
   const loadFromPitcher = (pt: Pitcher) => {
     setSteamDurationSec(pt.steamDurationSec);
     setSteamTempC(pt.steamTempC);
@@ -759,6 +773,7 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
               isWarming={isWarming}
               isHeaterOff={heaterOff}
               isWaterCritical={waterCritical}
+              isSteamNotReady={steamNotReady}
               onStart={startCurrentStep}
             />
           </Show>
@@ -1006,6 +1021,10 @@ const PrepActionBar: Component<{
   isWarming: Accessor<boolean>;
   isHeaterOff: Accessor<boolean>;
   isWaterCritical: Accessor<boolean>;
+  /** Steam-step only: the steam boiler is not yet within ±10% of the target.
+   *  Lowest-priority gate (after heater/water/warming); fails open when the
+   *  live temp is unknown. */
+  isSteamNotReady: Accessor<boolean>;
   onStart: () => void;
 }> = (p) => (
   <footer class="prep__actionbar" data-testid="prep-action-bar">
@@ -1034,8 +1053,26 @@ const PrepActionBar: Component<{
             ? 'true'
             : undefined
         }
-        disabled={p.isWarming() || p.isHeaterOff() || p.isWaterCritical()}
-        aria-disabled={p.isWarming() || p.isHeaterOff() || p.isWaterCritical()}
+        data-steam-not-ready={
+          p.isSteamNotReady() &&
+          !p.isWarming() &&
+          !p.isHeaterOff() &&
+          !p.isWaterCritical()
+            ? 'true'
+            : undefined
+        }
+        disabled={
+          p.isWarming() ||
+          p.isHeaterOff() ||
+          p.isWaterCritical() ||
+          p.isSteamNotReady()
+        }
+        aria-disabled={
+          p.isWarming() ||
+          p.isHeaterOff() ||
+          p.isWaterCritical() ||
+          p.isSteamNotReady()
+        }
         onClick={p.onStart}
       >
         <Switch
@@ -1052,6 +1089,10 @@ const PrepActionBar: Component<{
           <Match when={p.isWarming()}>
             <ThermometerIcon size={18} />
             Warming up…
+          </Match>
+          <Match when={p.isSteamNotReady()}>
+            <SteamIcon size={18} />
+            Heating steam…
           </Match>
         </Switch>
       </button>
