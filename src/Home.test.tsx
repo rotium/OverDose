@@ -162,23 +162,51 @@ describe('Home', () => {
     expect(onSleep).not.toHaveBeenCalled();
   });
 
-  it('steam toggle composes the current settings with steamSetting flipped', () => {
+  it('steam mode On pushes the desired steam temp', () => {
     const onUpdate = vi.fn();
     render(() =>
       buildHome({
-        stubs: { settings: { ...settings, steamSetting: 0 } },
+        // Off: machine steam temp 0.
+        stubs: { settings: { ...settings, targetSteamTemp: 0 } },
         onUpdate,
       }),
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Toggle steam heater' }));
-    expect(onUpdate).toHaveBeenCalledWith({ ...settings, steamSetting: 1 });
+    fireEvent.click(screen.getByTestId('steam-mode-on'));
+    // Enables by pushing the skin's desired temp (default 170).
+    expect(onUpdate).toHaveBeenCalledWith({ ...settings, targetSteamTemp: 170 });
+  });
+
+  it('steam mode Off sets targetSteamTemp 0', () => {
+    const onUpdate = vi.fn();
+    render(() =>
+      buildHome({
+        // On: machine steam temp at a heated value.
+        stubs: { settings: { ...settings, targetSteamTemp: 150 } },
+        onUpdate,
+      }),
+    );
+    fireEvent.click(screen.getByTestId('steam-mode-off'));
+    expect(onUpdate).toHaveBeenCalledWith({ ...settings, targetSteamTemp: 0 });
+  });
+
+  it('steam mode Auto records the mode without writing steam settings (phase 1)', () => {
+    const onUpdate = vi.fn();
+    render(() =>
+      buildHome({
+        stubs: { settings: { ...settings, targetSteamTemp: 0 } },
+        onUpdate,
+      }),
+    );
+    fireEvent.click(screen.getByTestId('steam-mode-auto'));
+    // Auto has no runtime behaviour yet — it must not touch the machine.
+    expect(onUpdate).not.toHaveBeenCalled();
   });
 
   it('does not call onUpdateShotSettings if no current settings are loaded', () => {
     const onUpdate = vi.fn();
     render(() => buildHome({ onUpdate }));
-    // Steam button is disabled when settings === null
-    expect(screen.getByRole('button', { name: 'Toggle steam heater' })).toBeDisabled();
+    // The mode toggle is disabled when settings === null.
+    expect(screen.getByTestId('steam-mode-on')).toBeDisabled();
     expect(onUpdate).not.toHaveBeenCalled();
   });
 
@@ -258,10 +286,12 @@ describe('Home', () => {
       buildHome({ stubs: { water: { currentLevel: 2, refillLevel: 5 } } }),
     );
     await waitFor(() => screen.getByTestId('explore-brew'));
-    // Brew tile stays navigable — gating happens at the prep Start.
+    // Brew + steam tiles stay navigable — they open a prep screen and gate at
+    // its Start button.
     expect(screen.getByTestId('explore-brew')).not.toBeDisabled();
-    // Steam/water/flush block since their tap IS the action.
-    for (const op of ['steam', 'water', 'flush']) {
+    expect(screen.getByTestId('explore-steam')).not.toBeDisabled();
+    // Water/flush block since their tap IS the action (no prep screen yet).
+    for (const op of ['water', 'flush']) {
       const tile = screen.getByTestId(`explore-${op}`);
       expect(tile).toBeDisabled();
       expect(tile).toHaveAttribute('data-block-reason', 'water-critical');
@@ -304,7 +334,9 @@ describe('Home', () => {
     expect(waterCell.contains(screen.getByTestId('status-water-alert'))).toBe(
       true,
     );
-    expect(screen.getByTestId('explore-steam')).toBeDisabled();
+    // Direct ops (water/flush) lock; steam stays navigable to its prep.
+    expect(screen.getByTestId('explore-flush')).toBeDisabled();
+    expect(screen.getByTestId('explore-steam')).not.toBeDisabled();
   });
 
   it('refetches the last shot when machine state transitions out of `espresso`', async () => {

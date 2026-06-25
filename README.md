@@ -28,6 +28,7 @@ recipe-driven brewing UI, designed for the tablet on your espresso bar.
 - Per-shot setting overrides
 - Auto-stop by weight (with a connected scale) or volume (estimated)
 - Auto-stop steam by time (configurable per pitcher)
+- Steam modes — Off / Auto / On, with an energy-saving Auto that warms steam on demand and lets it cool when idle
 - Two-level water warnings (soft warning + machine refill level)
 - Smooth live shot view
 - Searchable shot history — review past shots, edit their details, replay the curve
@@ -64,6 +65,38 @@ control between phases rather than racing an auto-progressing timer.
 For ad-hoc operations that don't deserve a saved recipe — warming a
 cup, a quick steam wand purge, hot water for tea — the **Explore**
 tray on the home screen runs the four machine operations directly.
+
+## Steam
+
+Milk drinks need steam hot — but holding it at temperature all day wastes
+power on an always-on tablet. OverDose puts steam on a simple three-way
+control on the home screen: **Off**, **Auto**, or **On**.
+
+<img src="docs/screenshots/steam-modes.png" alt="Home steam control — Off / Auto / On" width="500">
+
+- **On** — steam is held at your set temperature whenever the machine is
+  awake, so it's instant.
+- **Off** — steam stays cold. Opening a steam recipe doesn't change that; the
+  prep offers a one-tap **Turn on steam** instead of starting cold.
+- **Auto** — steam warms on demand and cools back down when idle, for the best
+  of both. Two flavours, set in Settings:
+  - **Smart** — heats steam only when you pick a steam recipe. It's ready
+    exactly when you want milk, and stays cold the rest of the time, so it
+    spends no energy heating steam you're not going to use. Still being
+    fine-tuned, and set to become the default.
+  - **Eco** — the looser option: keeps steam warm whenever you're using the
+    machine at all (like the Decent app), spending more idle energy in exchange
+    for steam that's always a moment away.
+
+When you reach the steam step, OverDose shows the target temperature next to
+the live reading and holds Start until steam is up to temperature — so you
+never steam cold. In **Off** mode the same step offers the one-tap **Turn on
+steam** instead.
+
+<p>
+  <img src="docs/screenshots/steam-prep.png" alt="Steam prep — target temperature, live readout, and pitcher" width="320">
+  <img src="docs/screenshots/steam-pre-off.png" alt="Steam step in Off mode — the one-tap Turn on steam" width="320">
+</p>
 
 ## Shot history
 

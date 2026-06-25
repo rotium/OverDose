@@ -15,12 +15,19 @@ import {
   DEFAULT_DEBUG_LOGGING,
   DEFAULT_HAS_SCALE,
   DEFAULT_SOUND_CUES,
+  DEFAULT_STEAM_AUTO_FLAVOR,
   DEFAULT_STEAM_AUTO_FLUSH_SEC,
+  DEFAULT_STEAM_AUTO_TIMEOUT_MIN,
+  DEFAULT_STEAM_IDLE_TEMP,
+  DEFAULT_STEAM_MODE,
   DEFAULT_STEAM_PURGE_STRATEGY,
+  DEFAULT_STEAM_TARGET_TEMP,
   DEFAULT_TRACE_VISIBILITY,
   DEFAULT_WATER_UNIT,
   type AutoStopMode,
   type ChartSmoothing,
+  type SteamAutoFlavor,
+  type SteamMode,
   type SteamPurgeStrategy,
   type TraceVisibility,
   type WaterUnit,
@@ -79,6 +86,11 @@ interface PersistedPrefs {
   steamPurgeStrategy?: SteamPurgeStrategy;
   steamAutoFlushSec?: number;
   autoStopMode?: AutoStopMode;
+  steamTargetTemp?: number;
+  steamMode?: SteamMode;
+  steamAutoFlavor?: SteamAutoFlavor;
+  steamIdleTemp?: number;
+  steamAutoTimeoutMin?: number;
 }
 
 export interface UserPrefsContextValue {
@@ -128,6 +140,28 @@ export interface UserPrefsContextValue {
   /** Global default auto-stop mode; overridable per shot in the prep card. */
   autoStopMode: Accessor<AutoStopMode>;
   setAutoStopMode: (v: AutoStopMode) => void;
+  /**
+   * Desired steam-boiler target temp (°C) — the skin owns this. The status
+   * steam toggle pushes it to the machine (on) or 0 (off), and the machine is
+   * re-synced to it on focus; only the on/off state is read back. Default 170.
+   */
+  steamTargetTemp: Accessor<number>;
+  setSteamTargetTemp: (v: number) => void;
+  /**
+   * Steam mode (Off / Auto / On) chosen from the Home steam toggle. On/Off are
+   * wired now; Auto's runtime behaviour lands in a later phase.
+   */
+  steamMode: Accessor<SteamMode>;
+  setSteamMode: (v: SteamMode) => void;
+  /** Auto-mode config: warm-up trigger flavour (Eco / Smart). */
+  steamAutoFlavor: Accessor<SteamAutoFlavor>;
+  setSteamAutoFlavor: (v: SteamAutoFlavor) => void;
+  /** Auto-mode config: idle/"off" temperature the boiler drops to (°C). */
+  steamIdleTemp: Accessor<number>;
+  setSteamIdleTemp: (v: number) => void;
+  /** Auto-mode config: minutes before dropping to the idle temperature. */
+  steamAutoTimeoutMin: Accessor<number>;
+  setSteamAutoTimeoutMin: (v: number) => void;
 }
 
 const Ctx = createContext<UserPrefsContextValue>();
@@ -200,6 +234,21 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
   const [autoStopMode, setAutoStopMode] = createSignal<AutoStopMode>(
     initial.autoStopMode ?? DEFAULT_AUTO_STOP_MODE,
   );
+  const [steamTargetTemp, setSteamTargetTemp] = createSignal<number>(
+    initial.steamTargetTemp ?? DEFAULT_STEAM_TARGET_TEMP,
+  );
+  const [steamMode, setSteamMode] = createSignal<SteamMode>(
+    initial.steamMode ?? DEFAULT_STEAM_MODE,
+  );
+  const [steamAutoFlavor, setSteamAutoFlavor] = createSignal<SteamAutoFlavor>(
+    initial.steamAutoFlavor ?? DEFAULT_STEAM_AUTO_FLAVOR,
+  );
+  const [steamIdleTemp, setSteamIdleTemp] = createSignal<number>(
+    initial.steamIdleTemp ?? DEFAULT_STEAM_IDLE_TEMP,
+  );
+  const [steamAutoTimeoutMin, setSteamAutoTimeoutMin] = createSignal<number>(
+    initial.steamAutoTimeoutMin ?? DEFAULT_STEAM_AUTO_TIMEOUT_MIN,
+  );
 
   const setTraceVisible = (k: keyof TraceVisibility, v: boolean) =>
     setTraceVisibility({ ...traceVisibility(), [k]: v });
@@ -221,6 +270,11 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
       steamPurgeStrategy: steamPurgeStrategy(),
       steamAutoFlushSec: steamAutoFlushSec(),
       autoStopMode: autoStopMode(),
+      steamTargetTemp: steamTargetTemp(),
+      steamMode: steamMode(),
+      steamAutoFlavor: steamAutoFlavor(),
+      steamIdleTemp: steamIdleTemp(),
+      steamAutoTimeoutMin: steamAutoTimeoutMin(),
     };
     storage.setItem(STORAGE_KEY, JSON.stringify(shape));
   });
@@ -312,6 +366,16 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
     setSteamAutoFlushSec,
     autoStopMode,
     setAutoStopMode,
+    steamTargetTemp,
+    setSteamTargetTemp,
+    steamMode,
+    setSteamMode,
+    steamAutoFlavor,
+    setSteamAutoFlavor,
+    steamIdleTemp,
+    setSteamIdleTemp,
+    steamAutoTimeoutMin,
+    setSteamAutoTimeoutMin,
   };
 
   return <Ctx.Provider value={value}>{p.children}</Ctx.Provider>;

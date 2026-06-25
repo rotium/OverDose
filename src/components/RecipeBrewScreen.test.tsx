@@ -24,6 +24,7 @@ import type {
   ShotPatch,
 } from '../api';
 import type { WsStream } from '../streams';
+import type { SteamMode } from '../prefs';
 
 interface SeedOpts {
   routines: Routine[];
@@ -104,12 +105,16 @@ const renderScreen = (
     scaleConnected?: () => boolean;
     /** Global default auto-stop mode. */
     autoStopMode?: () => import('../autoStop').AutoStopMode;
+    /** Steam mode — when 'off' on a steam step, Start becomes "Turn on steam". */
+    steamMode?: () => SteamMode;
   },
 ): ReturnType<typeof mkSetup> & {
   onApplyWorkflow: ReturnType<typeof vi.fn>;
   updateShot: ReturnType<typeof vi.fn>;
   updateShotSettings: ReturnType<typeof vi.fn>;
   updateMachineSettings: ReturnType<typeof vi.fn>;
+  onSteamContext: ReturnType<typeof vi.fn>;
+  onTurnOnSteam: ReturnType<typeof vi.fn>;
 } => {
   const env = mkSetup({ routines: opts.routines, recipes: opts.recipes });
   // Default profile fetchers return empty/null so the brew-step prep card
@@ -137,6 +142,8 @@ const renderScreen = (
   const updateMachineSettings = vi.fn(
     opts.updateMachineSettings ?? (async (_p: { steamFlow: number }) => {}),
   );
+  const onSteamContext = vi.fn();
+  const onTurnOnSteam = vi.fn();
   const [shotSettings] = createSignal<ShotSettingsSnapshot | null>(
     opts.shotSettingsSnap ?? null,
   );
@@ -156,6 +163,9 @@ const renderScreen = (
         shotSettingsStream={() => shotSettingsStream}
         updateShotSettings={updateShotSettings}
         updateMachineSettings={updateMachineSettings}
+        onSteamContext={onSteamContext}
+        steamMode={opts.steamMode}
+        onTurnOnSteam={onTurnOnSteam}
         loadMachineSettings={
           opts.loadMachineSettings ?? (() => Promise.resolve(null))
         }
@@ -183,6 +193,8 @@ const renderScreen = (
     ...env,
     onApplyWorkflow,
     updateShot,
+    onSteamContext,
+    onTurnOnSteam,
     updateShotSettings,
     updateMachineSettings,
   };
@@ -928,6 +940,23 @@ describe('RecipeBrewScreen', () => {
       expect(screen.queryByTestId('steam-param-temp')).not.toBeInTheDocument();
     });
 
+    it('seeds the pitcher params without waiting on machineSettings (slow BLE read)', async () => {
+      // Regression: the params section was gated on machineSettings.loading
+      // even for the pitcher path, leaving Duration/Flow/Steam-temp blank for
+      // ~1-2s on real hardware. With a recipe pitcher, it must seed immediately
+      // even if the machine-settings read never resolves.
+      renderScreen({
+        routines: [steamRoutine()],
+        recipes: [sampleRecipe({ pitcherId: 'p-large' })],
+        loadPitchers: () => Promise.resolve(PITCHERS),
+        loadMachineSettings: () => new Promise(() => {}), // never resolves
+      });
+      // Duration appears from the pitcher (50) without the machine read.
+      await waitFor(() =>
+        expect(sliderValue('steam-param-duration')).toBe('50'),
+      );
+    });
+
     it('hides the flow slider unless the pref is on', async () => {
       renderScreen({
         routines: [steamRoutine()],
@@ -1029,9 +1058,13 @@ describe('RecipeBrewScreen', () => {
       // gets them too), so there may be several calls — the latest reflects
       // the value in effect at Start.
       const body = env.updateShotSettings.mock.calls.at(-1)![0] as ShotSettingsSnapshot;
-      // Custom duration applied; temp stays the small pitcher's seeded value.
+      // Custom duration applied via the prep; the temp is owned by the steam
+      // controller and reported through the steam context (small pitcher = 150).
       expect(body.targetSteamDuration).toBe(42);
-      expect(body.targetSteamTemp).toBe(150);
+      expect(env.onSteamContext).toHaveBeenLastCalledWith({
+        active: true,
+        targetTemp: 150,
+      });
     });
 
     it('applies the chosen pitcher\'s params before steaming', async () => {
@@ -1048,9 +1081,13 @@ describe('RecipeBrewScreen', () => {
       await waitFor(() => expect(env.updateShotSettings).toHaveBeenCalled());
       // Latest push reflects the chosen pitcher (large) at Start.
       const body = env.updateShotSettings.mock.calls.at(-1)![0] as ShotSettingsSnapshot;
-      // shotSettings carries temp + duration (overlaid on the live snapshot).
+      // shotSettings carries duration; the temp goes through the steam context
+      // to the controller (large pitcher = 160).
       expect(body.targetSteamDuration).toBe(50);
-      expect(body.targetSteamTemp).toBe(160);
+      expect(env.onSteamContext).toHaveBeenLastCalledWith({
+        active: true,
+        targetTemp: 160,
+      });
       // Flow rides machineSettings, not shotSettings.
       await waitFor(() =>
         expect(env.updateMachineSettings).toHaveBeenCalledWith({
@@ -1102,6 +1139,234 @@ describe('RecipeBrewScreen', () => {
       });
       const card = await waitFor(() => screen.getByTestId('prep-card'));
       expect(card).toHaveTextContent(/no prep needed/i);
+    });
+
+    describe('steam temp readout (target + live "now")', () => {
+      // The p-large pitcher seeds a 160°C target, so the ±10% readiness band
+      // is 16°C wide → ready anywhere from 144 to 176°C.
+      const steamSnap = (steamTemperature: number): MachineSnapshot => ({
+        ...snapshotWithState('idle'),
+        steamTemperature,
+      });
+      const renderSteam = (boilerTemp?: number) => {
+        const env = renderScreen({
+          routines: [steamRoutine()],
+          recipes: [sampleRecipe({ pitcherId: 'p-large' })],
+          loadPitchers: () => Promise.resolve(PITCHERS),
+        });
+        if (boilerTemp !== undefined) env.setMachineSnap(steamSnap(boilerTemp));
+        return env;
+      };
+
+      it('heads the block "Steam targets"', async () => {
+        renderSteam(150);
+        expect(
+          await waitFor(() => screen.getByTestId('steam-params')),
+        ).toHaveTextContent(/steam targets/i);
+      });
+
+      it('shows the target as the headline, with the live temp only on the "now" line', async () => {
+        renderSteam(120);
+        // Target (160) is the read-only value even though the boiler is at 120.
+        expect(
+          await waitFor(() => screen.getByTestId('steam-machine')),
+        ).toHaveTextContent('160 °C');
+        expect(screen.getByTestId('steam-temp-now')).toHaveTextContent(
+          'now 120°C',
+        );
+      });
+
+      it('hides the "now" line when there is no machine snapshot', async () => {
+        renderScreen({
+          routines: [steamRoutine()],
+          recipes: [sampleRecipe({ pitcherId: 'p-large' })],
+          loadPitchers: () => Promise.resolve(PITCHERS),
+        });
+        await waitFor(() => screen.getByTestId('steam-param-duration'));
+        expect(screen.queryByTestId('steam-temp-now')).not.toBeInTheDocument();
+      });
+
+      it('hides the "now" line when the boiler reads 0 (off / no data)', async () => {
+        renderSteam(0);
+        await waitFor(() => screen.getByTestId('steam-param-duration'));
+        expect(screen.queryByTestId('steam-temp-now')).not.toBeInTheDocument();
+      });
+
+      it('reads "warming" (amber, no check) outside ±10%', async () => {
+        renderSteam(120); // delta 40 > 16
+        const now = await waitFor(() => screen.getByTestId('steam-temp-now'));
+        expect(now).toHaveTextContent('now 120°C');
+        expect(now).not.toHaveTextContent('✓');
+        expect(now).toHaveClass('rstat__now--warm');
+        expect(now).not.toHaveClass('rstat__now--ready');
+      });
+
+      it('reads "ready" (green, check) within ±10% below target', async () => {
+        renderSteam(150); // delta 10 ≤ 16
+        const now = await waitFor(() => screen.getByTestId('steam-temp-now'));
+        expect(now).toHaveTextContent('now 150°C');
+        expect(now).toHaveTextContent('✓');
+        expect(now).toHaveClass('rstat__now--ready');
+        expect(now).not.toHaveClass('rstat__now--warm');
+      });
+
+      it('reads "ready" when overshooting above target (one-sided)', async () => {
+        renderSteam(190); // well above target 160 — still ready, can't cool fast
+        expect(
+          await waitFor(() => screen.getByTestId('steam-temp-now')),
+        ).toHaveClass('rstat__now--ready');
+      });
+
+      it('treats exactly ±10% as ready (inclusive boundary)', async () => {
+        renderSteam(144); // delta 16 == 160 * 0.1
+        expect(
+          await waitFor(() => screen.getByTestId('steam-temp-now')),
+        ).toHaveClass('rstat__now--ready');
+      });
+
+      it('reads "warming" just outside the ±10% boundary', async () => {
+        renderSteam(143); // delta 17 > 16
+        expect(
+          await waitFor(() => screen.getByTestId('steam-temp-now')),
+        ).toHaveClass('rstat__now--warm');
+      });
+
+      it('flips warming → ready live as the boiler heats', async () => {
+        const env = renderSteam(120);
+        const now = await waitFor(() => screen.getByTestId('steam-temp-now'));
+        expect(now).toHaveClass('rstat__now--warm');
+        env.setMachineSnap(steamSnap(158)); // delta 2 ≤ 16
+        await waitFor(() =>
+          expect(screen.getByTestId('steam-temp-now')).toHaveClass(
+            'rstat__now--ready',
+          ),
+        );
+        expect(screen.getByTestId('steam-temp-now')).toHaveTextContent(
+          'now 158°C',
+        );
+      });
+    });
+
+    describe('steam Start readiness lock', () => {
+      // p-large seeds a 160°C target → ±10% band = 144–176.
+      const steamSnap = (steamTemperature: number): MachineSnapshot => ({
+        ...snapshotWithState('idle'),
+        steamTemperature,
+      });
+      const renderSteam = (boilerTemp?: number) => {
+        const env = renderScreen({
+          routines: [steamRoutine()],
+          recipes: [sampleRecipe({ pitcherId: 'p-large' })],
+          loadPitchers: () => Promise.resolve(PITCHERS),
+        });
+        if (boilerTemp !== undefined) env.setMachineSnap(steamSnap(boilerTemp));
+        return env;
+      };
+
+      it('locks Start (amber "Heating steam…") while below the ±10% band', async () => {
+        renderSteam(120); // delta 40 > 16
+        const start = await waitFor(() => screen.getByTestId('prep-card-start'));
+        await waitFor(() => expect(start).toBeDisabled());
+        expect(start).toHaveAttribute('data-steam-not-ready', 'true');
+        expect(start).toHaveTextContent(/heating steam/i);
+      });
+
+      it('unlocks Start ("Start steam") once within the ±10% band', async () => {
+        renderSteam(150); // delta 10 ≤ 16
+        const start = await waitFor(() => screen.getByTestId('prep-card-start'));
+        await waitFor(() => expect(start).not.toBeDisabled());
+        expect(start).not.toHaveAttribute('data-steam-not-ready');
+        expect(start).toHaveTextContent(/start steam/i);
+      });
+
+      it('does not lock Start above the target (one-sided — steam is usable hot)', async () => {
+        renderSteam(190); // well above target 160
+        const start = await waitFor(() => screen.getByTestId('prep-card-start'));
+        await waitFor(() => expect(start).not.toBeDisabled());
+        expect(start).not.toHaveAttribute('data-steam-not-ready');
+        expect(start).toHaveTextContent(/start steam/i);
+      });
+
+      it('fails open: Start enabled when the boiler temp is unknown (no snapshot)', async () => {
+        renderSteam(); // machine.latest() === null
+        await waitFor(() => screen.getByTestId('steam-param-duration'));
+        const start = screen.getByTestId('prep-card-start');
+        expect(start).not.toBeDisabled();
+        expect(start).not.toHaveAttribute('data-steam-not-ready');
+      });
+
+      it('fails open: Start enabled when the boiler reads 0 (off / no data)', async () => {
+        renderSteam(0);
+        await waitFor(() => screen.getByTestId('steam-param-duration'));
+        expect(screen.getByTestId('prep-card-start')).not.toBeDisabled();
+      });
+
+      it('unlocks Start live as the boiler heats into the band', async () => {
+        const env = renderSteam(120);
+        const start = await waitFor(() => screen.getByTestId('prep-card-start'));
+        await waitFor(() => expect(start).toBeDisabled());
+        env.setMachineSnap(steamSnap(155)); // delta 5 ≤ 16
+        await waitFor(() =>
+          expect(screen.getByTestId('prep-card-start')).not.toBeDisabled(),
+        );
+      });
+
+      it('does not gate a brew step on steam temp (steam-step-only)', async () => {
+        const env = renderScreen({
+          routines: [
+            {
+              id: 'bev-cap',
+              name: 'Cappuccino',
+              steps: [routineStep('brew', {}, 'step-brew')],
+            },
+          ],
+          recipes: [sampleRecipe()],
+        });
+        env.setMachineSnap(steamSnap(120)); // cold steam boiler
+        const start = await waitFor(() => screen.getByTestId('prep-card-start'));
+        expect(start).not.toHaveAttribute('data-steam-not-ready');
+        expect(start).not.toBeDisabled();
+      });
+    });
+
+    describe('steam Off — inline "Turn on steam"', () => {
+      const steamSnap = (steamTemperature: number): MachineSnapshot => ({
+        ...snapshotWithState('idle'),
+        steamTemperature,
+      });
+      const renderMode = (mode: SteamMode) => {
+        const env = renderScreen({
+          routines: [steamRoutine()],
+          recipes: [sampleRecipe({ pitcherId: 'p-large' })], // target 160
+          loadPitchers: () => Promise.resolve(PITCHERS),
+          steamMode: () => mode,
+        });
+        env.setMachineSnap(steamSnap(120)); // cold boiler
+        return env;
+      };
+
+      it('offers an enabled "Turn on steam" when steam is Off', async () => {
+        renderMode('off');
+        const start = await waitFor(() => screen.getByTestId('prep-card-start'));
+        expect(start).toHaveTextContent(/turn on steam/i);
+        expect(start).toHaveAttribute('data-steam-off', 'true');
+        expect(start).not.toBeDisabled();
+      });
+
+      it('tapping "Turn on steam" flips steam on', async () => {
+        const env = renderMode('off');
+        const start = await waitFor(() => screen.getByTestId('prep-card-start'));
+        fireEvent.click(start);
+        expect(env.onTurnOnSteam).toHaveBeenCalled();
+      });
+
+      it('On mode shows the heating lock, not "Turn on steam"', async () => {
+        renderMode('on'); // cold boiler + mode On → heating
+        const start = await waitFor(() => screen.getByTestId('prep-card-start'));
+        expect(start).not.toHaveAttribute('data-steam-off');
+        expect(start).toHaveTextContent(/heating steam/i);
+        expect(start).toBeDisabled();
+      });
     });
   });
 

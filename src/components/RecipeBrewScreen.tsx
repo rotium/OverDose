@@ -29,7 +29,7 @@ import {
   type MachineState,
   type ShotSettingsSnapshot,
 } from '../snapshot';
-import { PowerIcon, ThermometerIcon, WaterDropIcon } from './icons';
+import { PowerIcon, SteamIcon, ThermometerIcon, WaterDropIcon } from './icons';
 import type { WsStream } from '../streams';
 import {
   api,
@@ -47,7 +47,7 @@ import { deriveShotStats } from '../shotStats';
 import { gatewayCaughtUp } from '../liveShotAdapter';
 import { ShotReview } from './ShotReview';
 import { BeanCard, GrindCard, BeanPickerDialog } from './ShotFieldCards';
-import { type AutoStopMode, type TraceVisibility } from '../prefs';
+import { type AutoStopMode, type SteamMode, type TraceVisibility } from '../prefs';
 import {
   autoStopLabel,
   autoStopUnavailableReason,
@@ -59,7 +59,6 @@ import { ProfilePicker } from './settings/sections/library/ProfilePicker';
 import { BeanPicker } from './settings/sections/library/BeanPicker';
 import { PickerDialog } from './PickerDialog';
 import { DebouncedNumberField } from './settings/sections/library/DebouncedNumberField';
-import { DebouncedSliderField } from './settings/DebouncedSliderField';
 import { dlog } from '../debugLog';
 
 /**
@@ -140,6 +139,16 @@ export interface RecipeBrewScreenProps {
   shotSettingsStream?: () => WsStream<ShotSettingsSnapshot>;
   /** Persists shotSettings (full body). Defaults to `api.updateShotSettings`. */
   updateShotSettings?: (settings: ShotSettingsSnapshot) => Promise<void>;
+  /** Reports the steam context (a steam step open + its target temp) to the
+   *  app-level steam owner, which decides whether/what to heat by mode. The
+   *  prep itself no longer writes the steam temp. Optional (tests omit it). */
+  onSteamContext?: (ctx: { active: boolean; targetTemp: number | null }) => void;
+  /** Current steam mode — when 'off' on a steam step, the Start action becomes
+   *  an inline "Turn on steam". Optional; defaults to 'on' (tests). */
+  steamMode?: Accessor<SteamMode>;
+  /** Flips steam to On for the inline "Turn on steam" action (e.g. sets the
+   *  pref). Optional no-op when omitted. */
+  onTurnOnSteam?: () => void;
   /** Sparse machine-settings update — used to apply the steam flow (which
    *  lives on machineSettings, not shotSettings). Defaults to
    *  `api.updateMachineSettings`. */
@@ -491,6 +500,29 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
   const [steamTouched, setSteamTouched] = createSignal(false);
   const steamReady = (): boolean => steamDurationSec() !== null;
 
+  // Start-button gate (steam steps only): block until the steam boiler is
+  // within ±10% of the target temp — the same symmetric band as the SteamPrep
+  // "now" readout, so the lock and the amber/green readout always agree.
+  // Fails open when the live reading is unknown (no snapshot / ≤0) so a
+  // missing reading can never strand Start.
+  const steamNotReady = (): boolean => {
+    const step = steps()[currentIdx()];
+    if (!step || step.type !== 'steam') return false;
+    const target = steamTempC();
+    const live = machine.latest()?.steamTemperature ?? null;
+    if (target == null || live == null || live <= 0) return false;
+    // One-sided: only "not ready" while below the target band. Steam can't
+    // actively cool, so a hotter boiler is usable — don't block it.
+    return live < target - target * 0.1;
+  };
+
+  // Steam-step only: steam is in Off mode, so the boiler won't heat. The Start
+  // action becomes an inline "Turn on steam" (vs the locked "Heating steam…").
+  const steamOff = (): boolean => {
+    const step = steps()[currentIdx()];
+    return step?.type === 'steam' && (p.steamMode?.() ?? 'on') === 'off';
+  };
+
   const loadFromPitcher = (pt: Pitcher) => {
     setSteamDurationSec(pt.steamDurationSec);
     setSteamTempC(pt.steamTempC);
@@ -518,17 +550,23 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
   createEffect(() => {
     if (steamReady()) return;
     const list = pitchers();
-    if (!list || bundle.loading || machineSettings.loading) return;
+    if (!list || bundle.loading) return;
     const rec = bundle()?.recipe;
     const pt = rec?.pitcherId
       ? list.find((x) => x.id === rec.pitcherId)
       : undefined;
     if (pt) {
+      // The pitcher carries duration/temp/flow, so seed immediately — don't
+      // wait on `machineSettings` (a slow DE1 MMR read over BLE), which is only
+      // needed by the no-pitcher fallback below. Waiting here left the params
+      // section blank for ~1–2s on real hardware.
       loadFromPitcher(pt);
       return;
     }
     // No recipe pitcher: seed sliders from the machine's current settings.
-    // Needs a shotSettings frame for temp/duration; wait for it.
+    // Needs the machine's steam flow (machineSettings) + a shotSettings frame
+    // for temp/duration; wait for both so the seeded values are accurate.
+    if (machineSettings.loading) return;
     const ss = p.shotSettingsStream?.().latest();
     if (!ss) return;
     setSteamDurationSec(ss.targetSteamDuration);
@@ -560,9 +598,10 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
       const update =
         p.updateShotSettings ??
         ((s: ShotSettingsSnapshot) => api.updateShotSettings(s));
+      // Temp is owned by the app-level steam controller (reported via
+      // onSteamContext below); the prep only commits duration here.
       await update({
         ...cur,
-        targetSteamTemp: temp,
         targetSteamDuration: dur,
       });
     }
@@ -590,6 +629,16 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
     void pitcherId();
     void applySteam().catch((e) => console.warn('prep steam push failed', e));
   });
+
+  // Report the steam context to the app-level steam owner: a steam step in this
+  // routine means a steam intent is open, carrying the seeded target temp. The
+  // owner decides whether/what to heat by mode — this never turns steam on by
+  // itself (in Off it stays cold). Cleared when the screen closes.
+  createEffect(() => {
+    const hasSteam = steps().some((s) => s.type === 'steam');
+    p.onSteamContext?.({ active: hasSteam, targetTemp: steamTempC() });
+  });
+  onCleanup(() => p.onSteamContext?.({ active: false, targetTemp: null }));
 
   const startCurrentStep = async () => {
     const idx = currentIdx();
@@ -737,6 +786,8 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
                 steamReady={steamReady}
                 steamDuration={steamDurationSec}
                 steamFlow={steamFlow}
+                steamTemp={steamTempC}
+                currentSteamTemp={() => machine.latest()?.steamTemperature ?? null}
                 showFlowSlider={() => p.showFlowSlider?.() ?? false}
                 onChangeSteamDuration={(v) => editSteam(setSteamDurationSec, v)}
                 onChangeSteamFlow={(v) => editSteam(setSteamFlow, v)}
@@ -752,7 +803,10 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
               isWarming={isWarming}
               isHeaterOff={heaterOff}
               isWaterCritical={waterCritical}
+              isSteamNotReady={steamNotReady}
+              isSteamOff={steamOff}
               onStart={startCurrentStep}
+              onTurnOnSteam={() => p.onTurnOnSteam?.()}
             />
           </Show>
           {/* Post-brew flow actions — the same pinned bar as Start, at the
@@ -930,6 +984,9 @@ const PrepCard: Component<{
   steamReady: Accessor<boolean>;
   steamDuration: Accessor<number | null>;
   steamFlow: Accessor<number | null>;
+  steamTemp: Accessor<number | null>;
+  /** Live steam-boiler temperature (machine snapshot) for the "now" readout. */
+  currentSteamTemp: Accessor<number | null>;
   showFlowSlider: Accessor<boolean>;
   onChangeSteamDuration: (v: number) => void;
   onChangeSteamFlow: (v: number) => void;
@@ -967,6 +1024,8 @@ const PrepCard: Component<{
             ready={p.steamReady}
             duration={p.steamDuration}
             flow={p.steamFlow}
+            steamTemp={p.steamTemp}
+            currentTemp={p.currentSteamTemp}
             showFlow={p.showFlowSlider}
             onChangeDuration={p.onChangeSteamDuration}
             onChangeFlow={p.onChangeSteamFlow}
@@ -994,7 +1053,16 @@ const PrepActionBar: Component<{
   isWarming: Accessor<boolean>;
   isHeaterOff: Accessor<boolean>;
   isWaterCritical: Accessor<boolean>;
+  /** Steam-step only: the steam boiler is not yet within ±10% of the target.
+   *  Lowest-priority gate (after heater/water/warming); fails open when the
+   *  live temp is unknown. */
+  isSteamNotReady: Accessor<boolean>;
+  /** Steam-step only: steam is in Off mode — instead of a locked Start, offer
+   *  an inline "Turn on steam" that enables it (and starts heating). */
+  isSteamOff: Accessor<boolean>;
   onStart: () => void;
+  /** Flip steam to On (the inline "Turn on steam" action). */
+  onTurnOnSteam: () => void;
 }> = (p) => (
   <footer class="prep__actionbar" data-testid="prep-action-bar">
     <Show
@@ -1009,40 +1077,80 @@ const PrepActionBar: Component<{
         </p>
       }
     >
-      <button
-        type="button"
-        class="btn btn--primary prep__start"
-        data-testid="prep-card-start"
-        data-heater-off={p.isHeaterOff() ? 'true' : undefined}
-        data-water-critical={
-          p.isWaterCritical() && !p.isHeaterOff() ? 'true' : undefined
+      <Show
+        when={p.isSteamOff()}
+        fallback={
+          <button
+            type="button"
+            class="btn btn--primary prep__start"
+            data-testid="prep-card-start"
+            data-heater-off={p.isHeaterOff() ? 'true' : undefined}
+            data-water-critical={
+              p.isWaterCritical() && !p.isHeaterOff() ? 'true' : undefined
+            }
+            data-warming={
+              p.isWarming() && !p.isHeaterOff() && !p.isWaterCritical()
+                ? 'true'
+                : undefined
+            }
+            data-steam-not-ready={
+              p.isSteamNotReady() &&
+              !p.isWarming() &&
+              !p.isHeaterOff() &&
+              !p.isWaterCritical()
+                ? 'true'
+                : undefined
+            }
+            disabled={
+              p.isWarming() ||
+              p.isHeaterOff() ||
+              p.isWaterCritical() ||
+              p.isSteamNotReady()
+            }
+            aria-disabled={
+              p.isWarming() ||
+              p.isHeaterOff() ||
+              p.isWaterCritical() ||
+              p.isSteamNotReady()
+            }
+            onClick={p.onStart}
+          >
+            <Switch
+              fallback={<>Start {formatStepType(p.step().type).toLowerCase()}</>}
+            >
+              <Match when={p.isHeaterOff()}>
+                <PowerIcon size={18} />
+                Heater off
+              </Match>
+              <Match when={p.isWaterCritical()}>
+                <WaterDropIcon size={18} />
+                Refill water
+              </Match>
+              <Match when={p.isWarming()}>
+                <ThermometerIcon size={18} />
+                Warming up…
+              </Match>
+              <Match when={p.isSteamNotReady()}>
+                <SteamIcon size={18} />
+                Heating steam…
+              </Match>
+            </Switch>
+          </button>
         }
-        data-warming={
-          p.isWarming() && !p.isHeaterOff() && !p.isWaterCritical()
-            ? 'true'
-            : undefined
-        }
-        disabled={p.isWarming() || p.isHeaterOff() || p.isWaterCritical()}
-        aria-disabled={p.isWarming() || p.isHeaterOff() || p.isWaterCritical()}
-        onClick={p.onStart}
       >
-        <Switch
-          fallback={<>Start {formatStepType(p.step().type).toLowerCase()}</>}
+        {/* Off: not a locked Start — an action that turns steam on (mode → On)
+            and starts it heating; the button then becomes "Heating steam…". */}
+        <button
+          type="button"
+          class="btn btn--primary prep__start"
+          data-testid="prep-card-start"
+          data-steam-off="true"
+          onClick={p.onTurnOnSteam}
         >
-          <Match when={p.isHeaterOff()}>
-            <PowerIcon size={18} />
-            Heater off
-          </Match>
-          <Match when={p.isWaterCritical()}>
-            <WaterDropIcon size={18} />
-            Refill water
-          </Match>
-          <Match when={p.isWarming()}>
-            <ThermometerIcon size={18} />
-            Warming up…
-          </Match>
-        </Switch>
-      </button>
+          <SteamIcon size={18} />
+          Turn on steam
+        </button>
+      </Show>
     </Show>
   </footer>
 );
@@ -1407,12 +1515,12 @@ const BrewPrep: Component<{
 };
 
 /**
- * Steam-step prep: pick a pitcher (a preset), then fine-tune on the compact
- * sliders. Pitcher chips show name + capacity only; tapping one loads its
- * parameters. Moving a slider detaches from the pitcher (values become
- * custom). Duration is always editable; the flow slider appears only when the
- * "show steam-flow slider" pref is on (flow is still applied from the pitcher
- * either way). Temperature comes from the pitcher and isn't edited here.
+ * Steam-step prep: the pitcher cards are the hero — tapping one loads its
+ * params. Duration (and Flow, when the steam-flow pref is on) are editable
+ * numeric cards, consistent with brew prep's fields; editing one detaches from
+ * the pitcher (values become custom). Steam temperature — and flow when its
+ * card is hidden — stay a quiet read-only readout: the machine values the
+ * pitcher set, edited in Library → Steam, not here.
  */
 const SteamPrep: Component<{
   pitchers: Accessor<Pitcher[]>;
@@ -1422,102 +1530,162 @@ const SteamPrep: Component<{
   ready: Accessor<boolean>;
   duration: Accessor<number | null>;
   flow: Accessor<number | null>;
+  steamTemp: Accessor<number | null>;
+  /** Live steam-boiler temperature (machine snapshot). Shown as a "now" line
+   *  under the target so the read-only target reads as a target, not a live
+   *  value. ≤0 means "no reading" (off / no data) — the line is hidden. */
+  currentTemp: Accessor<number | null>;
   showFlow: Accessor<boolean>;
   onChangeDuration: (v: number) => void;
   onChangeFlow: (v: number) => void;
-}> = (p) => (
-  <div class="steam-prep" data-testid="steam-prep">
-    <span class="prep__field-label">Pitcher</span>
-    <Show
-      when={!p.loading()}
-      fallback={<p class="prep__no-params">loading pitchers…</p>}
-    >
+}> = (p) => {
+  const tempReadout = (): string => {
+    const t = p.steamTemp();
+    return t == null ? '—' : `${Math.round(t)} °C`;
+  };
+  const flowReadout = (): string => {
+    const f = p.flow();
+    return f == null ? '—' : `${f.toFixed(1)} mL/s`;
+  };
+  // Live boiler temp, or null when there's no usable reading (off / no data).
+  const liveTemp = (): number | null => {
+    const c = p.currentTemp();
+    return c == null || c <= 0 ? null : c;
+  };
+  // "At target" — at or above the target, within a 10% band below it.
+  // One-sided: steam can't actively cool, so a hotter boiler still reads ready.
+  const tempReady = (): boolean => {
+    const t = p.steamTemp();
+    const c = liveTemp();
+    return t != null && c != null && c >= t - t * 0.1;
+  };
+  const nowReadout = (): string | null => {
+    const c = liveTemp();
+    return c == null ? null : `now ${Math.round(c)}°C`;
+  };
+  return (
+    <div class="steam-prep" data-testid="steam-prep">
+      <span class="prep__field-label">Pitcher</span>
       <Show
-        when={p.pitchers().length > 0}
-        fallback={
-          <p class="prep__no-params" data-testid="steam-prep-empty">
-            No pitchers yet — add one in Library → Steam.
-          </p>
-        }
+        when={!p.loading()}
+        fallback={<p class="prep__no-params">loading pitchers…</p>}
       >
-        <div class="pitcher-chips" role="group" aria-label="Pitcher">
-          <For each={p.pitchers()}>
-            {(pt) => (
-              <button
-                type="button"
-                class="pitcher-chip"
-                data-testid={`pitcher-${pt.id}`}
-                data-selected={p.selectedId() === pt.id ? 'true' : undefined}
-                aria-pressed={p.selectedId() === pt.id}
-                onClick={() => p.onSelect(pt.id)}
-              >
-                <span class="pitcher-chip__name">{pt.name}</span>
-                <span class="pitcher-chip__cap">{pt.capacityMl} mL</span>
-              </button>
-            )}
-          </For>
+        <Show
+          when={p.pitchers().length > 0}
+          fallback={
+            <p class="prep__no-params" data-testid="steam-prep-empty">
+              No pitchers yet — add one in Library → Steam.
+            </p>
+          }
+        >
+          <div class="steam-pitchers" role="group" aria-label="Pitcher">
+            <For each={p.pitchers()}>
+              {(pt) => (
+                <button
+                  type="button"
+                  class="steam-pitcher"
+                  data-testid={`pitcher-${pt.id}`}
+                  data-selected={p.selectedId() === pt.id ? 'true' : undefined}
+                  aria-pressed={p.selectedId() === pt.id}
+                  onClick={() => p.onSelect(pt.id)}
+                >
+                  <span class="steam-pitcher__name">{pt.name}</span>
+                  <span class="steam-pitcher__cap">{pt.capacityMl} mL</span>
+                  <span class="steam-pitcher__params">
+                    {Math.round(pt.steamTempC)}°C · {pt.steamFlow.toFixed(1)} mL/s
+                  </span>
+                </button>
+              )}
+            </For>
+          </div>
+        </Show>
+      </Show>
+
+      {/* "Steam targets" — the setpoints for this steam, under a divider. The
+          editable cards (seeded from the pitcher / machine) sit beside a quiet
+          read-only readout; the heading marks the whole block as targets, so
+          the steam-temp value reads as a target with a live "now" line — not a
+          live reading. */}
+      <Show when={p.ready()}>
+        <div class="steam-params" data-testid="steam-params">
+          <span class="steam-params__head">Steam targets</span>
+          <div class="steam-params__row">
+          <div class="steam-params__cards">
+            <label class="prep__stat">
+              <span class="prep__stat-label">Duration</span>
+              <span class="prep__stat-edit">
+                <DebouncedNumberField
+                  value={p.duration() ?? undefined}
+                  onCommit={(v) => v !== undefined && p.onChangeDuration(v)}
+                  min={5}
+                  max={120}
+                  step={5}
+                  steppers
+                  unit="s"
+                  recentsKey="steamDuration"
+                  debounceMs={0}
+                  ariaLabel="Steam duration (seconds)"
+                  testId="steam-param-duration"
+                  class="prep__stat-input"
+                />
+              </span>
+            </label>
+            <Show when={p.showFlow()}>
+              <label class="prep__stat">
+                <span class="prep__stat-label">Flow</span>
+                <span class="prep__stat-edit">
+                  <DebouncedNumberField
+                    value={p.flow() ?? undefined}
+                    onCommit={(v) => v !== undefined && p.onChangeFlow(v)}
+                    min={0.4}
+                    max={2}
+                    step={0.1}
+                    decimal
+                    steppers
+                    unit="mL/s"
+                    recentsKey="steamFlow"
+                    debounceMs={0}
+                    ariaLabel="Steam flow (mL/s)"
+                    testId="steam-param-flow"
+                    class="prep__stat-input"
+                  />
+                </span>
+              </label>
+            </Show>
+          </div>
+          <dl class="steam-facts-ro" data-testid="steam-machine">
+            <Show when={!p.showFlow()}>
+              <div class="rstat">
+                <dt class="rstat__label">Flow</dt>
+                <dd class="rstat__value">{flowReadout()}</dd>
+              </div>
+            </Show>
+            <div class="rstat rstat--paired">
+              <dt class="rstat__label">Steam temp</dt>
+              <dd class="rstat__value">
+                {tempReadout()}
+                <Show when={nowReadout()}>
+                  <span
+                    class="rstat__now"
+                    classList={{
+                      'rstat__now--ready': tempReady(),
+                      'rstat__now--warm': !tempReady(),
+                    }}
+                    data-testid="steam-temp-now"
+                  >
+                    {nowReadout()}
+                    {tempReady() ? ' ✓' : ''}
+                  </span>
+                </Show>
+              </dd>
+            </div>
+          </dl>
+          </div>
         </div>
       </Show>
-    </Show>
-
-    {/* Compact parameter sliders — seeded from the pitcher (or the machine's
-        current settings). Editing detaches from the pitcher. */}
-    <Show when={p.ready()}>
-      <div class="steam-params" data-testid="steam-params">
-        <SteamParamSlider
-          label="Duration"
-          testId="steam-param-duration"
-          value={p.duration}
-          onChange={p.onChangeDuration}
-          min={5}
-          max={120}
-          step={1}
-          format={(v) => `${v.toFixed(0)} s`}
-        />
-        <Show when={p.showFlow()}>
-          <SteamParamSlider
-            label="Flow"
-            testId="steam-param-flow"
-            value={p.flow}
-            onChange={p.onChangeFlow}
-            min={0.4}
-            max={2}
-            step={0.1}
-            format={(v) => `${v.toFixed(1)} mL/s`}
-          />
-        </Show>
-      </div>
-    </Show>
-  </div>
-);
-
-/** One compact labelled steam-parameter slider row. */
-const SteamParamSlider: Component<{
-  label: string;
-  testId: string;
-  value: Accessor<number | null>;
-  onChange: (v: number) => void;
-  min: number;
-  max: number;
-  step: number;
-  format: (v: number) => string;
-}> = (p) => (
-  <div class="steam-param">
-    <span class="steam-param__label">{p.label}</span>
-    <DebouncedSliderField
-      class="steam-param__field"
-      testId={p.testId}
-      value={p.value() ?? undefined}
-      onCommit={p.onChange}
-      min={p.min}
-      max={p.max}
-      step={p.step}
-      debounceMs={0}
-      ariaLabel={p.label}
-      formatValue={p.format}
-    />
-  </div>
-);
+    </div>
+  );
+};
 
 /**
  * Post-brew result — the shared {@link ShotReview} in its always-editable

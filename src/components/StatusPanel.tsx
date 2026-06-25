@@ -1,4 +1,4 @@
-import { Show, type Accessor, type Component } from 'solid-js';
+import { For, Show, type Accessor, type Component } from 'solid-js';
 import {
   isScaleStatusFrame,
   type MachineSnapshot,
@@ -8,8 +8,9 @@ import {
   type WaterLevelsSnapshot,
 } from '../snapshot';
 import { useUserPrefs } from '../UserPrefsContext';
+import type { SteamStatus } from '../steamController';
 import { mmToMl, waterPct, type WaterSeverity } from '../water';
-import type { WaterUnit } from '../prefs';
+import type { SteamMode, WaterUnit } from '../prefs';
 import {
   PowerIcon,
   ScaleIcon,
@@ -49,9 +50,11 @@ const formatWaterLevel = (mm: number, unit: WaterUnit): string => {
  * state, group/steam temps, water level, scale, and a steam on/off toggle.
  *
  * All inputs are signals so the panel reacts at the granularity of the data
- * source. Steam toggle invokes `onSteamToggle(nextOn)` with the desired state
- * — the parent decides how to POST to the gateway (typically by composing the
- * current `ShotSettingsSnapshot` and overwriting `steamSetting`).
+ * source. The steam control is a 3-way mode toggle (Off / Auto / On) — it
+ * invokes `onSteamMode(mode)` with the chosen mode and reflects `steamMode`.
+ * The temperature value beside it shows the live boiler reading and the real
+ * on/off state (the DE1 has no steam flag — steam is on at `targetSteamTemp
+ * >= 130`), independent of the chosen mode.
  */
 export interface StatusPanelProps {
   machine: Accessor<MachineSnapshot | null>;
@@ -64,13 +67,43 @@ export interface StatusPanelProps {
    * numeric/bar readouts.
    */
   waterSeverity: Accessor<WaterSeverity>;
-  onSteamToggle: (next: boolean) => void;
+  /** Chosen steam mode (drives which toggle segment is active). */
+  steamMode: Accessor<SteamMode>;
+  /** Invoked with the chosen mode when a toggle segment is tapped. */
+  onSteamMode: (mode: SteamMode) => void;
+  /** Intent-based steam status (Off / Heating / Ready / Idle + direction). */
+  steamStatus: Accessor<SteamStatus>;
 }
+
+const STEAM_MODES: { mode: SteamMode; label: string }[] = [
+  { mode: 'off', label: 'Off' },
+  { mode: 'auto', label: 'Auto' },
+  { mode: 'on', label: 'On' },
+];
+
+const STEAM_STATE_LABEL: Record<SteamStatus['state'], string> = {
+  off: 'Off',
+  heating: 'Heating',
+  ready: 'Ready',
+  idle: 'Idle',
+};
 
 export const StatusPanel: Component<StatusPanelProps> = (p) => {
   const prefs = useUserPrefs();
-  const steamOn = () => (p.shotSettings()?.steamSetting ?? 0) > 0;
   const scaleData = () => dataFrame(p.scale());
+
+  // The dot + arrow are visual; the temp is shown, but carry the state word
+  // (which the dot replaces) for screen readers via the value's aria-label.
+  const steamAria = (): string => {
+    const s = p.steamStatus();
+    const dir =
+      s.direction === 'up'
+        ? ', warming up'
+        : s.direction === 'down'
+          ? ', cooling down'
+          : '';
+    return `Steam ${STEAM_STATE_LABEL[s.state]}${dir}, ${fmtTemp(p.machine()?.steamTemperature, 0)}`;
+  };
 
   return (
     <section class="card status">
@@ -100,20 +133,60 @@ export const StatusPanel: Component<StatusPanelProps> = (p) => {
           <span>Steam</span>
         </dt>
         <dd class="status__row">
-          <span data-testid="status-steam-temp">
-            {fmtTemp(p.machine()?.steamTemperature, 0)}
-          </span>
-          <button
-            type="button"
-            class="toggle"
-            data-on={steamOn()}
-            aria-label="Toggle steam heater"
-            aria-pressed={steamOn()}
-            disabled={p.shotSettings() === null}
-            onClick={() => p.onSteamToggle(!steamOn())}
+          {/* Intent-based status (Off / Heating / Ready / Idle) with a
+              direction arrow (↑ warming, ↓ cooling) and the live temp. The
+              mode toggle beside it sets the chosen mode. */}
+          <span
+            class="status__steam-value"
+            data-testid="status-steam-temp"
+            data-state={p.steamStatus().state}
+            aria-label={steamAria()}
           >
-            {steamOn() ? 'on' : 'off'}
-          </button>
+            <span class="status__steam-dot" aria-hidden="true" />
+            <Show when={p.steamStatus().direction}>
+              {(dir) => (
+                <span
+                  class="status__steam-dir"
+                  data-dir={dir()}
+                  aria-hidden="true"
+                >
+                  {dir() === 'up' ? '↑' : '↓'}
+                </span>
+              )}
+            </Show>
+            <span class="status__steam-now" aria-hidden="true">
+              {fmtTemp(p.machine()?.steamTemperature, 0)}
+            </span>
+          </span>
+          <div
+            class="status__steam-modes"
+            role="radiogroup"
+            aria-label="Steam mode"
+            data-testid="status-steam-modes"
+          >
+            <For each={STEAM_MODES}>
+              {(m) => (
+                <button
+                  type="button"
+                  role="radio"
+                  data-testid={`steam-mode-${m.mode}`}
+                  data-on={
+                    p.steamMode() === m.mode
+                      ? m.mode === 'off'
+                        ? 'off'
+                        : 'on'
+                      : undefined
+                  }
+                  aria-label={`Steam ${m.label}`}
+                  aria-checked={p.steamMode() === m.mode}
+                  disabled={p.shotSettings() === null}
+                  onClick={() => p.onSteamMode(m.mode)}
+                >
+                  {m.label}
+                </button>
+              )}
+            </For>
+          </div>
         </dd>
 
         <dt data-severity={p.waterSeverity()}>

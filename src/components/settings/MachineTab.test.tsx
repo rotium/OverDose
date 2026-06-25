@@ -166,6 +166,73 @@ describe('MachineTab — steam purge strategy', () => {
   });
 });
 
+describe('MachineTab — steam auto', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', mkFetchMock());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('renders the auto config with defaults (Smart · idle Off · 10 min)', async () => {
+    renderTab(() => <MachineTab />);
+    await waitFor(() => screen.getByTestId('machine-steam-auto-flavor'));
+    expect((screen.getByDisplayValue('smart') as HTMLInputElement).checked).toBe(
+      true,
+    );
+    // Idle defaults to Off — no temperature field shown.
+    expect((screen.getByDisplayValue('off') as HTMLInputElement).checked).toBe(
+      true,
+    );
+    expect(
+      screen.queryByTestId('machine-steam-idle-temp'),
+    ).not.toBeInTheDocument();
+    expect(
+      (screen.getByTestId('machine-steam-auto-timeout') as HTMLInputElement)
+        .value,
+    ).toBe('10');
+  });
+
+  it('switches the warm-up flavour to Eco and updates the help copy', async () => {
+    renderTab(() => <MachineTab />);
+    await waitFor(() => screen.getByTestId('machine-steam-auto-flavor'));
+    const eco = screen.getByDisplayValue('eco') as HTMLInputElement;
+    fireEvent.click(eco);
+    expect(eco.checked).toBe(true);
+    expect(
+      screen.getByTestId('machine-steam-auto-hint'),
+    ).toHaveTextContent(/whenever the machine is in use/i);
+  });
+
+  it('reveals a warm idle temperature slider when "Keep warm" is chosen', async () => {
+    renderTab(() => <MachineTab />);
+    await waitFor(() => screen.getByTestId('machine-steam-idle-mode'));
+    // Off by default → no temperature slider.
+    expect(
+      screen.queryByTestId('machine-steam-idle-temp'),
+    ).not.toBeInTheDocument();
+    // Choose "Keep warm" → a bounded slider appears, seeded warm (130).
+    fireEvent.click(screen.getByDisplayValue('warm'));
+    const slider = (await waitFor(() =>
+      screen.getByTestId('machine-steam-idle-temp'),
+    )) as HTMLInputElement;
+    expect(slider.value).toBe('130');
+    expect(slider.min).toBe('50');
+    expect(slider.max).toBe('170');
+    slider.value = '140';
+    fireEvent.input(slider);
+    fireEvent.pointerUp(slider);
+    expect(
+      screen.getByTestId('machine-steam-idle-temp-value'),
+    ).toHaveTextContent('140 °C');
+    // Back to Off hides the slider again.
+    fireEvent.click(screen.getByDisplayValue('off'));
+    expect(
+      screen.queryByTestId('machine-steam-idle-temp'),
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe('MachineTab — flush defaults', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', mkFetchMock());
@@ -265,16 +332,18 @@ describe('MachineTab — steam temperature + duration', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('renders the temp + duration sliders from the shotSettings frame', async () => {
+  it('renders temp from the skin desired (default 170) and duration from the frame', async () => {
     renderTab(() => <MachineTab shotSettingsStream={mkShotStream(baseShot)} />);
     await waitFor(() => screen.getByTestId('machine-steam-temp'));
 
+    // Temp is the skin's desired (fresh store → default 170), NOT the frame's
+    // targetSteamTemp (150) — so it's stable even when steam is off (machine 0).
     const temp = screen.getByTestId('machine-steam-temp') as HTMLInputElement;
-    expect(temp.value).toBe('150');
+    expect(temp.value).toBe('170');
     expect(temp.min).toBe('130');
     expect(temp.max).toBe('170');
     expect(screen.getByTestId('machine-steam-temp-value')).toHaveTextContent(
-      '150 °C',
+      '170 °C',
     );
 
     const dur = screen.getByTestId('machine-steam-duration') as HTMLInputElement;
@@ -283,6 +352,47 @@ describe('MachineTab — steam temperature + duration', () => {
     expect(
       screen.getByTestId('machine-steam-duration-value'),
     ).toHaveTextContent('30 s');
+  });
+
+  it('shows the desired temp (not 0) when steam is off on the machine', async () => {
+    renderTab(() => (
+      <MachineTab
+        shotSettingsStream={mkShotStream({ ...baseShot, targetSteamTemp: 0 })}
+      />
+    ));
+    await waitFor(() => screen.getByTestId('machine-steam-temp'));
+    const temp = screen.getByTestId('machine-steam-temp') as HTMLInputElement;
+    expect(temp.value).toBe('170'); // desired, not the machine's 0
+  });
+
+  it('editing the temp pushes to the machine while steam is on', async () => {
+    const fetchMock = mkFetchMock();
+    vi.stubGlobal('fetch', fetchMock);
+
+    // On: machine steam temp >= 130.
+    renderTab(() => (
+      <MachineTab
+        shotSettingsStream={mkShotStream({ ...baseShot, targetSteamTemp: 150 })}
+      />
+    ));
+    await waitFor(() => screen.getByTestId('machine-steam-temp'));
+
+    const temp = screen.getByTestId('machine-steam-temp') as HTMLInputElement;
+    temp.value = '160';
+    fireEvent.input(temp);
+    fireEvent.pointerUp(temp);
+
+    await waitFor(() => {
+      const postCall = fetchMock.mock.calls.find(
+        (call) =>
+          (call[1] as RequestInit | undefined)?.method === 'POST' &&
+          String(call[0]).includes('shotSettings'),
+      );
+      expect(postCall).toBeDefined();
+      expect((postCall![1] as RequestInit).body).toBe(
+        JSON.stringify({ ...baseShot, targetSteamTemp: 160 }),
+      );
+    });
   });
 
   it('renders "Until stopped" when the steam duration is 0', async () => {

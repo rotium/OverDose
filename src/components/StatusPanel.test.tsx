@@ -12,6 +12,8 @@ import type {
   WaterLevelsSnapshot,
 } from '../snapshot';
 import { waterSeverity, type WaterSeverity } from '../water';
+import type { SteamMode } from '../prefs';
+import type { SteamStatus } from '../steamController';
 
 // StatusPanel is a dumb display of a committed severity (the app derives it
 // once, hysteretically, in AppBody). For these display tests we feed severity
@@ -52,7 +54,9 @@ interface Inputs {
   scale?: ScaleMessage | null;
   shotSettings?: ShotSettingsSnapshot | null;
   waterLevels?: WaterLevelsSnapshot | null;
-  onSteamToggle?: (next: boolean) => void;
+  steamMode?: SteamMode;
+  onSteamMode?: (mode: SteamMode) => void;
+  steamStatus?: SteamStatus;
 }
 
 const setup = (init: Inputs = {}) => {
@@ -64,7 +68,11 @@ const setup = (init: Inputs = {}) => {
   const [waterLevels, setWaterLevels] = createSignal<WaterLevelsSnapshot | null>(
     init.waterLevels ?? null,
   );
-  const onSteamToggle = init.onSteamToggle ?? vi.fn();
+  const [steamMode] = createSignal<SteamMode>(init.steamMode ?? 'on');
+  const onSteamMode = init.onSteamMode ?? vi.fn();
+  const [steamStatus] = createSignal<SteamStatus>(
+    init.steamStatus ?? { state: 'off', direction: null },
+  );
   render(() => (
     <WithPrefs>
       <StatusPanel
@@ -73,7 +81,9 @@ const setup = (init: Inputs = {}) => {
         shotSettings={shotSettings}
         waterLevels={waterLevels}
         waterSeverity={() => sevOf(waterLevels())}
-        onSteamToggle={onSteamToggle}
+        steamMode={steamMode}
+        onSteamMode={onSteamMode}
+        steamStatus={steamStatus}
       />
     </WithPrefs>
   ));
@@ -82,7 +92,7 @@ const setup = (init: Inputs = {}) => {
     setScale,
     setShotSettings,
     setWaterLevels,
-    onSteamToggle,
+    onSteamMode,
   };
 };
 
@@ -111,7 +121,9 @@ describe('StatusPanel', () => {
             shotSettings={shotSettings}
             waterLevels={waterLevels}
             waterSeverity={() => sevOf(waterLevels())}
-            onSteamToggle={vi.fn()}
+            steamMode={() => 'on'}
+            onSteamMode={vi.fn()}
+            steamStatus={() => ({ state: 'off', direction: null })}
           />
         </UserPrefsProvider>
       ));
@@ -189,39 +201,93 @@ describe('StatusPanel', () => {
     });
   });
 
-  describe('steam toggle', () => {
-    it('is disabled until shotSettings arrive', () => {
+  describe('steam mode toggle', () => {
+    it('disables the toggle until shotSettings arrive', () => {
       setup();
-      const btn = screen.getByRole('button', { name: 'Toggle steam heater' });
-      expect(btn).toBeDisabled();
+      for (const mode of ['off', 'auto', 'on']) {
+        expect(screen.getByTestId(`steam-mode-${mode}`)).toBeDisabled();
+      }
     });
 
-    it('reflects current steamSetting > 0 as "on"', () => {
-      setup({ shotSettings: settingsSample({ steamSetting: 1 }) });
-      const btn = screen.getByRole('button', { name: 'Toggle steam heater' });
-      expect(btn).toHaveAttribute('aria-pressed', 'true');
-      expect(btn).toHaveTextContent('on');
+    it('marks the active segment from steamMode', () => {
+      setup({
+        shotSettings: settingsSample({ targetSteamTemp: 150 }),
+        steamMode: 'auto',
+      });
+      expect(screen.getByTestId('steam-mode-auto')).toHaveAttribute(
+        'aria-checked',
+        'true',
+      );
+      expect(screen.getByTestId('steam-mode-on')).toHaveAttribute(
+        'aria-checked',
+        'false',
+      );
+      expect(screen.getByTestId('steam-mode-off')).toHaveAttribute(
+        'aria-checked',
+        'false',
+      );
     });
 
-    it('reflects steamSetting === 0 as "off"', () => {
-      setup({ shotSettings: settingsSample({ steamSetting: 0 }) });
-      const btn = screen.getByRole('button', { name: 'Toggle steam heater' });
-      expect(btn).toHaveAttribute('aria-pressed', 'false');
-      expect(btn).toHaveTextContent('off');
+    it('shows a heating dot + warming arrow + temp (no state word)', () => {
+      setup({
+        machine: machineSample({ steamTemperature: 142 }),
+        steamStatus: { state: 'heating', direction: 'up' },
+      });
+      const val = screen.getByTestId('status-steam-temp');
+      expect(val).toHaveAttribute('data-state', 'heating');
+      expect(val).toHaveAttribute('aria-label', expect.stringContaining('Heating'));
+      expect(val).toHaveTextContent('↑');
+      expect(val).toHaveTextContent('142'); // temp shown
+      // Compact: no state word.
+      expect(val).not.toHaveTextContent('Heating');
     });
 
-    it('invokes onSteamToggle(true) when off → on', () => {
-      const onSteamToggle = vi.fn();
-      setup({ shotSettings: settingsSample({ steamSetting: 0 }), onSteamToggle });
-      fireEvent.click(screen.getByRole('button', { name: 'Toggle steam heater' }));
-      expect(onSteamToggle).toHaveBeenCalledWith(true);
+    it('shows the ready dot with no arrow at the target', () => {
+      setup({
+        machine: machineSample({ steamTemperature: 150 }),
+        steamStatus: { state: 'ready', direction: null },
+      });
+      const val = screen.getByTestId('status-steam-temp');
+      expect(val).toHaveAttribute('data-state', 'ready');
+      expect(val).toHaveAttribute('aria-label', expect.stringContaining('Ready'));
+      expect(val).toHaveTextContent('150');
+      expect(val).not.toHaveTextContent('↑');
+      expect(val).not.toHaveTextContent('↓');
     });
 
-    it('invokes onSteamToggle(false) when on → off', () => {
-      const onSteamToggle = vi.fn();
-      setup({ shotSettings: settingsSample({ steamSetting: 1 }), onSteamToggle });
-      fireEvent.click(screen.getByRole('button', { name: 'Toggle steam heater' }));
-      expect(onSteamToggle).toHaveBeenCalledWith(false);
+    it('shows the idle dot with a cooling arrow', () => {
+      setup({
+        machine: machineSample({ steamTemperature: 90 }),
+        steamStatus: { state: 'idle', direction: 'down' },
+      });
+      const val = screen.getByTestId('status-steam-temp');
+      expect(val).toHaveAttribute('data-state', 'idle');
+      expect(val).toHaveAttribute(
+        'aria-label',
+        expect.stringContaining('cooling down'),
+      );
+      expect(val).toHaveTextContent('↓');
+    });
+
+    it('shows the off dot', () => {
+      setup({ steamStatus: { state: 'off', direction: null } });
+      const val = screen.getByTestId('status-steam-temp');
+      expect(val).toHaveAttribute('data-state', 'off');
+      expect(val).toHaveAttribute('aria-label', expect.stringContaining('Off'));
+    });
+
+    it('invokes onSteamMode with the tapped mode', () => {
+      const onSteamMode = vi.fn();
+      setup({
+        shotSettings: settingsSample({ targetSteamTemp: 0 }),
+        onSteamMode,
+      });
+      fireEvent.click(screen.getByTestId('steam-mode-on'));
+      expect(onSteamMode).toHaveBeenCalledWith('on');
+      fireEvent.click(screen.getByTestId('steam-mode-off'));
+      expect(onSteamMode).toHaveBeenLastCalledWith('off');
+      fireEvent.click(screen.getByTestId('steam-mode-auto'));
+      expect(onSteamMode).toHaveBeenLastCalledWith('auto');
     });
   });
 

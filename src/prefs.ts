@@ -74,6 +74,66 @@ export const DEFAULT_WATER_UNIT: WaterUnit = 'mL';
 export const DEFAULT_HAS_SCALE = true;
 
 /**
+ * Desired steam-boiler target temperature (°C) — OverDose owns this value (the
+ * skin's "memory"). The DE1 has no "steam enabled" flag: steam is on when the
+ * machine's `targetSteamTemp >= 130` and off when it's 0, so turning steam off
+ * zeroes the machine value and would otherwise lose the configured temperature.
+ * We keep the desired here, push it to the machine on enable (and re-assert it
+ * on focus), and only read the on/off *state* back from the machine. Default to
+ * the DE1 steam ceiling; the editor clamps to 130–170 (see SteamSection).
+ */
+export const DEFAULT_STEAM_TARGET_TEMP = 170;
+export const STEAM_TEMP_MIN = 130;
+export const STEAM_TEMP_MAX = 170;
+
+/**
+ * Steam mode — how the steam boiler is governed, chosen from the Home steam
+ * toggle:
+ *  - `off`  — heater off (`targetSteamTemp = 0`); steam prep still opens but
+ *             its Start is an inline "turn on steam".
+ *  - `on`   — held at the desired steam temp whenever the machine is awake.
+ *  - `auto` — app-managed warm-on-demand + auto-off, configured in Settings
+ *             (flavour / idle temp / timeout).
+ * On/Off are wired first; Auto's runtime behaviour is a later phase, so for
+ * now selecting Auto only records the preference (no steam write).
+ */
+export type SteamMode = 'off' | 'auto' | 'on';
+export const DEFAULT_STEAM_MODE: SteamMode = 'on';
+
+/**
+ * Auto-mode flavour — what triggers the boiler to warm up:
+ *  - `eco`   — warm on any machine activity (brew/flush/water, tablet), like
+ *              the Decent app's Eco-Steam. Most likely to be ready; more idle
+ *              power.
+ *  - `smart` — warm only when a steam recipe / Explore → Steam is opened.
+ *              Saves the most power.
+ */
+export type SteamAutoFlavor = 'eco' | 'smart';
+export const DEFAULT_STEAM_AUTO_FLAVOR: SteamAutoFlavor = 'smart';
+
+/**
+ * What steam falls back to when Auto goes idle. `0` = fully off (cold; biggest
+ * saving, slowest reheat); any value `>= STEAM_IDLE_TEMP_MIN` is a warm hold
+ * (a lower hold than the steam-on threshold still cuts reheat time). The
+ * settings UI presents this as Off vs. a temperature. Default Off.
+ */
+export const DEFAULT_STEAM_IDLE_TEMP = 0;
+/** Lowest warm-hold temperature; below this, idle is treated as Off. */
+export const STEAM_IDLE_TEMP_MIN = 50;
+export const STEAM_IDLE_TEMP_MAX = STEAM_TEMP_MAX;
+/** Temp used when the user switches idle to "keep warm" from Off. */
+export const DEFAULT_STEAM_IDLE_WARM = 130;
+
+/**
+ * Minutes before Auto drops the boiler to the idle temperature — counted from
+ * inactivity (Eco) or last steam use / steam-recipe close (Smart). Default 10
+ * (matches the Decent app's Eco-Steam).
+ */
+export const DEFAULT_STEAM_AUTO_TIMEOUT_MIN = 10;
+export const STEAM_AUTO_TIMEOUT_MIN_MIN = 1;
+export const STEAM_AUTO_TIMEOUT_MIN_MAX = 60;
+
+/**
  * Developer console/debug logging. Default off. When on, key flow events
  * (machine state/activity transitions, steam duration changes, brew-step and
  * steam-stop events) are written to the console and an in-memory buffer

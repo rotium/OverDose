@@ -55,6 +55,7 @@ import {
   type WaterLevelsSnapshot,
 } from './snapshot';
 import type { WsStream } from './streams';
+import { createSteamController } from './steamController';
 
 // One library sync for the app: owns the local repos (the mirror) and the
 // gateway push/pull. `syncNow` runs on load + focus; see docs/storage-sync.md.
@@ -196,13 +197,34 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
     cleanings();
     armReminderTimer();
   });
+
+  // Steam: a single controller owns the steam boiler — it reads the mode +
+  // Auto config (prefs), the steam context (reported by the brew screen), and
+  // user activity, and is the only writer of `targetSteamTemp`. It also
+  // continuously re-asserts the skin's intent, subsuming the old focus-only
+  // re-push (an external app/skin change is corrected the moment it streams in).
+  const steam = createSteamController({
+    mode: prefs.steamMode,
+    desiredTemp: prefs.steamTargetTemp,
+    idleTemp: prefs.steamIdleTemp,
+    flavor: prefs.steamAutoFlavor,
+    timeoutMin: prefs.steamAutoTimeoutMin,
+    machine: () => p.streams.machine.latest(),
+    shotSettings: () => p.streams.shotSettings.latest(),
+    write: onUpdateShotSettings,
+  });
+
   onMount(() => {
     const onVisible = () => {
       if (!document.hidden) armReminderTimer();
     };
+    // Eco-flavour steam activity: any tap counts as "in use".
+    const onActivity = () => steam.noteActivity();
     document.addEventListener('visibilitychange', onVisible);
+    document.addEventListener('pointerdown', onActivity);
     onCleanup(() => {
       document.removeEventListener('visibilitychange', onVisible);
+      document.removeEventListener('pointerdown', onActivity);
       if (reminderTimer !== undefined) clearTimeout(reminderTimer);
     });
   });
@@ -612,6 +634,7 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
                 onSleep={onSleep}
                 onWake={onWake}
                 onUpdateShotSettings={onUpdateShotSettings}
+                steamStatus={steam.status}
                 onMenu={onMenu}
                 onMaintenance={onMaintenance}
                 dueCleanings={dueCleanings}
@@ -640,6 +663,9 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
               traceVisibility={prefs.traceVisibility}
               fetchLatestShot={api.shotsLatest}
               fetchShot={api.shotById}
+              onSteamContext={steam.setSteamContext}
+              steamMode={prefs.steamMode}
+              onTurnOnSteam={() => prefs.setSteamMode('on')}
               optimisticShot={optimisticShot}
             />
           </Match>
@@ -664,6 +690,9 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
                 traceVisibility={prefs.traceVisibility}
                 fetchLatestShot={api.shotsLatest}
                 fetchShot={api.shotById}
+                onSteamContext={steam.setSteamContext}
+                steamMode={prefs.steamMode}
+                onTurnOnSteam={() => prefs.setSteamMode('on')}
                 optimisticShot={optimisticShot}
               />
             </Show>
@@ -683,6 +712,9 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
               traceVisibility={prefs.traceVisibility}
               fetchLatestShot={api.shotsLatest}
               fetchShot={api.shotById}
+              onSteamContext={steam.setSteamContext}
+              steamMode={prefs.steamMode}
+              onTurnOnSteam={() => prefs.setSteamMode('on')}
               optimisticShot={optimisticShot}
             />
           </Match>

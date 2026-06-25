@@ -29,6 +29,8 @@ import {
 import type { WsStatus } from './streams';
 import { createWsStream, type WsStream } from './streams';
 import { useUserPrefs } from './UserPrefsContext';
+import type { SteamMode } from './prefs';
+import type { SteamStatus } from './steamController';
 import { type WaterSeverity } from './water';
 
 /**
@@ -65,6 +67,9 @@ export interface HomeProps {
   /** Wake the machine from sleeping state — typically `requestState('idle')`. */
   onWake: () => void;
   onUpdateShotSettings: (settings: ShotSettingsSnapshot) => void;
+  /** Intent-based steam status for the status panel (from the steam
+   *  controller in App). Optional; defaults to "Off" in tests. */
+  steamStatus?: Accessor<SteamStatus>;
   onMenu: () => void;
   onMaintenance?: () => void;
   /** Cleanings currently due — surfaced as header alert pills. */
@@ -94,13 +99,26 @@ export const Home: Component<HomeProps> = (p) => {
   const shotSettings = p.shotSettingsStream();
   const waterLevels = p.waterLevelsStream();
 
-  const handleSteamToggle = (next: boolean) => {
+  const prefs = useUserPrefs();
+
+  // Steam mode (Off / Auto / On) drives the steam *target temperature* (the DE1
+  // has no enable flag): On pushes the skin's desired temp, Off pushes 0. The
+  // mode itself is persisted in prefs. Auto's runtime behaviour (warm-on-demand
+  // + auto-off) lands in a later phase, so for now selecting it only records the
+  // preference and leaves the machine as-is.
+  const handleSteamMode = (mode: SteamMode) => {
+    prefs.setSteamMode(mode);
     const current = shotSettings.latest();
     if (!current) return;
-    p.onUpdateShotSettings({ ...current, steamSetting: next ? 1 : 0 });
+    if (mode === 'on') {
+      p.onUpdateShotSettings({
+        ...current,
+        targetSteamTemp: prefs.steamTargetTemp(),
+      });
+    } else if (mode === 'off') {
+      p.onUpdateShotSettings({ ...current, targetSteamTemp: 0 });
+    }
   };
-
-  const prefs = useUserPrefs();
 
   // Ids of due cleanings, for the Explore-row tile highlight (derived from the
   // same due list the header pill uses).
@@ -225,7 +243,9 @@ export const Home: Component<HomeProps> = (p) => {
             shotSettings={shotSettings.latest}
             waterLevels={waterLevels.latest}
             waterSeverity={severity}
-            onSteamToggle={handleSteamToggle}
+            steamMode={prefs.steamMode}
+            onSteamMode={handleSteamMode}
+            steamStatus={p.steamStatus ?? (() => ({ state: 'off', direction: null }))}
           />
           <LastShotCard
             fetchSummary={p.fetchLatestShot}

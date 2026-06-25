@@ -1,10 +1,26 @@
-import { For, Show, createResource, type Component } from 'solid-js';
+import {
+  For,
+  Show,
+  createResource,
+  createSignal,
+  type Component,
+} from 'solid-js';
 import { api, type MachineSettingsSnapshot } from '../../api';
 import type { ShotSettingsSnapshot } from '../../snapshot';
 import type { WsStream } from '../../streams';
-import type { SteamPurgeStrategy } from '../../prefs';
+import {
+  DEFAULT_STEAM_IDLE_WARM,
+  STEAM_AUTO_TIMEOUT_MIN_MAX,
+  STEAM_AUTO_TIMEOUT_MIN_MIN,
+  STEAM_IDLE_TEMP_MAX,
+  STEAM_IDLE_TEMP_MIN,
+  type SteamAutoFlavor,
+  type SteamPurgeStrategy,
+} from '../../prefs';
 import { useUserPrefs } from '../../UserPrefsContext';
+import { isSteamOn } from '../../steam';
 import { DebouncedSliderField } from './DebouncedSliderField';
+import { DebouncedNumberField } from './sections/library/DebouncedNumberField';
 
 const PURGE_STRATEGY_OPTIONS: {
   value: SteamPurgeStrategy;
@@ -13,6 +29,11 @@ const PURGE_STRATEGY_OPTIONS: {
   { value: 'firmware', label: 'Machine auto-purge' },
   { value: 'autoFlush', label: 'Auto-purge after delay' },
   { value: 'manual', label: 'Manual purge' },
+];
+
+const AUTO_FLAVOR_OPTIONS: { value: SteamAutoFlavor; label: string }[] = [
+  { value: 'eco', label: 'Eco' },
+  { value: 'smart', label: 'Smart' },
 ];
 
 /**
@@ -36,6 +57,22 @@ export interface MachineTabProps {
 
 export const MachineTab: Component<MachineTabProps> = (p) => {
   const prefs = useUserPrefs();
+  // The Off/Keep-warm idle choice is local UI state, seeded from the pref —
+  // kept separate from the temperature being edited so a half-typed value
+  // (briefly below the steam threshold) can't collapse the field mid-edit.
+  const [idleWarm, setIdleWarm] = createSignal(
+    prefs.steamIdleTemp() >= STEAM_IDLE_TEMP_MIN,
+  );
+  const chooseIdleOff = () => {
+    setIdleWarm(false);
+    prefs.setSteamIdleTemp(0);
+  };
+  const chooseIdleWarm = () => {
+    setIdleWarm(true);
+    if (prefs.steamIdleTemp() < STEAM_IDLE_TEMP_MIN) {
+      prefs.setSteamIdleTemp(DEFAULT_STEAM_IDLE_WARM);
+    }
+  };
   // `/api/v1/machine/settings` has no WS stream — it's request/response only —
   // so a one-shot resource is the right shape: it fetches the machine's
   // current values each time the tab is opened (the tab unmounts/remounts via
@@ -139,10 +176,15 @@ export const MachineTab: Component<MachineTabProps> = (p) => {
                       </label>
                       <DebouncedSliderField
                         testId="machine-steam-temp"
-                        value={sh().targetSteamTemp}
-                        onCommit={(targetSteamTemp) =>
-                          commitShot({ targetSteamTemp })
-                        }
+                        // The desired temp is the skin's own value (so it never
+                        // shows 0 when steam is off, where the machine reports
+                        // targetSteamTemp 0). Editing updates the skin's memory
+                        // and, when steam is currently on, applies it live.
+                        value={prefs.steamTargetTemp()}
+                        onCommit={(v) => {
+                          prefs.setSteamTargetTemp(v);
+                          if (isSteamOn(sh())) commitShot({ targetSteamTemp: v });
+                        }}
                         min={130}
                         max={170}
                         step={1}
@@ -249,6 +291,121 @@ export const MachineTab: Component<MachineTabProps> = (p) => {
                   />
                 </div>
               </Show>
+
+              {/* Auto behaviour — config for when Steam is set to Auto (the
+                  Home toggle). Small, exact values, so numeric steppers. */}
+              <p class="settings-help" data-testid="machine-steam-auto-intro">
+                When Steam is set to <strong>Auto</strong>, the boiler warms on
+                demand and cools back down when idle:
+              </p>
+
+              <div class="settings-field settings-field--stack">
+                <span class="settings-field__label">Warm up</span>
+                <div
+                  class="settings-radio-row"
+                  role="radiogroup"
+                  aria-label="Auto warm-up trigger"
+                  data-testid="machine-steam-auto-flavor"
+                >
+                  <For each={AUTO_FLAVOR_OPTIONS}>
+                    {(opt) => (
+                      <label class="settings-radio">
+                        <input
+                          type="radio"
+                          name="steam-auto-flavor"
+                          value={opt.value}
+                          checked={prefs.steamAutoFlavor() === opt.value}
+                          onChange={() => prefs.setSteamAutoFlavor(opt.value)}
+                        />
+                        <span>{opt.label}</span>
+                      </label>
+                    )}
+                  </For>
+                </div>
+                <p class="settings-help" data-testid="machine-steam-auto-hint">
+                  {prefs.steamAutoFlavor() === 'eco'
+                    ? 'Stay warm whenever the machine is in use (brewing, tablet), like the Decent app. Steam is most often ready, at the cost of more idle power.'
+                    : 'Warm up only when you open a steam recipe or Explore → Steam. Saves the most power; you may wait for heat-up.'}
+                </p>
+              </div>
+
+              <div class="settings-field settings-field--stack">
+                <span class="settings-field__label">When idle</span>
+                <div
+                  class="settings-radio-row"
+                  role="radiogroup"
+                  aria-label="When steam is idle"
+                  data-testid="machine-steam-idle-mode"
+                >
+                  <label class="settings-radio">
+                    <input
+                      type="radio"
+                      name="steam-idle"
+                      value="off"
+                      checked={!idleWarm()}
+                      onChange={chooseIdleOff}
+                    />
+                    <span>Off (cold)</span>
+                  </label>
+                  <label class="settings-radio">
+                    <input
+                      type="radio"
+                      name="steam-idle"
+                      value="warm"
+                      checked={idleWarm()}
+                      onChange={chooseIdleWarm}
+                    />
+                    <span>Keep warm</span>
+                  </label>
+                </div>
+                <Show when={idleWarm()}>
+                  <DebouncedSliderField
+                    testId="machine-steam-idle-temp"
+                    value={prefs.steamIdleTemp()}
+                    onCommit={(v) => prefs.setSteamIdleTemp(v)}
+                    min={STEAM_IDLE_TEMP_MIN}
+                    max={STEAM_IDLE_TEMP_MAX}
+                    step={5}
+                    ariaLabel="Idle steam temperature in degrees Celsius"
+                    formatValue={(v) => `${v.toFixed(0)} °C`}
+                  />
+                </Show>
+                <p class="settings-help">
+                  When steam goes idle it can cool fully (Off — biggest saving,
+                  slowest reheat) or hold at a lower temperature for a faster
+                  reheat.
+                </p>
+              </div>
+
+              <div class="settings-field settings-field--stack">
+                <label
+                  class="settings-field__label"
+                  for="machine-steam-auto-timeout"
+                >
+                  Auto-off after
+                </label>
+                <div class="settings-number-row">
+                  <DebouncedNumberField
+                    testId="machine-steam-auto-timeout"
+                    value={prefs.steamAutoTimeoutMin()}
+                    onCommit={(v) =>
+                      v !== undefined && prefs.setSteamAutoTimeoutMin(v)
+                    }
+                    min={STEAM_AUTO_TIMEOUT_MIN_MIN}
+                    max={STEAM_AUTO_TIMEOUT_MIN_MAX}
+                    step={1}
+                    steppers
+                    unit="min"
+                    class="step-field__input"
+                    ariaLabel="Auto-off after (minutes)"
+                  />
+                </div>
+                <p class="settings-help">
+                  {prefs.steamAutoFlavor() === 'eco'
+                    ? 'How long the machine can sit inactive before steam cools to the off temperature.'
+                    : 'How long after you close a steam recipe before steam cools to the off temperature.'}
+                </p>
+              </div>
             </section>
 
             <section class="settings-section" data-testid="machine-flush-section">

@@ -97,22 +97,36 @@ export const DebouncedNumberField: Component<DebouncedNumberFieldProps> = (
     }
   };
 
+  // Keep committed values inside [min, max] — typed input must respect the
+  // same bounds the steppers do, so the field can't save (or be left showing)
+  // an out-of-range number.
+  const clamp = (v: number | undefined): number | undefined => {
+    if (v === undefined) return undefined;
+    let n = v;
+    if (p.min !== undefined) n = Math.max(p.min, n);
+    if (p.max !== undefined) n = Math.min(p.max, n);
+    return n;
+  };
+
   const schedule = (raw: string) => {
     clearTimer();
     const delay = p.debounceMs ?? 500;
     if (delay <= 0) {
-      p.onCommit(parse(raw));
+      p.onCommit(clamp(parse(raw)));
       return;
     }
     timer = setTimeout(() => {
       timer = undefined;
-      p.onCommit(parse(raw));
+      p.onCommit(clamp(parse(raw)));
     }, delay);
   };
 
   const flush = (raw: string) => {
     clearTimer();
-    const v = parse(raw);
+    const v = clamp(parse(raw));
+    // Snap the display to the clamped value so what's shown matches what's
+    // committed (e.g. typing below the minimum settles back up to it).
+    if (v !== undefined) setLocal(String(v));
     p.onCommit(v);
     // Record the settled value for the quick-pick chips (blur/Done only, not
     // every debounced keystroke).
