@@ -10,6 +10,7 @@ import type { Cleaning } from '../../domain';
 import { cleaningDue, operationSummary } from '../../domain';
 import { useRepositories } from '../../RepositoriesContext';
 import { CleaningKindIcon } from '../CleaningKindIcon';
+import { log } from '../../debugLog';
 
 export interface CleaningRunSectionProps {
   /** Launch a cleaning's runtime (the wizard). When omitted, Run is disabled
@@ -36,7 +37,7 @@ export const CleaningRunSection: Component<CleaningRunSectionProps> = (p) => {
   const dismiss = (c: Cleaning) =>
     void repos.cleanings
       .update({ ...c, lastDoneAt: new Date().toISOString() })
-      .catch((e) => console.warn('dismiss reminder failed', e));
+      .catch((e) => log.warn('clean', 'dismiss reminder failed', e));
 
   return (
     <div class="settings-section-stack">

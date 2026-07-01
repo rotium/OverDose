@@ -21,6 +21,7 @@ import { useUserPrefs } from '../../UserPrefsContext';
 import { isSteamOn } from '../../steam';
 import { DebouncedSliderField } from './DebouncedSliderField';
 import { DebouncedNumberField } from './sections/library/DebouncedNumberField';
+import { log } from '../../debugLog';
 
 const PURGE_STRATEGY_OPTIONS: {
   value: SteamPurgeStrategy;
@@ -87,7 +88,7 @@ export const MachineTab: Component<MachineTabProps> = (p) => {
       try {
         return await api.machineSettings();
       } catch (e) {
-        console.warn('machineSettings fetch failed', e);
+        log.warn('machine', 'machineSettings fetch failed', e);
         return null;
       }
     },
@@ -102,7 +103,7 @@ export const MachineTab: Component<MachineTabProps> = (p) => {
     api
       .updateMachineSettings(partial)
       .then(() => void refetch())
-      .catch((e) => console.warn('updateMachineSettings failed', e));
+      .catch((e) => log.warn('machine', 'updateMachineSettings failed', e));
   };
 
   // Steam temperature + duration live in `shotSettings`, not machineSettings.
@@ -117,7 +118,7 @@ export const MachineTab: Component<MachineTabProps> = (p) => {
     if (!cur) return; // no base snapshot yet — can't build the full body
     api
       .updateShotSettings({ ...cur, ...partial })
-      .catch((e) => console.warn('updateShotSettings failed', e));
+      .catch((e) => log.warn('machine', 'updateShotSettings failed', e));
   };
 
   return (

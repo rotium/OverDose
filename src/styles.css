@@ -1571,6 +1571,16 @@ html {
   font-weight: 500;
 }
 
+.settings-select {
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  min-width: 9rem;
+}
+
 .settings-radio-row {
   display: inline-flex;
   gap: 0.5rem;

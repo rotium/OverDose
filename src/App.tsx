@@ -41,7 +41,7 @@ import { linkSeedRecipeProfiles } from './repositories';
 import { createLibrarySync } from './librarySync';
 import { RepositoriesProvider } from './RepositoriesContext';
 import { UserPrefsProvider, useUserPrefs } from './UserPrefsContext';
-import { setDebugLogging as setDebugLoggingEnabled, dlog } from './debugLog';
+import { log, setLogLevel } from './debugLog';
 import { deriveActivity } from './machineActivity';
 import { createWaterSeverity, type WaterSeverity } from './water';
 import type { Recipe, Cleaning } from './domain';
@@ -68,11 +68,13 @@ const {
 } = librarySync.repos;
 
 const onSleep = () =>
-  api.sleep().catch((e) => console.warn('sleep failed', e));
+  api.sleep().catch((e) => log.warn('intent', 'sleep failed', e));
 
 const onWake = () => {
-  dlog('intent', 'wake (idle)');
-  return api.requestState('idle').catch((e) => console.warn('wake failed', e));
+  log.info('intent', 'wake (idle)');
+  return api
+    .requestState('idle')
+    .catch((e) => log.warn('intent', 'wake failed', e));
 };
 
 // Shared stop path: hit by both the app STOP button and the steam auto
@@ -81,15 +83,15 @@ const onWake = () => {
 // just changes — which is exactly how a trace distinguishes app-driven stops
 // from physical-button stops.
 const onStop = () => {
-  dlog('intent', 'stop (idle)');
+  log.info('intent', 'stop (idle)');
   return api.requestState('idle').catch((e) => {
-    console.warn('stop failed', e);
+    log.warn('intent', 'stop failed', e);
   });
 };
 
 const onUpdateShotSettings = (settings: ShotSettingsSnapshot) =>
   api.updateShotSettings(settings).catch((e) =>
-    console.warn('updateShotSettings failed', e),
+    log.warn('machine', 'updateShotSettings failed', e),
   );
 
 /**
@@ -148,7 +150,7 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
   const onCleaningComplete = (c: Cleaning) => {
     void cleaningRepository
       .update({ ...c, lastDoneAt: new Date().toISOString() })
-      .catch((e) => console.warn('stamp lastDone failed', e));
+      .catch((e) => log.warn('clean', 'stamp lastDone failed', e));
     setActiveCleaning(null);
   };
 
@@ -266,7 +268,7 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
       );
       return rec?.profile ?? null;
     } catch (e) {
-      console.warn('resolve cleaning profile failed', e);
+      log.warn('clean', 'resolve cleaning profile failed', e);
       return null;
     }
   };
@@ -335,7 +337,7 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
       return;
     }
     const state: MachineState = op === 'water' ? 'hotWater' : 'flush';
-    void api.requestState(state).catch((e) => console.warn(`explore ${op} failed`, e));
+    void api.requestState(state).catch((e) => log.warn('explore', `explore ${op} failed`, e));
   };
   // Frozen-shot hand-off to LastShotCard. The signal is *sticky*: it's set
   // once on each freeze and persists until the next brew overwrites it.
@@ -376,9 +378,10 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
 
   // ── Developer logging ──
   // Mirror the pref into the leaf logger, then log the events that matter for
-  // diagnosing the brew/steam flow: machine state+activity transitions and
-  // steam-duration changes. `dlog` is a no-op while logging is off.
-  createEffect(() => setDebugLoggingEnabled(prefs.debugLogging()));
+  // diagnosing the brew/steam flow. State+activity transitions (including
+  // substate churn) and steam-duration changes are chatty, so they sit at
+  // `debug`; the always-on narrative lives at `info` elsewhere.
+  createEffect(() => setLogLevel(prefs.logLevel()));
   let lastStateKey = '';
   createEffect(() => {
     const snap = p.streams.machine.latest();
@@ -386,14 +389,43 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
     const key = `${snap.state.state}/${snap.state.substate}`;
     if (key === lastStateKey) return;
     lastStateKey = key;
-    dlog('state', `${key}  →  ${deriveActivity(snap).kind}`);
+    log.debug('state', `${key}  →  ${deriveActivity(snap).kind}`);
+    // Known firmware quirk: the `preparingForShot` substate can fire while the
+    // parent state isn't `espresso` (the "substate leak"). Surface it so a
+    // misfire downstream is traceable to its source.
+    if (
+      snap.state.substate === 'preparingForShot' &&
+      snap.state.state !== 'espresso'
+    ) {
+      log.warn('state', `substate leak: preparingForShot while state=${snap.state.state}`);
+    }
   });
   let lastSteamDur: number | undefined;
   createEffect(() => {
     const ss = p.streams.shotSettings.latest();
     if (!ss || ss.targetSteamDuration === lastSteamDur) return;
     lastSteamDur = ss.targetSteamDuration;
-    dlog('steamDur', `${ss.targetSteamDuration}s`);
+    log.debug('steamDur', `${ss.targetSteamDuration}s`);
+  });
+
+  // Top-level navigation. Overlays sit above the home/brew swap, so they win in
+  // precedence — this mirrors what the user actually sees on top.
+  const activeScreen = (): string => {
+    if (activeCleaning()) return 'cleaning';
+    if (settingsOpen()) return 'settings';
+    if (maintenanceOpen()) return 'maintenance';
+    if (historyOpen()) return 'history';
+    if (activeBrewRecipeId() !== null) return 'brew';
+    if (exploreBrewing()) return 'explore-brew';
+    if (exploreSteaming()) return 'explore-steam';
+    return 'home';
+  };
+  let lastScreen = '';
+  createEffect(() => {
+    const screen = activeScreen();
+    if (screen === lastScreen) return;
+    lastScreen = screen;
+    log.info('nav', `→ ${screen}`);
   });
 
   // ── Steam purge strategy: firmware write-through ──
@@ -425,10 +457,10 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
     const desired = strat === 'firmware' ? 0 : 1;
     if (desired === lastWrittenPurgeMode) return;
     lastWrittenPurgeMode = desired;
-    dlog('steam', `write steamPurgeMode=${desired} (strategy=${strat})`);
+    log.info('steam', `write steamPurgeMode=${desired} (strategy=${strat})`);
     void api
       .updateMachineSettings({ steamPurgeMode: desired })
-      .catch((e) => console.warn('write steamPurgeMode failed', e));
+      .catch((e) => log.warn('steam', 'write steamPurgeMode failed', e));
   });
 
   // ── Steam purge orchestration (autoFlush) ──
@@ -458,11 +490,11 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
     if (prefs.steamPurgeStrategy() !== 'autoFlush') return;
     purgeFired = true;
     const dwellMs = Math.max(0, prefs.steamAutoFlushSec()) * 1000;
-    dlog('steam', `autoFlush: purge in ${dwellMs}ms`);
+    log.info('steam', `autoFlush: purge in ${dwellMs}ms`);
     purgeTimer = setTimeout(() => {
       purgeTimer = undefined;
-      dlog('steam', 'autoFlush: firing purge (idle)');
-      void onStop().catch((e) => console.warn('auto-flush purge failed', e));
+      log.info('steam', 'autoFlush: firing purge (idle)');
+      void onStop().catch((e) => log.warn('steam', 'auto-flush purge failed', e));
     }, dwellMs);
   });
   onCleanup(cancelPurgeTimer);
@@ -759,7 +791,7 @@ export const App: Component = () => {
         const profiles = await api.profiles({});
         await linkSeedRecipeProfiles(recipeRepository, profiles);
       } catch (e) {
-        console.warn('link seed profiles failed', e);
+        log.warn('sync', 'link seed profiles failed', e);
       }
     })();
 
@@ -795,7 +827,7 @@ export const App: Component = () => {
           onUpdateShotSettings={onUpdateShotSettings}
           onFetchMachineSettings={() =>
             api.machineSettings().catch((e) => {
-              console.warn('fetch machineSettings failed', e);
+              log.warn('machine', 'fetch machineSettings failed', e);
               return null;
             })
           }

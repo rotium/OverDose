@@ -1,5 +1,6 @@
 import { createSignal, onCleanup, type Accessor } from 'solid-js';
 import { gatewayWsOrigin } from './gateway';
+import { log } from './debugLog';
 
 export type WsStatus = 'connecting' | 'open' | 'closed';
 
@@ -21,28 +22,41 @@ export function createWsStream<T>(path: string, label: string): WsStream<T> {
   let closed = false;
   let backoff = 500;
   let retryTimer: number | undefined;
+  let reconnects = 0;
 
   const open = () => {
     if (closed) return;
     const url = `${gatewayWsOrigin()}${path}`;
+    log.debug(
+      'ws',
+      `${label} connecting${reconnects > 0 ? ` (reconnect #${reconnects})` : ''}`,
+    );
     socket = new WebSocket(url);
     socket.onopen = () => {
       setStatus('open');
       backoff = 500;
-      console.log(`[${label}] open`);
+      log.info(
+        'ws',
+        `${label} open${reconnects > 0 ? ` (after ${reconnects} reconnect(s))` : ''}`,
+      );
+      reconnects = 0;
     };
     socket.onmessage = (e) => {
       try {
         setLatest(() => JSON.parse(e.data) as T);
       } catch (err) {
-        console.warn(`[${label}] bad frame`, err, e.data);
+        log.error('ws', `${label} bad frame`, err, e.data);
       }
     };
-    socket.onerror = (e) => console.warn(`[${label}] error`, e);
+    socket.onerror = (e) => log.warn('ws', `${label} socket error`, e);
     socket.onclose = () => {
       setStatus('closed');
-      console.log(`[${label}] closed; retrying in ${backoff}ms`);
-      if (closed) return;
+      if (closed) {
+        log.debug('ws', `${label} closed (disposed)`);
+        return;
+      }
+      reconnects++;
+      log.warn('ws', `${label} closed; retry #${reconnects} in ${backoff}ms`);
       retryTimer = window.setTimeout(open, backoff);
       backoff = Math.min(backoff * 2, 5_000);
     };

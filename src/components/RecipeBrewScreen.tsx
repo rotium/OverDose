@@ -59,7 +59,7 @@ import { ProfilePicker } from './settings/sections/library/ProfilePicker';
 import { BeanPicker } from './settings/sections/library/BeanPicker';
 import { PickerDialog } from './PickerDialog';
 import { DebouncedNumberField } from './settings/sections/library/DebouncedNumberField';
-import { dlog } from '../debugLog';
+import { log } from '../debugLog';
 
 /**
  * Recipe-driven brewing runtime — full-screen replacement for Home that
@@ -343,11 +343,11 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
       const r = (p.onApplyWorkflow ?? ((b) => api.setWorkflow(b)))(body);
       if (r && typeof (r as Promise<void>).catch === 'function') {
         void (r as Promise<void>).catch((e) =>
-          console.warn('apply workflow failed', e),
+          log.warn('workflow', 'apply workflow failed', e),
         );
       }
     } catch (e) {
-      console.warn('apply workflow failed', e);
+      log.warn('workflow', 'apply workflow failed', e);
     }
   };
   createEffect(() => {
@@ -377,7 +377,7 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
     const b = bean() ?? null;
     // Trace what we push: the resolved mode + the targets it produced, plus
     // the raw draft/profile inputs they were derived from.
-    dlog(
+    log.debug(
       'workflow',
       `apply "${rec.name}": mode=${mode} → yield=${targetYield ?? '–'}g ` +
         `sentVol=${targetVolume}ml ` +
@@ -460,10 +460,10 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
     if (!step) return;
     const target = stepToGatewayState(step.type);
     if ((ss[idx] === 'requested' || ss[idx] === 'pending') && cur === target) {
-      dlog('step', `${idx} ${step.type}: running (state=${cur})`);
+      log.info('step', `${idx} ${step.type}: running (state=${cur})`);
       updateStatus(idx, 'running');
     } else if (ss[idx] === 'running' && cur !== target) {
-      dlog('step', `${idx} ${step.type}: done (state=${cur})`);
+      log.info('step', `${idx} ${step.type}: done (state=${cur})`);
       updateStatus(idx, 'done');
     }
   });
@@ -590,7 +590,7 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
     // (below) calls applySteam, and we don't want it re-firing on every
     // shotSettings frame — only on prep-param edits.
     const cur = untrack(() => p.shotSettingsStream?.().latest());
-    dlog(
+    log.debug(
       'steam.apply',
       `pitcher=${pitcherId() ?? 'custom'} dur=${dur}s temp=${temp}°C flow=${flow} (shotSettings ${cur ? 'present' : 'MISSING'})`,
     );
@@ -627,7 +627,7 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
     void steamFlow();
     void steamTouched();
     void pitcherId();
-    void applySteam().catch((e) => console.warn('prep steam push failed', e));
+    void applySteam().catch((e) => log.warn('steam', 'prep steam push failed', e));
   });
 
   // Report the steam context to the app-level steam owner: a steam step in this
@@ -651,7 +651,7 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
       if (step.type === 'steam') await applySteam();
       await p.requestState(stepToGatewayState(step.type));
     } catch (e) {
-      console.warn('start step failed', e);
+      log.error('step', 'start step failed', e);
       updateStatus(idx, 'pending');
     }
   };
@@ -1748,9 +1748,25 @@ const PostBrewView: Component<{
     if (!usingOptimistic() || summaryPolls >= SUMMARY_POLL_MAX) return;
     const t = setTimeout(() => {
       summaryPolls++;
+      log.debug(
+        'shot',
+        `handoff poll ${summaryPolls}/${SUMMARY_POLL_MAX}: gateway not caught up, refetching /shots/latest`,
+      );
       void refetchSummary();
     }, SUMMARY_POLL_MS);
     onCleanup(() => clearTimeout(t));
+  });
+  // Log the hand-off outcome (the optimistic→gateway flip is the chronic
+  // failure point): info on catch-up, warn if the bounded poll gives up.
+  let wasOptimistic = false;
+  createEffect(() => {
+    const opt = usingOptimistic();
+    if (wasOptimistic && !opt) {
+      log.info('shot', `handoff: gateway caught up after ${summaryPolls} poll(s) (id=${summary()?.id})`);
+    } else if (opt && summaryPolls >= SUMMARY_POLL_MAX) {
+      log.warn('shot', `handoff: gave up after ${summaryPolls} polls — staying on optimistic record`);
+    }
+    wasOptimistic = opt;
   });
   const displayedSummary = (): GatewayShotSummary | null =>
     usingOptimistic() ? p.optimisticShot!() : (summary() ?? null);

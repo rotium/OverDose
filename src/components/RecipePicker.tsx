@@ -13,6 +13,7 @@ import type { Recipe } from '../domain';
 import type { RecipeRepository } from '../repositories';
 import { api, type ProfileRecord } from '../api';
 import { RecipeTile } from './RecipeTile';
+import { log } from '../debugLog';
 
 /**
  * Recipe picker grid (was WorkflowPicker). Loads recipes from the injected
@@ -69,7 +70,7 @@ export const RecipePicker: Component<
   // render from the local repository.
   const [profiles] = createResource<ProfileRecord[] | null>(() =>
     (p.loadProfiles ?? (() => api.profiles({})))().catch((e) => {
-      console.warn('profile list load failed', e);
+      log.warn('profile', 'profile list load failed', e);
       return null;
     }),
   );

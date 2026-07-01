@@ -1,5 +1,6 @@
 import { Show, createResource, type Component } from 'solid-js';
 import { api, type MachineInfo } from '../../../api';
+import { log } from '../../../debugLog';
 
 /**
  * Read-only machine identity card (Settings → About → Machine). Fed by
@@ -15,7 +16,7 @@ export const MachineInfoSection: Component = () => {
     try {
       return await api.machineInfo();
     } catch (e) {
-      console.warn('machineInfo fetch failed', e);
+      log.warn('info', 'machineInfo fetch failed', e);
       return null;
     }
   });

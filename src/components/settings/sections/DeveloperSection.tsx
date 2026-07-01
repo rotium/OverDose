@@ -1,51 +1,57 @@
-import {
-  Show,
-  createSignal,
-  onCleanup,
-  onMount,
-  type Component,
-} from 'solid-js';
+import { Show, createSignal, type Component } from 'solid-js';
 import { useUserPrefs } from '../../../UserPrefsContext';
-import { clearDebugLog, debugLogSize, getDebugLog } from '../../../debugLog';
+import { LOG_LEVELS, type LogLevel } from '../../../debugLog';
+import { api } from '../../../api';
 import { BUILD_INFO, buildInfoLine } from '../../../buildInfo';
+
+type CopyState = 'idle' | 'copying' | 'copied' | 'empty' | 'error';
+
+const COPY_LABEL: Record<CopyState, string> = {
+  idle: 'Copy device log',
+  copying: 'Fetching…',
+  copied: 'Copied ✓',
+  empty: 'No log captured',
+  error: 'Fetch failed',
+};
 
 /**
  * Developer tools (Settings → About → Developer). One section card titled
- * "Developer" with three subsections: Build identity, debug Logging (toggle +
- * copy/clear of the in-app log buffer), and a Reset that clears all
+ * "Developer" with three subsections: Build identity, Logging (level picker +
+ * copy of the gateway's captured console log), and a Reset that clears all
  * locally-stored skin state for a fresh-install-like start.
  */
 export const DeveloperSection: Component = () => {
   const prefs = useUserPrefs();
-  const [copied, setCopied] = createSignal(false);
+  const [copyState, setCopyState] = createSignal<CopyState>('idle');
   const [confirmingReset, setConfirmingReset] = createSignal(false);
-  // Poll the buffer size so the count + disabled states stay live while the
-  // tab is open (the buffer is a plain module, not a signal).
-  const [size, setSize] = createSignal(debugLogSize());
-  onMount(() => {
-    const id = setInterval(() => setSize(debugLogSize()), 400);
-    onCleanup(() => clearInterval(id));
-  });
 
+  // Pull the gateway's captured WebView console log (this skin's console.*
+  // output, ~1 MB of the current session) and copy it out. The gateway is the
+  // single sink — there's no in-app buffer. On a real gateway this is the full
+  // session; in dev the skin runs in a browser (not the gateway's WebView) so
+  // the file is empty — use the browser devtools console there instead.
   const copyLog = async () => {
-    // Prepend the build identity so a pasted log is self-identifying.
-    const text = `${buildInfoLine()}\n\n${getDebugLog()}`;
-    // Always echo to the console too — clipboard is unavailable over plain
-    // http (the gateway isn't https), so this guarantees the log is reachable.
-    // eslint-disable-next-line no-console
-    console.log(text);
+    setCopyState('copying');
     try {
-      await navigator.clipboard?.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      const logText = await api.webviewLogs();
+      if (!logText.trim()) {
+        setCopyState('empty');
+      } else {
+        // Prepend the build identity so a pasted log is self-identifying.
+        const text = `${buildInfoLine()}\n\n${logText}`;
+        // Echo to the console too — clipboard is unavailable over plain http
+        // (the gateway isn't https), so this guarantees the log is reachable.
+        // eslint-disable-next-line no-console
+        console.log(text);
+        await navigator.clipboard?.writeText(text).catch(() => {
+          /* console fallback above */
+        });
+        setCopyState('copied');
+      }
     } catch {
-      /* console fallback above */
+      setCopyState('error');
     }
-  };
-
-  const clear = () => {
-    clearDebugLog();
-    setSize(0);
+    setTimeout(() => setCopyState('idle'), 2000);
   };
 
   const resetData = () => {
@@ -74,39 +80,39 @@ export const DeveloperSection: Component = () => {
 
       <div class="settings-subsection" aria-labelledby="dev-logging-heading">
         <h3 class="settings-subheading" id="dev-logging-heading">Logging</h3>
-        <label class="settings-checkbox">
-          <input
-            type="checkbox"
-            data-testid="pref-debug-logging"
-            checked={prefs.debugLogging()}
-            onChange={(e) => prefs.setDebugLogging(e.currentTarget.checked)}
-          />
-          <span>Enable debug logging</span>
+        <label class="settings-field">
+          <span class="settings-field__label">Log level</span>
+          <select
+            class="settings-select"
+            data-testid="pref-log-level"
+            value={prefs.logLevel()}
+            onChange={(e) =>
+              prefs.setLogLevel(e.currentTarget.value as LogLevel)
+            }
+          >
+            {LOG_LEVELS.map((level) => (
+              <option value={level}>{level}</option>
+            ))}
+          </select>
         </label>
         <p class="settings-help">
-          Logs machine state/activity transitions, steam-duration changes, and
-          brew/steam-stop events to the browser console and an in-app buffer —
-          so you can run a brew and copy the timeline afterwards instead of
-          catching it live.
+          Logs flow events to the console. Higher levels are chattier:{' '}
+          <code>info</code> (default) keeps the session narrative;{' '}
+          <code>debug</code>/<code>trace</code> add the play-by-play;{' '}
+          <code>silent</code> turns logging off. On the machine these are
+          captured by the gateway — “Copy device log” fetches that capture (the
+          current session). In dev there's no gateway capture; use the browser
+          devtools console.
         </p>
         <div class="dev-actions">
           <button
             type="button"
             class="btn"
             data-testid="copy-debug-log"
-            disabled={size() === 0}
+            disabled={copyState() === 'copying'}
             onClick={copyLog}
           >
-            {copied() ? 'Copied ✓' : `Copy log (${size()})`}
-          </button>
-          <button
-            type="button"
-            class="btn"
-            data-testid="clear-debug-log"
-            disabled={size() === 0}
-            onClick={clear}
-          >
-            Clear log
+            {COPY_LABEL[copyState()]}
           </button>
         </div>
       </div>

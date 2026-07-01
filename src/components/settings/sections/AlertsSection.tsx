@@ -4,6 +4,7 @@ import { WATER_TANK_MAX_MM } from '../../../water';
 import { api } from '../../../api';
 import type { WaterLevelsSnapshot } from '../../../snapshot';
 import { DebouncedNumberField } from './library/DebouncedNumberField';
+import { log } from '../../../debugLog';
 
 const parseMm = (raw: string, fallback: number): number => {
   const n = Number(raw);
@@ -43,7 +44,7 @@ export const AlertsSection: Component<AlertsSectionProps> = (p) => {
     ((mm: number) =>
       void api
         .setRefillLevel(mm)
-        .catch((e) => console.warn('set refill level failed', e)));
+        .catch((e) => log.warn('water', 'set refill level failed', e)));
 
   // Warn floor = the machine's critical level (skin warns no later than the
   // machine's hard stop). Falls back to 0 when no machine has reported one.

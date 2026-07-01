@@ -19,12 +19,12 @@ describe('DeveloperSection', () => {
     expect(screen.getByTestId('dev-build-time')).toHaveTextContent('test');
   });
 
-  it('toggles the debug-logging pref', () => {
+  it('selects the log level', () => {
     renderSection();
-    const cb = screen.getByTestId('pref-debug-logging') as HTMLInputElement;
-    expect(cb.checked).toBe(false);
-    fireEvent.click(cb);
-    expect(cb.checked).toBe(true);
+    const select = screen.getByTestId('pref-log-level') as HTMLSelectElement;
+    expect(select.value).toBe('info');
+    fireEvent.change(select, { target: { value: 'debug' } });
+    expect(select.value).toBe('debug');
   });
 
   it('reset asks for confirmation before wiping data', () => {

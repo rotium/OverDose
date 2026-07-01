@@ -20,6 +20,7 @@ import { beanRating, groupBeansByRoaster } from '../../../../beans';
 import { ShotRatingFace } from '../../../ShotRatingFace';
 import { AutocompleteInput } from './AutocompleteInput';
 import { BeanEditor, type BeanEditorProps } from './BeanEditor';
+import { log } from '../../../../debugLog';
 
 const SHEET_ANIM_MS = 280;
 
@@ -55,7 +56,7 @@ export const BeansSection: Component<BeansSectionProps> = (props) => {
     () => ({ includeArchived: showArchived() }),
     (src) =>
       (props.loadBeans ?? ((o) => api.beans(o)))(src).catch((e) => {
-        console.warn('bean load failed', e);
+        log.warn('bean', 'bean load failed', e);
         return null;
       }),
   );

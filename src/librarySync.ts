@@ -1,6 +1,7 @@
 import { createSignal, type Accessor } from 'solid-js';
 import { api } from './api';
 import { BUILD_INFO } from './buildInfo';
+import { log } from './debugLog';
 import {
   LocalRecipeRepository,
   LocalRoutineRepository,
@@ -170,16 +171,19 @@ export function createLibrarySync(opts: LibrarySyncOptions = {}): LibrarySync {
       const gateway = await storeGet<LibraryMeta>('meta');
       const gUpdated = gateway?.updatedAt ?? -1; // absent gateway = oldest
       if (gUpdated > meta.updatedAt) {
+        log.info('sync', `pull: gateway newer (gw=${gUpdated} > local=${meta.updatedAt})`);
         await pull(gateway!);
       } else if (meta.updatedAt > gUpdated) {
+        log.info('sync', `push: local newer (local=${meta.updatedAt} > gw=${gUpdated})`);
         await push();
+      } else {
+        log.debug('sync', `in sync (updatedAt=${meta.updatedAt})`);
       }
-      // equal → in sync, do nothing
     } catch (e) {
       // Gateway unreachable / transient — stay on the local mirror; the next
       // load/focus retries (and a local edit that failed to push is older on
       // the gateway, so it re-pushes via the compare).
-      console.warn('library sync failed', e);
+      log.warn('sync', 'library sync failed', e);
     } finally {
       syncing = false;
     }
@@ -194,7 +198,7 @@ export function createLibrarySync(opts: LibrarySyncOptions = {}): LibrarySync {
     pushTimer = setTimeout(() => {
       pushTimer = undefined;
       if (syncing) return; // a sync is mid-flight; its compare will push
-      void push().catch((e) => console.warn('library push failed', e));
+      void push().catch((e) => log.warn('sync', 'library push failed', e));
     }, debounceMs);
   }
 

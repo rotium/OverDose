@@ -9,6 +9,8 @@
  * add when the config screen exists.
  */
 
+import type { LogLevel } from './debugLog';
+
 /**
  * Line smoothing for the live brew chart. Trade-offs:
  *   - `linear`   — straight segments between samples; sharp corners at
@@ -134,12 +136,12 @@ export const STEAM_AUTO_TIMEOUT_MIN_MIN = 1;
 export const STEAM_AUTO_TIMEOUT_MIN_MAX = 60;
 
 /**
- * Developer console/debug logging. Default off. When on, key flow events
- * (machine state/activity transitions, steam duration changes, brew-step and
- * steam-stop events) are written to the console and an in-memory buffer
- * (Settings → App → Developer).
+ * Developer log verbosity. Default `info`: error/warn/info always emit (so a
+ * real gateway always captures the session narrative for post-hoc debugging),
+ * while the chattier debug/trace levels stay off until a developer raises the
+ * level in Settings → About → Developer. See `debugLog.ts` for the level model.
  */
-export const DEFAULT_DEBUG_LOGGING = false;
+export const DEFAULT_LOG_LEVEL: LogLevel = 'info';
 
 /** Play a short audio cue when the machine goes to sleep / wakes. Default on. */
 export const DEFAULT_SOUND_CUES = true;

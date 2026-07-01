@@ -21,7 +21,7 @@ import {
   type ShotSettingsSnapshot,
 } from './snapshot';
 import type { WsStream } from './streams';
-import { dlog } from './debugLog';
+import { log } from './debugLog';
 
 /**
  * Streams + side-effects the context needs in order to drive the
@@ -270,7 +270,7 @@ export const LiveShotProvider: Component<LiveShotProviderProps> = (p) => {
         .then((s) => {
           if (s) setMachineSettings(s);
         })
-        .catch((e) => console.warn('fetch machineSettings failed', e));
+        .catch((e) => log.warn('machine', 'fetch machineSettings failed', e));
     };
 
     // Steam-only: register the `pouring` substate (real steam flow). Starts the
@@ -279,7 +279,7 @@ export const LiveShotProvider: Component<LiveShotProviderProps> = (p) => {
       if (substate === 'pouring' && !steamSawPouring) {
         steamSawPouring = true;
         setSteamingStartedAtMs(Date.parse(snap.timestamp));
-        dlog('steam', 'steaming started (pouring)');
+        log.info('steam', 'steaming started (pouring)');
       }
     };
 
@@ -332,7 +332,7 @@ export const LiveShotProvider: Component<LiveShotProviderProps> = (p) => {
         // running across the purge.
         registerSteamPour();
         if (prevSubstate === 'pouring' && substate !== 'pouring') {
-          dlog('steam', `steam stopped → purging (state=${state}, substate=${substate})`);
+          log.info('steam', `steam stopped → purging (state=${state}, substate=${substate})`);
         }
         // setOpPhase with an unchanged value is a no-op (Object.is), so this
         // is safe to call every frame without re-triggering subscribers.
@@ -362,11 +362,11 @@ export const LiveShotProvider: Component<LiveShotProviderProps> = (p) => {
           const r = p.onUpdateShotSettings(restored);
           if (r && typeof (r as Promise<void>).catch === 'function') {
             void (r as Promise<void>).catch((e) =>
-              console.warn('restore steam duration failed', e),
+              log.warn('steam', 'restore steam duration failed', e),
             );
           }
         } catch (e) {
-          console.warn('restore steam duration failed', e);
+          log.warn('steam', 'restore steam duration failed', e);
         }
       }
       originalSteamDurationSec = null;
@@ -376,7 +376,7 @@ export const LiveShotProvider: Component<LiveShotProviderProps> = (p) => {
       setOpKind(null);
       setOpPhase('idle');
       setOpStartedAtMs(0);
-      dlog('op', `${prevOp} session end → ${state}`);
+      log.info('op', `${prevOp} session end → ${state}`);
     }
 
     if (prevState === 'espresso' && state !== 'espresso') {
@@ -448,8 +448,8 @@ export const LiveShotProvider: Component<LiveShotProviderProps> = (p) => {
     const elapsedSec = (Date.parse(snap.timestamp) - startMs) / 1000;
     if (Number.isNaN(elapsedSec) || elapsedSec < dur) return;
     steamStopFired = true;
-    dlog('steam.autostop', `elapsed=${elapsedSec.toFixed(1)}s ≥ dur=${dur}s → stop`);
-    void p.onStop().catch((e) => console.warn('steam auto-stop failed', e));
+    log.info('steam.autostop', `elapsed=${elapsedSec.toFixed(1)}s ≥ dur=${dur}s → stop`);
+    void p.onStop().catch((e) => log.warn('steam', 'steam auto-stop failed', e));
   });
 
   const extendSteam = async (deltaSec: number): Promise<void> => {

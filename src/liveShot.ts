@@ -5,7 +5,7 @@ import type {
   WorkflowSnapshot,
 } from './api';
 import type { MachineSubstate } from './snapshot';
-import { dlog, isDebugLogging } from './debugLog';
+import { isLevelEnabled, log } from './debugLog';
 
 /** One captured tick of brew telemetry — what the accumulator stores per frame. */
 export interface LiveShotFrame {
@@ -350,8 +350,9 @@ export function createLiveShotAccumulator(): LiveShotAccumulator {
       // pre-infusion; `steps(mL)` breaks the dispensed water down per frame
       // (step) so the pre-infusion / pour / tail split is visible. The
       // per-frame volumes sum to `vol`, and frames >= countStart sum to
-      // `counted`. Guarded so the per-frame pass is skipped when logging off.
-      if (isDebugLogging()) {
+      // `counted`. Guarded so the per-frame pass is skipped unless debug
+      // logging is active.
+      if (isLevelEnabled('debug')) {
         let minF = Infinity;
         let maxF = -Infinity;
         const perFrame: number[] = [];
@@ -365,7 +366,7 @@ export function createLiveShotAccumulator(): LiveShotAccumulator {
               flow[i]! * ((tMs[i]! - tMs[i - 1]!) / 1000);
           }
         }
-        dlog(
+        log.debug(
           'shot',
           `end: vol=${volumeMl.toFixed(1)}mL counted=${countedVolumeMl.toFixed(1)}mL ` +
             `countStart=${volumeCountStart} frames=${minF}..${maxF} samples=${cursor}`,
@@ -377,7 +378,7 @@ export function createLiveShotAccumulator(): LiveShotAccumulator {
           const v = (perFrame[f] ?? 0).toFixed(1);
           parts.push(name ? `${f}:${name}=${v}` : `${f}=${v}`);
         }
-        dlog('shot', `steps(mL): ${parts.join('  ')}`);
+        log.debug('shot', `steps(mL): ${parts.join('  ')}`);
       }
       setFrozenShot(buildFrozenShot());
       setStatus('frozen');

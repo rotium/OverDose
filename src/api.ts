@@ -1,7 +1,7 @@
 import type { MachineState, MachineSubstate } from './snapshot';
 import type { ShotSettingsSnapshot } from './snapshot';
 import { gatewayHttpOrigin } from './gateway';
-import { dlog } from './debugLog';
+import { log } from './debugLog';
 
 export interface Device {
   name: string;
@@ -185,14 +185,20 @@ export interface WorkflowSnapshot {
 }
 
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = init?.method ?? 'GET';
+  const t0 = performance.now();
   const res = await fetch(`${gatewayHttpOrigin()}${path}`, init);
-  if (!res.ok) throw new Error(`${init?.method ?? 'GET'} ${path} → ${res.status}`);
+  log.debug('api', `${method} ${path} → ${res.status} (${Math.round(performance.now() - t0)}ms)`);
+  if (!res.ok) throw new Error(`${method} ${path} → ${res.status}`);
   return res.json() as Promise<T>;
 }
 
 async function fetchEmpty(path: string, init?: RequestInit): Promise<void> {
+  const method = init?.method ?? 'GET';
+  const t0 = performance.now();
   const res = await fetch(`${gatewayHttpOrigin()}${path}`, init);
-  if (!res.ok) throw new Error(`${init?.method ?? 'GET'} ${path} → ${res.status}`);
+  log.debug('api', `${method} ${path} → ${res.status} (${Math.round(performance.now() - t0)}ms)`);
+  if (!res.ok) throw new Error(`${method} ${path} → ${res.status}`);
 }
 
 /** The gateway KV store namespace OverDose owns. See docs/storage-sync.md. */
@@ -200,9 +206,11 @@ const STORE_NAMESPACE = 'overdose';
 
 /** GET a KV-store value, resolving to null on 404 (key absent) or empty body. */
 async function fetchStore<T>(key: string): Promise<T | null> {
+  const t0 = performance.now();
   const res = await fetch(
     `${gatewayHttpOrigin()}/api/v1/store/${STORE_NAMESPACE}/${encodeURIComponent(key)}`,
   );
+  log.debug('api', `GET store/${key} → ${res.status} (${Math.round(performance.now() - t0)}ms)`);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`GET store/${key} → ${res.status}`);
   const text = await res.text();
@@ -216,6 +224,20 @@ export const api = {
 
   /** Gateway build identity (version / commit / build time / LAN IP). */
   gatewayInfo: () => fetchJson<GatewayInfo>('/api/v1/info'),
+
+  /**
+   * The gateway's captured WebView console log — i.e. this skin's `console.*`
+   * output, which the InAppWebView host tees into `webview_console.log`.
+   * Plain text, newest entries first; the whole file (up to ~1 MB of the
+   * current gateway session). Only meaningful on a real gateway: in dev the
+   * skin runs in a browser, not the gateway's WebView, so there's nothing to
+   * capture. See docs and the `debugLog` module.
+   */
+  webviewLogs: async (): Promise<string> => {
+    const res = await fetch(`${gatewayHttpOrigin()}/api/v1/webview/logs`);
+    if (!res.ok) throw new Error(`GET /api/v1/webview/logs → ${res.status}`);
+    return res.text();
+  },
 
   /** Read a value from the gateway KV store (namespace `overdose`). Resolves
    *  to null when the key doesn't exist. Backs the library sync — see
@@ -233,13 +255,13 @@ export const api = {
     // Log every outgoing state command so a steam/purge trace can tell apart
     // "we asked for idle and the firmware purged" from "it purged/parked on
     // its own" (no preceding cmd line) — the crux of the steam-stuck bug.
-    dlog('cmd', `→ requestState(${state})`);
+    log.debug('cmd', `→ requestState(${state})`);
     return fetchEmpty(`/api/v1/machine/state/${encodeURIComponent(state)}`, {
       method: 'PUT',
     }).then(
-      () => dlog('cmd', `✓ requestState(${state}) acked`),
+      () => log.debug('cmd', `✓ requestState(${state}) acked`),
       (e) => {
-        dlog('cmd', `✗ requestState(${state}) failed: ${e}`);
+        log.error('cmd', `✗ requestState(${state}) failed`, e);
         throw e;
       },
     );

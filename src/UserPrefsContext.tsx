@@ -9,11 +9,12 @@ import {
   type Component,
   type JSX,
 } from 'solid-js';
+import { log, type LogLevel } from './debugLog';
 import {
   DEFAULT_AUTO_STOP_MODE,
   DEFAULT_CHART_SMOOTHING,
-  DEFAULT_DEBUG_LOGGING,
   DEFAULT_HAS_SCALE,
+  DEFAULT_LOG_LEVEL,
   DEFAULT_SOUND_CUES,
   DEFAULT_STEAM_AUTO_FLAVOR,
   DEFAULT_STEAM_AUTO_FLUSH_SEC,
@@ -81,7 +82,7 @@ interface PersistedPrefs {
   showWaterFlowSlider?: boolean;
   showFlushFlowSlider?: boolean;
   hasScale?: boolean;
-  debugLogging?: boolean;
+  logLevel?: LogLevel;
   soundCues?: boolean;
   steamPurgeStrategy?: SteamPurgeStrategy;
   steamAutoFlushSec?: number;
@@ -124,9 +125,9 @@ export interface UserPrefsContextValue {
    *  hides scale UI (header pill + dashboard readout). */
   hasScale: Accessor<boolean>;
   setHasScale: (v: boolean) => void;
-  /** Developer console/debug logging. Default off. */
-  debugLogging: Accessor<boolean>;
-  setDebugLogging: (v: boolean) => void;
+  /** Developer log verbosity. Default `info`. See `debugLog.ts`. */
+  logLevel: Accessor<LogLevel>;
+  setLogLevel: (v: LogLevel) => void;
   /** Play a short audio cue on the sleep/wake transition. Default on. */
   soundCues: Accessor<boolean>;
   setSoundCues: (v: boolean) => void;
@@ -218,8 +219,8 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
   const [hasScale, setHasScale] = createSignal<boolean>(
     initial.hasScale ?? DEFAULT_HAS_SCALE,
   );
-  const [debugLogging, setDebugLogging] = createSignal<boolean>(
-    initial.debugLogging ?? DEFAULT_DEBUG_LOGGING,
+  const [logLevel, setLogLevel] = createSignal<LogLevel>(
+    initial.logLevel ?? DEFAULT_LOG_LEVEL,
   );
   const [soundCues, setSoundCues] = createSignal<boolean>(
     initial.soundCues ?? DEFAULT_SOUND_CUES,
@@ -265,7 +266,7 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
       showWaterFlowSlider: showWaterFlowSlider(),
       showFlushFlowSlider: showFlushFlowSlider(),
       hasScale: hasScale(),
-      debugLogging: debugLogging(),
+      logLevel: logLevel(),
       soundCues: soundCues(),
       steamPurgeStrategy: steamPurgeStrategy(),
       steamAutoFlushSec: steamAutoFlushSec(),
@@ -302,7 +303,7 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
         }
       } catch (e) {
         // Offline / first run — keep the local mirror value.
-        console.warn('steamPurge gateway pull failed', e);
+        log.warn('steam', 'steamPurge gateway pull failed', e);
       }
     };
 
@@ -329,7 +330,7 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
       pushTimer = setTimeout(() => {
         pushTimer = undefined;
         void gw.set(STEAM_PURGE_STORE_KEY, cfg).catch((e) =>
-          console.warn('steamPurge gateway push failed', e),
+          log.warn('steam', 'steamPurge gateway push failed', e),
         );
       }, 400);
     });
@@ -356,8 +357,8 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
     setShowFlushFlowSlider,
     hasScale,
     setHasScale,
-    debugLogging,
-    setDebugLogging,
+    logLevel,
+    setLogLevel,
     soundCues,
     setSoundCues,
     steamPurgeStrategy,

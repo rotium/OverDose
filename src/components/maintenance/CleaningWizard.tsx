@@ -14,6 +14,7 @@ import type { Cleaning } from '../../domain';
 import type { MachineSnapshot, MachineState } from '../../snapshot';
 import type { WsStream } from '../../streams';
 import { buildWizard, wizardFinishLines, type WizardPhase } from './cleaningWizard';
+import { log } from '../../debugLog';
 
 type PhaseStatus = 'pending' | 'requested' | 'running' | 'done';
 
@@ -168,7 +169,7 @@ export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
     try {
       await p.restoreWorkflow(w);
     } catch (e) {
-      console.warn('restore workflow failed', e);
+      log.warn('clean', 'restore workflow failed', e);
     }
   };
 
@@ -195,20 +196,20 @@ export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
           runStopTimer = setTimeout(() => {
             runStopTimer = undefined;
             p.requestState('idle').catch((e) =>
-              console.warn('run stop failed', e),
+              log.warn('clean', 'run stop failed', e),
             );
           }, phase.durationSec * 1000);
         }
       }
     } catch (e) {
-      console.warn('cleaning run start failed', e);
+      log.error('clean', 'cleaning run start failed', e);
       setStatus(idx, 'pending');
     }
   };
 
   const stopRun = () => {
     clearRunTimer();
-    p.requestState('idle').catch((e) => console.warn('stop failed', e));
+    p.requestState('idle').catch((e) => log.warn('clean', 'stop failed', e));
   };
 
   const next = () => {
@@ -230,7 +231,7 @@ export const CleaningWizard: Component<CleaningWizardProps> = (p) => {
     const phase = phases[idx];
     const st = statuses()[idx];
     if (phase?.kind === 'run' && (st === 'requested' || st === 'running')) {
-      p.requestState('idle').catch((e) => console.warn('stop failed', e));
+      p.requestState('idle').catch((e) => log.warn('clean', 'stop failed', e));
     }
     await restoreIfNeeded();
     p.onExit();

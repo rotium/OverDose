@@ -1,5 +1,6 @@
 import { Show, createResource, type Component } from 'solid-js';
 import { api, type GatewayInfo } from '../../../api';
+import { log } from '../../../debugLog';
 
 /**
  * App section (Settings → About → App). One card titled "App" with two
@@ -16,7 +17,7 @@ export const AppSection: Component = () => {
     try {
       return await api.gatewayInfo();
     } catch (e) {
-      console.warn('gatewayInfo fetch failed', e);
+      log.warn('info', 'gatewayInfo fetch failed', e);
       return null;
     }
   });

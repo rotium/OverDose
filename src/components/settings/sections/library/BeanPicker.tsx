@@ -10,6 +10,7 @@ import {
 } from 'solid-js';
 import { api, type Bean } from '../../../../api';
 import { groupBeansByRoaster } from '../../../../beans';
+import { log } from '../../../../debugLog';
 
 export interface BeanPickerProps {
   selectedId?: string;
@@ -31,7 +32,7 @@ export interface BeanPickerProps {
 export const BeanPicker: Component<BeanPickerProps> = (p) => {
   const [beans] = createResource<Bean[] | null>(() =>
     (p.loadBeans ?? (() => api.beans({})))().catch((e) => {
-      console.warn('bean load failed', e);
+      log.warn('bean', 'bean load failed', e);
       return null;
     }),
   );

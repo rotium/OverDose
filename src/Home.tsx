@@ -32,6 +32,7 @@ import { useUserPrefs } from './UserPrefsContext';
 import type { SteamMode } from './prefs';
 import type { SteamStatus } from './steamController';
 import { type WaterSeverity } from './water';
+import { log } from './debugLog';
 
 /**
  * Home — the entry screen. Composes the live data streams + the injected
@@ -182,8 +183,9 @@ export const Home: Component<HomeProps> = (p) => {
       prevSubstate !== 'pouringDone' && curSubstate === 'pouringDone';
 
     if (stateLeftEspresso || enteredPouringDone) {
-      console.info(
-        '[Home] brew complete — refetching last shot',
+      log.info(
+        'shot',
+        'brew complete — refetching last shot',
         { prevState, curState, prevSubstate, curSubstate },
       );
       setShotCompletedTick((n) => n + 1);

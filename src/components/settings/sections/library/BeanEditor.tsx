@@ -22,6 +22,7 @@ import { ShotRatingBar } from '../../../ShotRatingBar';
 import { ShotRatingFace } from '../../../ShotRatingFace';
 import { AutocompleteInput } from './AutocompleteInput';
 import { DebouncedNumberField } from './DebouncedNumberField';
+import { log } from '../../../../debugLog';
 
 const SPECIES = ['Arabica', 'Robusta', 'Liberica', 'Blend'];
 const PROCESSING = ['Washed', 'Natural', 'Honey', 'Anaerobic', 'Wet-hulled'];
@@ -142,7 +143,7 @@ export const BeanEditor: Component<BeanEditorProps> = (p) => {
       void refetch();
       return true;
     } catch (e) {
-      console.warn('bean save failed', e);
+      log.warn('bean', 'bean save failed', e);
       setSaveFailed(true);
       return false;
     }
@@ -237,7 +238,7 @@ export const BeanEditor: Component<BeanEditorProps> = (p) => {
       await (p.deleteBean ?? ((id) => api.deleteBean(id)))(p.beanId);
       p.onClose();
     } catch (e) {
-      console.warn('bean delete failed', e);
+      log.warn('bean', 'bean delete failed', e);
       setSaveFailed(true);
     }
   };

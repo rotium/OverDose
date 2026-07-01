@@ -12,6 +12,7 @@ import {
 } from 'solid-js';
 import { api, type ProfileRecord } from '../../../../api';
 import { ProfilePreview } from './ProfilePreview';
+import { log } from '../../../../debugLog';
 
 /**
  * Master-detail profile picker. Left column lists profiles (title +
@@ -67,7 +68,7 @@ export const ProfilePicker: Component<ProfilePickerProps> = (p) => {
   // doesn't leak unhandled rejections (same pattern as MachineTab).
   const [profiles] = createResource<ProfileRecord[] | null>(() =>
     (p.loadProfiles ?? (() => api.profiles({})))().catch((e) => {
-      console.warn('profile load failed', e);
+      log.warn('profile', 'profile load failed', e);
       return null;
     }),
   );
