@@ -188,8 +188,9 @@ describe('Settings', () => {
       const { prefs } = setup();
       openAlerts();
       const input = screen.getByLabelText('Warn threshold') as HTMLInputElement;
-      // Debounced field: commit fires on input (debounced) + blur (flush).
-      fireEvent.input(input, { target: { value: '8' } });
+      // The field is in the displayed (raw + 8mm reserve) frame, so entering 16
+      // persists a raw warn of 8. Debounced: commit fires on input + blur.
+      fireEvent.input(input, { target: { value: '16' } });
       fireEvent.blur(input);
       expect(prefs.waterWarnMm()).toBe(8);
     });
@@ -200,11 +201,11 @@ describe('Settings', () => {
         .mockResolvedValue(undefined);
       const { prefs } = setup({ refillLevel: 3 }); // machine reports a level
       openAlerts();
-      // warn defaults to 5, so trying to set critical to 9 should clamp to 5
-      // and write that to the machine (not a skin pref).
+      // warn defaults to raw 5. The field is in the displayed (+8) frame, so 20
+      // maps to raw 12 — above warn — and clamps to warn (5), written raw to the
+      // machine (not a skin pref). Debounced: commit fires on input + blur.
       const crit = screen.getByLabelText('Critical threshold') as HTMLInputElement;
-      // Debounced field: commit fires on input (debounced) + blur (flush).
-      fireEvent.input(crit, { target: { value: '9' } });
+      fireEvent.input(crit, { target: { value: '20' } });
       fireEvent.blur(crit);
       expect(setRefill).toHaveBeenCalledWith(prefs.waterWarnMm());
       setRefill.mockRestore();

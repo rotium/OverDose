@@ -1,16 +1,14 @@
 import { Show, type Accessor, type Component } from 'solid-js';
 import { useUserPrefs } from '../../../UserPrefsContext';
-import { WATER_TANK_MAX_MM } from '../../../water';
+import {
+  WATER_DEAD_ZONE_MM,
+  WATER_DISPLAY_MAX_MM,
+  WATER_TANK_MAX_MM,
+} from '../../../water';
 import { api } from '../../../api';
 import type { WaterLevelsSnapshot } from '../../../snapshot';
 import { DebouncedNumberField } from './library/DebouncedNumberField';
 import { log } from '../../../debugLog';
-
-const parseMm = (raw: string, fallback: number): number => {
-  const n = Number(raw);
-  if (!Number.isFinite(n)) return fallback;
-  return n;
-};
 
 export interface AlertsSectionProps {
   /** Live water-levels accessor — supplies the machine's current refill
@@ -38,7 +36,18 @@ export interface AlertsSectionProps {
 export const AlertsSection: Component<AlertsSectionProps> = (p) => {
   const prefs = useUserPrefs();
 
-  const refillMm = (): number | null => p.waterLevels?.()?.refillLevel ?? null;
+  // Thresholds are stored/written in the raw sensor frame (warn = skin pref,
+  // critical = the machine's refillLevel), but shown to the user in the same
+  // true-height (raw + reserve) frame as the water readout, floored at the
+  // reserve so an alert can't be set inside the unmeasurable dead zone.
+  const toDisp = (raw: number): number => raw + WATER_DEAD_ZONE_MM;
+  const fromDisp = (disp: number): number => disp - WATER_DEAD_ZONE_MM;
+
+  const refillRaw = (): number | null => p.waterLevels?.()?.refillLevel ?? null;
+  const refillDisp = (): number | null => {
+    const r = refillRaw();
+    return r === null ? null : toDisp(r);
+  };
   const writeRefill =
     p.onSetRefillLevel ??
     ((mm: number) =>
@@ -47,18 +56,20 @@ export const AlertsSection: Component<AlertsSectionProps> = (p) => {
         .catch((e) => log.warn('water', 'set refill level failed', e)));
 
   // Warn floor = the machine's critical level (skin warns no later than the
-  // machine's hard stop). Falls back to 0 when no machine has reported one.
-  const setWarn = (raw: string) => {
-    const floor = refillMm() ?? 0;
-    const parsed = parseMm(raw, prefs.waterWarnMm());
-    prefs.setWaterWarnMm(Math.max(floor, Math.min(WATER_TANK_MAX_MM, parsed)));
+  // machine's hard stop). Falls back to 0 (raw) when no machine has reported one.
+  const commitWarn = (disp: number | undefined) => {
+    if (disp === undefined) return;
+    const floorRaw = refillRaw() ?? 0;
+    const raw = fromDisp(disp);
+    prefs.setWaterWarnMm(Math.max(floorRaw, Math.min(WATER_TANK_MAX_MM, raw)));
   };
 
   // Critical writes the machine's refill level (clamped at/below warn). Ignores
   // a cleared field — there's no "no critical level" on the machine.
-  const commitCritical = (v: number | undefined) => {
-    if (v === undefined) return;
-    writeRefill(Math.max(0, Math.min(prefs.waterWarnMm(), v)));
+  const commitCritical = (disp: number | undefined) => {
+    if (disp === undefined) return;
+    const raw = fromDisp(disp);
+    writeRefill(Math.max(0, Math.min(prefs.waterWarnMm(), raw)));
   };
 
   return (
@@ -71,12 +82,10 @@ export const AlertsSection: Component<AlertsSectionProps> = (p) => {
           </label>
           <div class="settings-number-row">
             <DebouncedNumberField
-              value={prefs.waterWarnMm()}
-              onCommit={(v) => {
-                if (v !== undefined) setWarn(String(v));
-              }}
-              min={refillMm() ?? 0}
-              max={WATER_TANK_MAX_MM}
+              value={toDisp(prefs.waterWarnMm())}
+              onCommit={commitWarn}
+              min={refillDisp() ?? WATER_DEAD_ZONE_MM}
+              max={WATER_DISPLAY_MAX_MM}
               step={1}
               steppers
               unit="mm"
@@ -89,7 +98,7 @@ export const AlertsSection: Component<AlertsSectionProps> = (p) => {
           <label class="settings-field__label">Critical threshold</label>
           <div class="settings-number-row">
             <Show
-              when={refillMm() !== null}
+              when={refillDisp() !== null}
               fallback={
                 <span class="settings-unit" data-testid="critical-no-machine">
                   — (no machine connected)
@@ -100,9 +109,10 @@ export const AlertsSection: Component<AlertsSectionProps> = (p) => {
                   debounced field so incoming water frames don't reset the
                   input mid-type. Commit writes through to the machine. */}
               <DebouncedNumberField
-                value={refillMm() ?? undefined}
+                value={refillDisp() ?? undefined}
                 onCommit={commitCritical}
-                min={0}
+                min={WATER_DEAD_ZONE_MM}
+                max={WATER_DISPLAY_MAX_MM}
                 step={1}
                 steppers
                 unit="mm"

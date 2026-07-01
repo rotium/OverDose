@@ -9,7 +9,14 @@ import {
 } from '../snapshot';
 import { useUserPrefs } from '../UserPrefsContext';
 import type { SteamStatus } from '../steamController';
-import { mmToMl, waterPct, type WaterSeverity } from '../water';
+import {
+  displayMl,
+  isBelowSensor,
+  toDisplayMm,
+  waterFillPct,
+  WATER_RESERVE_FRAC,
+  type WaterSeverity,
+} from '../water';
 import type { SteamMode, WaterUnit } from '../prefs';
 import {
   PowerIcon,
@@ -32,9 +39,14 @@ const fmtWeight = (w: number | null | undefined) =>
 const dataFrame = (msg: ScaleMessage | null): ScaleSnapshot | null =>
   msg && !isScaleStatusFrame(msg) ? msg : null;
 
-const formatWaterLevel = (mm: number, unit: WaterUnit): string => {
-  const mlPart = `${Math.round(mmToMl(mm))} mL`;
-  const mmPart = `${mm.toFixed(0)} mm`;
+// Levels are shown in the true-height frame (raw + intake-tube reserve, see
+// water.ts). In the dead zone the sensor reads 0 and the true amount is unknown
+// up to the reserve, so the value is shown `≤`-qualified rather than as a hard
+// number — but never as a bare 0, since the reservoir visibly holds water.
+const formatWaterLevel = (rawMm: number, unit: WaterUnit): string => {
+  const q = isBelowSensor(rawMm) ? '≤ ' : '';
+  const mlPart = `${q}${Math.round(displayMl(rawMm))} mL`;
+  const mmPart = `${q}${Math.round(toDisplayMm(rawMm))} mm`;
   switch (unit) {
     case 'mL':
       return mlPart;
@@ -208,10 +220,24 @@ export const StatusPanel: Component<StatusPanelProps> = (p) => {
                 <span class="status__row status__row--wrap">
                   <span>{formatWaterLevel(w().currentLevel, prefs.waterUnit())}</span>
                   <span class="bar" aria-hidden="true">
+                    {/* Option A: hatched reserve zone at the base, a sensor line
+                        where measurement begins, measured water growing above it. */}
+                    <span
+                      class="bar__reserve"
+                      data-severity={rowSev()}
+                      style={{ width: `${WATER_RESERVE_FRAC * 100}%` }}
+                    />
                     <span
                       class="bar__fill"
                       data-severity={rowSev()}
-                      style={{ width: `${waterPct(w().currentLevel) * 100}%` }}
+                      style={{
+                        left: `${WATER_RESERVE_FRAC * 100}%`,
+                        width: `${Math.max(0, waterFillPct(w().currentLevel) - WATER_RESERVE_FRAC) * 100}%`,
+                      }}
+                    />
+                    <span
+                      class="bar__sensor"
+                      style={{ left: `${WATER_RESERVE_FRAC * 100}%` }}
                     />
                   </span>
                   <Show when={rowSev() === 'critical'}>

@@ -85,5 +85,35 @@ export const isWaterBlocked = (
 // User-supplied curve fit; matches the machine's tapered tank closely enough for UI.
 export const mmToMl = (mm: number): number => mm * 22 + Math.pow(mm, 1.52);
 
-export const waterPct = (mm: number): number =>
-  Math.max(0, Math.min(1, mm / WATER_TANK_MAX_MM));
+// ── Intake-tube dead zone / reserve ──────────────────────────────────────────
+// The DE1 sensor measures height up the intake tube, which sits ~8mm above the
+// true tank bottom, so it reports 0 until the tank holds the reserve below the
+// tube (≈ mmToMl(8) ≈ 200mL — the level the user sees start moving on real
+// hardware). The reservoir is *visible*, so we don't hide that water like a
+// battery buffer: we shift the whole display up by this offset and draw the
+// reserve as its own zone in the bar. TUNABLE — eyeball estimate, validate on
+// hardware. Severity/alerts stay in the raw sensor frame (see waterSeverity):
+// a uniform offset on both sides of the refill compare is a no-op there.
+export const WATER_DEAD_ZONE_MM = 8;
+
+// Displayed full height = raw full (WATER_TANK_MAX_MM) + the reserve offset.
+export const WATER_DISPLAY_MAX_MM = WATER_TANK_MAX_MM + WATER_DEAD_ZONE_MM;
+
+const clamp01 = (n: number): number => Math.max(0, Math.min(1, n));
+
+/** True water height (mm from the tank bottom) for a raw sensor reading. */
+export const toDisplayMm = (rawMm: number): number => rawMm + WATER_DEAD_ZONE_MM;
+
+/** Displayed volume (mL) incl. the below-tube reserve. */
+export const displayMl = (rawMm: number): number => mmToMl(toDisplayMm(rawMm));
+
+/** The sensor can't measure below the tube — raw pins at 0 through the reserve. */
+export const isBelowSensor = (rawMm: number): boolean => rawMm <= 0;
+
+/** Bar fill (0–1) by volume incl. reserve — one physical bar for every unit. */
+export const waterFillPct = (rawMm: number): number =>
+  clamp01(displayMl(rawMm) / mmToMl(WATER_DISPLAY_MAX_MM));
+
+/** Constant width (0–1) of the always-present reserve zone at the base of the bar. */
+export const WATER_RESERVE_FRAC =
+  mmToMl(WATER_DEAD_ZONE_MM) / mmToMl(WATER_DISPLAY_MAX_MM);
