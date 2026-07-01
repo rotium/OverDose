@@ -3,9 +3,30 @@
 
 import { createMemo, type Accessor } from 'solid-js';
 import type { WaterLevelsSnapshot } from './snapshot';
+import type { WaterUnit } from './prefs';
 
 // DE1 tank: full at ~65mm.
 export const WATER_TANK_MAX_MM = 65;
+
+// TEMPORARY (2026-07 debug): DE1 intake-tube offset, gated by the
+// `waterIntakeOffset` pref (default on — see DEFAULT_WATER_INTAKE_OFFSET).
+//
+// The DE1 reports water height from the intake tube, which sits ~5mm above the
+// true tank bottom. DE1App adds this back before its tank-volume math; reaprime
+// forwards the raw value ("what the machine sees"). Our mL curve (mmToMl) and
+// full-tank height (WATER_TANK_MAX_MM) inherit DE1App's tank-bottom frame, so
+// without the offset the readout under-reports by ~5mm of water.
+//
+// Applied to the *displayed* level only (mm / mL / fill bar). Severity + alert
+// thresholds stay in the raw machine frame: adding a constant to both sides of
+// the `currentLevel <= refillLevel` compare is a no-op, so critical alerts
+// remain aligned with the machine. Intent is to settle on fixed behaviour and
+// drop the toggle once it's been felt out on real hardware.
+export const WATER_INTAKE_OFFSET_MM = 5;
+
+/** Level (mm) to show/convert, with the intake-tube offset optionally applied. */
+export const effectiveLevelMm = (rawMm: number, applyOffset: boolean): number =>
+  applyOffset ? rawMm + WATER_INTAKE_OFFSET_MM : rawMm;
 
 // Water-alert thresholds (mm), compared as `currentLevel <= threshold`.
 // `warn` is the skin-only visual nudge — a UserPrefs setting seeded from
@@ -87,3 +108,13 @@ export const mmToMl = (mm: number): number => mm * 22 + Math.pow(mm, 1.52);
 
 export const waterPct = (mm: number): number =>
   Math.max(0, Math.min(1, mm / WATER_TANK_MAX_MM));
+
+// Fill fraction (0–1) for the tank bar, matched to the *displayed* unit so the
+// bar and the number always tell the same story:
+//   'mm' / 'both' → % of tank height (linear; mm is the source of truth)
+//   'mL'          → % of tank volume (uses mmToMl so the taper is reflected —
+//                   a half-height reading fills to ~46%, not 50%).
+export const waterFillPct = (mm: number, unit: WaterUnit): number =>
+  unit === 'mL'
+    ? Math.max(0, Math.min(1, mmToMl(mm) / mmToMl(WATER_TANK_MAX_MM)))
+    : waterPct(mm);

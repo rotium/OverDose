@@ -1,6 +1,7 @@
 import { For, type Component } from 'solid-js';
 import { useUserPrefs } from '../../../UserPrefsContext';
 import type { ChartSmoothing, TraceVisibility, WaterUnit } from '../../../prefs';
+import { WATER_INTAKE_OFFSET_MM } from '../../../water';
 
 const WATER_UNIT_OPTIONS: { value: WaterUnit; label: string }[] = [
   { value: 'mL', label: 'mL' },
@@ -52,6 +53,22 @@ export const DisplaySection: Component = () => {
             )}
           </For>
         </div>
+        <label class="settings-checkbox">
+          <input
+            type="checkbox"
+            data-testid="pref-water-intake-offset"
+            checked={prefs.waterIntakeOffset()}
+            onChange={(e) => prefs.setWaterIntakeOffset(e.currentTarget.checked)}
+          />
+          <span>Adjust for intake-tube offset (+{WATER_INTAKE_OFFSET_MM} mm)</span>
+        </label>
+        <p class="settings-help">
+          Temporary. The DE1 measures water height from the intake tube, which
+          sits ~{WATER_INTAKE_OFFSET_MM} mm above the tank bottom; adding it back
+          makes the mm/mL readout match the real tank (and Decent's own app).
+          Turn off to show exactly what the machine reports. Low-water alerts are
+          unaffected either way.
+        </p>
       </section>
 
       <section class="settings-section" aria-labelledby="display-chart-heading">

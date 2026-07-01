@@ -24,6 +24,7 @@ import {
   DEFAULT_STEAM_PURGE_STRATEGY,
   DEFAULT_STEAM_TARGET_TEMP,
   DEFAULT_TRACE_VISIBILITY,
+  DEFAULT_WATER_INTAKE_OFFSET,
   DEFAULT_WATER_UNIT,
   type AutoStopMode,
   type ChartSmoothing,
@@ -76,6 +77,7 @@ const STEAM_PURGE_STRATEGIES: readonly SteamPurgeStrategy[] = [
 interface PersistedPrefs {
   waterUnit?: WaterUnit;
   waterWarnMm?: number;
+  waterIntakeOffset?: boolean;
   chartSmoothing?: ChartSmoothing;
   traceVisibility?: TraceVisibility;
   showSteamFlowSlider?: boolean;
@@ -99,6 +101,13 @@ export interface UserPrefsContextValue {
   setWaterUnit: (u: WaterUnit) => void;
   waterWarnMm: Accessor<number>;
   setWaterWarnMm: (mm: number) => void;
+  /**
+   * TEMPORARY debug toggle — add the DE1 intake-tube offset (~5mm) to the
+   * displayed water level before mm/mL/fill conversion. Default on. See
+   * DEFAULT_WATER_INTAKE_OFFSET / WATER_INTAKE_OFFSET_MM.
+   */
+  waterIntakeOffset: Accessor<boolean>;
+  setWaterIntakeOffset: (v: boolean) => void;
   chartSmoothing: Accessor<ChartSmoothing>;
   setChartSmoothing: (s: ChartSmoothing) => void;
   traceVisibility: Accessor<TraceVisibility>;
@@ -199,6 +208,9 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
   const [waterWarnMm, setWaterWarnMm] = createSignal<number>(
     initial.waterWarnMm ?? WATER_WARN_MM,
   );
+  const [waterIntakeOffset, setWaterIntakeOffset] = createSignal<boolean>(
+    initial.waterIntakeOffset ?? DEFAULT_WATER_INTAKE_OFFSET,
+  );
   const [chartSmoothing, setChartSmoothing] = createSignal<ChartSmoothing>(
     initial.chartSmoothing ?? DEFAULT_CHART_SMOOTHING,
   );
@@ -260,6 +272,7 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
     const shape: PersistedPrefs = {
       waterUnit: waterUnit(),
       waterWarnMm: waterWarnMm(),
+      waterIntakeOffset: waterIntakeOffset(),
       chartSmoothing: chartSmoothing(),
       traceVisibility: traceVisibility(),
       showSteamFlowSlider: showSteamFlowSlider(),
@@ -344,6 +357,8 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
     setWaterUnit,
     waterWarnMm,
     setWaterWarnMm,
+    waterIntakeOffset,
+    setWaterIntakeOffset,
     chartSmoothing,
     setChartSmoothing,
     traceVisibility,

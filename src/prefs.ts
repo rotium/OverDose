@@ -69,6 +69,16 @@ export type WaterUnit = 'mL' | 'mm' | 'both';
 export const DEFAULT_WATER_UNIT: WaterUnit = 'mL';
 
 /**
+ * TEMPORARY (2026-07 debug toggle): whether to add the DE1 intake-tube offset
+ * (~5mm) to the displayed water level before converting to mm/mL/fill. The DE1
+ * measures from the intake tube, which sits above the true tank bottom; DE1App
+ * adds this back, reaprime forwards the raw value. Default on so the readout
+ * matches the real tank / DE1App. Kept as a pref only to feel out both modes on
+ * hardware — likely to become fixed behaviour later. See WATER_INTAKE_OFFSET_MM.
+ */
+export const DEFAULT_WATER_INTAKE_OFFSET = true;
+
+/**
  * Whether a scale is part of the setup. Default true. When false, the skin
  * hides scale UI (the header status pill, the dashboard scale readout) so a
  * scaleless user isn't shown a permanently-offline badge.

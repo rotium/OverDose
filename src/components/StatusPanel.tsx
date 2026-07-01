@@ -9,7 +9,12 @@ import {
 } from '../snapshot';
 import { useUserPrefs } from '../UserPrefsContext';
 import type { SteamStatus } from '../steamController';
-import { mmToMl, waterPct, type WaterSeverity } from '../water';
+import {
+  effectiveLevelMm,
+  mmToMl,
+  waterFillPct,
+  type WaterSeverity,
+} from '../water';
 import type { SteamMode, WaterUnit } from '../prefs';
 import {
   PowerIcon,
@@ -204,14 +209,20 @@ export const StatusPanel: Component<StatusPanelProps> = (p) => {
               // accessor through a getter keeps it reactive (capturing the
               // value once would stick at its first-seen state).
               const rowSev = p.waterSeverity;
+              // Displayed level, optionally adjusted for the intake-tube offset
+              // (getter keeps it reactive to the pref + incoming frames).
+              const shownMm = () =>
+                effectiveLevelMm(w().currentLevel, prefs.waterIntakeOffset());
               return (
                 <span class="status__row status__row--wrap">
-                  <span>{formatWaterLevel(w().currentLevel, prefs.waterUnit())}</span>
+                  <span>{formatWaterLevel(shownMm(), prefs.waterUnit())}</span>
                   <span class="bar" aria-hidden="true">
                     <span
                       class="bar__fill"
                       data-severity={rowSev()}
-                      style={{ width: `${waterPct(w().currentLevel) * 100}%` }}
+                      style={{
+                        width: `${waterFillPct(shownMm(), prefs.waterUnit()) * 100}%`,
+                      }}
                     />
                   </span>
                   <Show when={rowSev() === 'critical'}>
