@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { createRoot, createSignal } from 'solid-js';
 import {
   createWaterSeverity,
+  displayMl,
+  isBelowSensor,
+  mmToMl,
+  toDisplayMm,
+  waterFillPct,
+  WATER_DEAD_ZONE_MM,
   WATER_HYSTERESIS_MM,
+  WATER_RESERVE_FRAC,
+  WATER_TANK_MAX_MM,
   waterSeverity,
   type WaterSeverity,
 } from './water';
@@ -73,5 +81,38 @@ describe('createWaterSeverity (hysteretic)', () => {
   it('cascades critical → normal in one frame on a full refill', () => {
     // Jump well past warn + margin: should de-escalate all the way to normal.
     expect(run([lvl(2, 3), lvl(40, 3)])).toEqual(['critical', 'normal']);
+  });
+});
+
+describe('intake-tube reserve (display frame)', () => {
+  it('shifts the shown level up by the dead-zone offset', () => {
+    expect(toDisplayMm(0)).toBe(WATER_DEAD_ZONE_MM);
+    expect(toDisplayMm(10)).toBe(10 + WATER_DEAD_ZONE_MM);
+    expect(displayMl(10)).toBe(mmToMl(10 + WATER_DEAD_ZONE_MM));
+  });
+
+  it('reports ~200 mL of reserve at a raw-0 reading (not 0)', () => {
+    // The reservoir is visible, so an empty sensor still shows the reserve.
+    expect(Math.round(displayMl(0))).toBe(Math.round(mmToMl(WATER_DEAD_ZONE_MM)));
+    expect(Math.round(displayMl(0))).toBeGreaterThan(150);
+  });
+
+  it('flags the dead zone only at/below a raw-0 reading', () => {
+    expect(isBelowSensor(0)).toBe(true);
+    expect(isBelowSensor(-1)).toBe(true);
+    expect(isBelowSensor(0.1)).toBe(false);
+  });
+
+  it('fills the bar by volume incl. reserve, clamped to [0,1]', () => {
+    // Raw 0 fills exactly the reserve fraction; raw-full is exactly 1; over
+    // clamps to 1.
+    expect(waterFillPct(0)).toBeCloseTo(WATER_RESERVE_FRAC, 10);
+    expect(waterFillPct(WATER_TANK_MAX_MM - WATER_DEAD_ZONE_MM)).toBe(1);
+    expect(waterFillPct(1000)).toBe(1);
+  });
+
+  it('keeps the reserve zone a small slice of the full bar', () => {
+    expect(WATER_RESERVE_FRAC).toBeGreaterThan(0);
+    expect(WATER_RESERVE_FRAC).toBeLessThan(0.2);
   });
 });

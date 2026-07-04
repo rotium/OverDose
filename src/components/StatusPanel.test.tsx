@@ -11,7 +11,13 @@ import type {
   ShotSettingsSnapshot,
   WaterLevelsSnapshot,
 } from '../snapshot';
-import { waterSeverity, type WaterSeverity } from '../water';
+import {
+  displayMl,
+  waterFillPct,
+  waterSeverity,
+  WATER_RESERVE_FRAC,
+  type WaterSeverity,
+} from '../water';
 import type { SteamMode } from '../prefs';
 import type { SteamStatus } from '../steamController';
 
@@ -150,23 +156,39 @@ describe('StatusPanel', () => {
       expect(screen.getByTestId('status-scale')).toHaveTextContent('—');
     });
 
-    it('renders water level in mL with a bar against the 65mm tank', () => {
-      // 32.5mm = half of the 65mm tank → 50% bar.
-      // mL = 32.5 * 22 + 32.5^1.52 ≈ 914
-      setup({ waterLevels: { currentLevel: 32.5, refillLevel: 10 } });
+    it('renders water level in mL incl. the reserve, measured span above the reserve zone', () => {
+      const raw = 32.5;
+      setup({ waterLevels: { currentLevel: raw, refillLevel: 10 } });
       const cell = screen.getByTestId('status-water');
-      expect(cell).toHaveTextContent('914 mL');
+      // Volume is shown in the true-height frame (raw + reserve), so it's higher
+      // than the bare mmToMl(raw) — and never 'mm' in mL mode.
+      expect(cell).toHaveTextContent(`${Math.round(displayMl(raw))} mL`);
       expect(cell).not.toHaveTextContent('mm');
+      // The reserve zone is always present; the measured fill starts at the
+      // sensor line and spans up to the total fill.
+      expect(cell.querySelector('.bar__reserve')).toBeInTheDocument();
       const fill = cell.querySelector('.bar__fill') as HTMLElement;
-      expect(fill).toBeInTheDocument();
-      expect(fill.style.width).toBe('50%');
+      expect(fill.style.left).toBe(`${WATER_RESERVE_FRAC * 100}%`);
+      expect(fill.style.width).toBe(
+        `${Math.max(0, waterFillPct(raw) - WATER_RESERVE_FRAC) * 100}%`,
+      );
     });
 
-    it('clamps the bar at 100% when level exceeds the 65mm tank max', () => {
+    it('shows a ≤-qualified reserve value and empty measured span in the dead zone', () => {
+      setup({ waterLevels: { currentLevel: 0, refillLevel: 3 } });
+      const cell = screen.getByTestId('status-water');
+      expect(cell).toHaveTextContent(`≤ ${Math.round(displayMl(0))} mL`);
+      expect(cell.querySelector('.bar__reserve')).toBeInTheDocument();
+      const fill = cell.querySelector('.bar__fill') as HTMLElement;
+      expect(fill.style.width).toBe('0%');
+    });
+
+    it('clamps the measured span to full when level exceeds the tank max', () => {
       setup({ waterLevels: { currentLevel: 80, refillLevel: 10 } });
       const cell = screen.getByTestId('status-water');
       const fill = cell.querySelector('.bar__fill') as HTMLElement;
-      expect(fill.style.width).toBe('100%');
+      // fill clamps to 1, so the measured span runs from the reserve line to 100%.
+      expect(fill.style.width).toBe(`${(1 - WATER_RESERVE_FRAC) * 100}%`);
     });
 
     it('shows no water alert above the warn threshold', () => {

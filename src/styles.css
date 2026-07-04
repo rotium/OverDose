@@ -518,9 +518,10 @@ html {
 }
 
 .bar {
+  position: relative;
   display: inline-block;
   width: 80px;
-  height: 6px;
+  height: 0.65em;
   background: #2a2a2a;
   border-radius: 999px;
   overflow: hidden;
@@ -528,9 +529,48 @@ html {
 }
 
 .bar__fill {
-  display: block;
-  height: 100%;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
   background: var(--accent);
+}
+
+/* Always-present intake-tube reserve at the base of the bar — filled water
+   under a translucent lighter "cover glass" film, so it reads as water but a
+   paler, distinct tone from the measured fill. Mirrors severity (via
+   data-severity) so the bar still colours in the dead zone, where there's no
+   measured segment. See WATER_RESERVE_FRAC / WATER_DEAD_ZONE_MM in water.ts. */
+.bar__reserve {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0)),
+    color-mix(in srgb, var(--accent) 70%, white);
+}
+
+.bar__reserve[data-severity='warn'] {
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0)),
+    color-mix(in srgb, var(--warn) 70%, white);
+}
+
+.bar__reserve[data-severity='critical'] {
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0)),
+    color-mix(in srgb, var(--bad) 70%, white);
+}
+
+/* The sensor line: where real measurement begins (top of the reserve). */
+.bar__sensor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.4);
+  transform: translateX(-0.5px);
 }
 
 .bar__fill[data-severity='warn'] {
