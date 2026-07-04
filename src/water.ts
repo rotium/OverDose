@@ -4,7 +4,10 @@
 import { createMemo, type Accessor } from 'solid-js';
 import type { WaterLevelsSnapshot } from './snapshot';
 
-// DE1 tank: full at ~65mm.
+// DE1 tank: full at ~65mm of true height from the bottom. The intake-tube dead
+// zone (WATER_DEAD_ZONE_MM below) is *within* this 65mm, not on top of it — so
+// full volume is mmToMl(65) ≈ 2000mL (matches Decent's ~2L), and the raw sensor
+// reads ~57 at a full tank (65 − the 8mm it can't see).
 export const WATER_TANK_MAX_MM = 65;
 
 // Water-alert thresholds (mm), compared as `currentLevel <= threshold`.
@@ -96,9 +99,6 @@ export const mmToMl = (mm: number): number => mm * 22 + Math.pow(mm, 1.52);
 // a uniform offset on both sides of the refill compare is a no-op there.
 export const WATER_DEAD_ZONE_MM = 8;
 
-// Displayed full height = raw full (WATER_TANK_MAX_MM) + the reserve offset.
-export const WATER_DISPLAY_MAX_MM = WATER_TANK_MAX_MM + WATER_DEAD_ZONE_MM;
-
 const clamp01 = (n: number): number => Math.max(0, Math.min(1, n));
 
 /** True water height (mm from the tank bottom) for a raw sensor reading. */
@@ -112,8 +112,8 @@ export const isBelowSensor = (rawMm: number): boolean => rawMm <= 0;
 
 /** Bar fill (0–1) by volume incl. reserve — one physical bar for every unit. */
 export const waterFillPct = (rawMm: number): number =>
-  clamp01(displayMl(rawMm) / mmToMl(WATER_DISPLAY_MAX_MM));
+  clamp01(displayMl(rawMm) / mmToMl(WATER_TANK_MAX_MM));
 
 /** Constant width (0–1) of the always-present reserve zone at the base of the bar. */
 export const WATER_RESERVE_FRAC =
-  mmToMl(WATER_DEAD_ZONE_MM) / mmToMl(WATER_DISPLAY_MAX_MM);
+  mmToMl(WATER_DEAD_ZONE_MM) / mmToMl(WATER_TANK_MAX_MM);

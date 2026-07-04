@@ -2,7 +2,6 @@ import { Show, type Accessor, type Component } from 'solid-js';
 import { useUserPrefs } from '../../../UserPrefsContext';
 import {
   WATER_DEAD_ZONE_MM,
-  WATER_DISPLAY_MAX_MM,
   WATER_TANK_MAX_MM,
 } from '../../../water';
 import { api } from '../../../api';
@@ -85,7 +84,7 @@ export const AlertsSection: Component<AlertsSectionProps> = (p) => {
               value={toDisp(prefs.waterWarnMm())}
               onCommit={commitWarn}
               min={refillDisp() ?? WATER_DEAD_ZONE_MM}
-              max={WATER_DISPLAY_MAX_MM}
+              max={WATER_TANK_MAX_MM}
               step={1}
               steppers
               unit="mm"
@@ -112,7 +111,7 @@ export const AlertsSection: Component<AlertsSectionProps> = (p) => {
                 value={refillDisp() ?? undefined}
                 onCommit={commitCritical}
                 min={WATER_DEAD_ZONE_MM}
-                max={WATER_DISPLAY_MAX_MM}
+                max={WATER_TANK_MAX_MM}
                 step={1}
                 steppers
                 unit="mm"

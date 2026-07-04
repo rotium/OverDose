@@ -8,9 +8,9 @@ import {
   toDisplayMm,
   waterFillPct,
   WATER_DEAD_ZONE_MM,
-  WATER_DISPLAY_MAX_MM,
   WATER_HYSTERESIS_MM,
   WATER_RESERVE_FRAC,
+  WATER_TANK_MAX_MM,
   waterSeverity,
   type WaterSeverity,
 } from './water';
@@ -107,7 +107,7 @@ describe('intake-tube reserve (display frame)', () => {
     // Raw 0 fills exactly the reserve fraction; raw-full is exactly 1; over
     // clamps to 1.
     expect(waterFillPct(0)).toBeCloseTo(WATER_RESERVE_FRAC, 10);
-    expect(waterFillPct(WATER_DISPLAY_MAX_MM - WATER_DEAD_ZONE_MM)).toBe(1);
+    expect(waterFillPct(WATER_TANK_MAX_MM - WATER_DEAD_ZONE_MM)).toBe(1);
     expect(waterFillPct(1000)).toBe(1);
   });
 
