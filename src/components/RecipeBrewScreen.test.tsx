@@ -556,6 +556,70 @@ describe('RecipeBrewScreen', () => {
       ).toBe('40');
     });
 
+    it('seeds the target-volume input from the profile when the Recipe has none', async () => {
+      // Without a scale the gateway stops on profile.target_volume; surface it
+      // in the field so it isn't a silent early stop.
+      const profile = mkProfileRecord({
+        id: 'profile:vol',
+        profile: { title: 'Vol', target_volume: 36 },
+      });
+      renderScreen({
+        routines: [cappuccino()],
+        recipes: [sampleRecipe({ profileId: profile.id })],
+        loadProfileById: () => Promise.resolve(profile),
+      });
+      await waitFor(() =>
+        expect(
+          (
+            screen.getByTestId(
+              'prep-card-target-volume-input',
+            ) as HTMLInputElement
+          ).value,
+        ).toBe('36'),
+      );
+    });
+
+    it('does not overwrite the Recipe’s target volume with the profile default', async () => {
+      const profile = mkProfileRecord({
+        id: 'profile:vol',
+        profile: { title: 'Vol', target_volume: 36 },
+      });
+      renderScreen({
+        routines: [cappuccino()],
+        recipes: [sampleRecipe({ profileId: profile.id, targetVolumeMl: 611 })],
+        loadProfileById: () => Promise.resolve(profile),
+      });
+      await waitFor(() => screen.getByTestId('prep-card'));
+      expect(
+        (
+          screen.getByTestId(
+            'prep-card-target-volume-input',
+          ) as HTMLInputElement
+        ).value,
+      ).toBe('611');
+    });
+
+    it('leaves the target-volume input blank when the profile has no volume target', async () => {
+      const profile = mkProfileRecord({
+        id: 'profile:novol',
+        profile: { title: 'NoVol' },
+      });
+      renderScreen({
+        routines: [cappuccino()],
+        recipes: [sampleRecipe({ profileId: profile.id })],
+        loadProfileById: () => Promise.resolve(profile),
+      });
+      await waitFor(() => screen.getByTestId('prep-card'));
+      await Promise.resolve();
+      expect(
+        (
+          screen.getByTestId(
+            'prep-card-target-volume-input',
+          ) as HTMLInputElement
+        ).value,
+      ).toBe('');
+    });
+
     it('editing a prep-card field overrides for this shot only — the saved Recipe is untouched', async () => {
       const { repos } = renderScreen({
         routines: [cappuccino()],
@@ -868,6 +932,20 @@ describe('RecipeBrewScreen', () => {
       expect(
         await waitFor(() => screen.getByTestId('prep-card-autostop')),
       ).toHaveTextContent(/auto-stop at volume/i);
+    });
+
+    it('treats a 0 volume target as “no limit” — disables the auto-stop control', async () => {
+      renderScreen({
+        routines: [cappuccino()],
+        recipes: [sampleRecipe({ profileId: asProfile.id, targetVolumeMl: 0 })],
+        loadProfileById: () => Promise.resolve(asProfile),
+        scaleConnected: () => false,
+      });
+      const autostop = await waitFor(() =>
+        screen.getByTestId('prep-card-autostop'),
+      );
+      expect(autostop).toHaveTextContent(/set a target/i);
+      expect(autostop).not.toHaveTextContent(/0\s*mL/i);
     });
 
     it('warns when the global default cannot apply to the scale state', async () => {

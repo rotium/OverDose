@@ -323,6 +323,33 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
     (id) => profileLoader(id),
   );
 
+  // Surface the profile's built-in volume stop instead of applying it silently.
+  // Without a scale the gateway stops on `profile.target_volume`; if the user
+  // never fills "Target volume" it would otherwise inherit whatever (often
+  // small) value the profile author baked in — an invisible early stop. So when
+  // the field is blank, seed it from the resolved profile: the value the gateway
+  // would enforce becomes visible and editable. We remember the auto-seeded
+  // value so switching profiles refreshes the shown default, but never clobber a
+  // value the user typed. `0` means "no limit" (the gateway ignores ≤0).
+  const asPosVol = (v: unknown): number | null => {
+    const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v) : NaN;
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+  const [seededVol, setSeededVol] = createSignal<number | null>(null);
+  createEffect(() => {
+    const prof = profile();
+    const d = untrack(draft);
+    if (!prof || !d) return;
+    const pv = asPosVol(prof.profile.target_volume);
+    if (pv == null) return; // no positive profile volume → leave blank (no limit)
+    const cur = d.targetVolumeMl;
+    // Seed only when blank or still holding our previous auto-seed (untouched).
+    if (cur == null || cur === seededVol()) {
+      if (cur !== pv) patchDraft({ targetVolumeMl: pv });
+      setSeededVol(pv);
+    }
+  });
+
   // Resolve the draft's bean — drives the prep row and the coffee context we
   // stamp onto the shot. Null-on-error; resolves archived beans too.
   const beanLoader = (id: string): Promise<Bean | null> =>
@@ -1199,9 +1226,13 @@ const BrewPrep: Component<{
     p.scaleConnected()
       ? { name: 'yield', value: p.draft()?.targetYieldGrams, unit: 'g' }
       : { name: 'volume', value: p.draft()?.targetVolumeMl, unit: 'mL' };
-  // Auto-stop needs a value on the enforced target; with both empty there's
-  // nothing to stop at, so the control is disabled.
-  const canStop = (): boolean => enforced().value != null;
+  // Auto-stop needs a positive value on the enforced target; blank — or 0,
+  // the "no limit" idiom the gateway ignores — means there's nothing to stop
+  // at, so the control is disabled.
+  const canStop = (): boolean => {
+    const v = enforced().value;
+    return v != null && v > 0;
+  };
 
   return (
     // 2-column grid: the two co-equal choices (Bean over Profile) on the left,
