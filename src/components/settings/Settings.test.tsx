@@ -174,6 +174,48 @@ describe('Settings', () => {
       fireEvent.click(screen.getByRole('checkbox', { name: 'Step boundaries' }));
       expect(prefs.traceVisibility().steps).toBe(!before);
     });
+
+    it('toggles the profile-chart step boundaries (on by default)', () => {
+      const { prefs } = setup();
+      fireEvent.click(screen.getByRole('tab', { name: 'App' }));
+      expect(prefs.profileChartSteps()).toBe(true);
+      fireEvent.click(
+        screen.getByRole('checkbox', { name: 'Show step boundaries' }),
+      );
+      expect(prefs.profileChartSteps()).toBe(false);
+    });
+
+    it('toggles the profile-chart step names (on by default)', () => {
+      const { prefs } = setup();
+      fireEvent.click(screen.getByRole('tab', { name: 'App' }));
+      expect(prefs.profileChartStepNames()).toBe(true);
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Show step names' }));
+      expect(prefs.profileChartStepNames()).toBe(false);
+    });
+
+    it('disables step-names when step boundaries are off', () => {
+      const { prefs } = setup();
+      fireEvent.click(screen.getByRole('tab', { name: 'App' }));
+      fireEvent.click(
+        screen.getByRole('checkbox', { name: 'Show step boundaries' }),
+      );
+      expect(prefs.profileChartSteps()).toBe(false);
+      expect(
+        screen.getByRole('checkbox', { name: 'Show step names' }),
+      ).toBeDisabled();
+    });
+
+    it('toggles the profile-thumbnail step boundaries (off by default)', () => {
+      const { prefs } = setup();
+      fireEvent.click(screen.getByRole('tab', { name: 'App' }));
+      expect(prefs.profileChartStepsThumbnail()).toBe(false);
+      fireEvent.click(
+        screen.getByRole('checkbox', {
+          name: 'Show step boundaries in thumbnails',
+        }),
+      );
+      expect(prefs.profileChartStepsThumbnail()).toBe(true);
+    });
   });
 
   describe('App tab — Alerts subsection', () => {

@@ -57,43 +57,103 @@ export const DisplaySection: Component = () => {
       <section class="settings-section" aria-labelledby="display-chart-heading">
         <h2 id="display-chart-heading">Chart</h2>
 
-        <div class="settings-field">
-          <span class="settings-field__label">Smoothing</span>
-          <div class="settings-radio-row" role="radiogroup" aria-label="Chart smoothing">
-            <For each={SMOOTHING_OPTIONS}>
-              {(opt) => (
-                <label class="settings-radio">
-                  <input
-                    type="radio"
-                    name="chart-smoothing"
-                    value={opt.value}
-                    checked={prefs.chartSmoothing() === opt.value}
-                    onChange={() => prefs.setChartSmoothing(opt.value)}
-                  />
-                  <span>{opt.label}</span>
-                </label>
-              )}
-            </For>
+        <div
+          class="settings-subsection"
+          aria-labelledby="display-shotchart-heading"
+        >
+          <h3 class="settings-subheading" id="display-shotchart-heading">
+            Shot chart
+          </h3>
+
+          <div class="settings-field">
+            <span class="settings-field__label">Smoothing</span>
+            <div class="settings-radio-row" role="radiogroup" aria-label="Chart smoothing">
+              <For each={SMOOTHING_OPTIONS}>
+                {(opt) => (
+                  <label class="settings-radio">
+                    <input
+                      type="radio"
+                      name="chart-smoothing"
+                      value={opt.value}
+                      checked={prefs.chartSmoothing() === opt.value}
+                      onChange={() => prefs.setChartSmoothing(opt.value)}
+                    />
+                    <span>{opt.label}</span>
+                  </label>
+                )}
+              </For>
+            </div>
+          </div>
+
+          <div class="settings-field settings-field--stack">
+            <span class="settings-field__label">Default trace visibility</span>
+            <div class="settings-checkbox-grid">
+              <For each={TRACE_OPTIONS}>
+                {(opt) => (
+                  <label class="settings-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={prefs.traceVisibility()[opt.key]}
+                      onChange={(e) =>
+                        prefs.setTraceVisible(opt.key, e.currentTarget.checked)
+                      }
+                    />
+                    <span>{opt.label}</span>
+                  </label>
+                )}
+              </For>
+            </div>
           </div>
         </div>
 
-        <div class="settings-field settings-field--stack">
-          <span class="settings-field__label">Default trace visibility</span>
-          <div class="settings-checkbox-grid">
-            <For each={TRACE_OPTIONS}>
-              {(opt) => (
-                <label class="settings-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={prefs.traceVisibility()[opt.key]}
-                    onChange={(e) =>
-                      prefs.setTraceVisible(opt.key, e.currentTarget.checked)
-                    }
-                  />
-                  <span>{opt.label}</span>
-                </label>
-              )}
-            </For>
+        <div
+          class="settings-subsection"
+          aria-labelledby="display-profilechart-heading"
+        >
+          <h3 class="settings-subheading" id="display-profilechart-heading">
+            Profile chart
+          </h3>
+
+          <div class="settings-field settings-field--stack">
+            <span class="settings-field__label">Full-size preview</span>
+            <label class="settings-checkbox">
+              <input
+                type="checkbox"
+                data-testid="pref-profile-chart-steps"
+                checked={prefs.profileChartSteps()}
+                onChange={(e) =>
+                  prefs.setProfileChartSteps(e.currentTarget.checked)
+                }
+              />
+              <span>Show step boundaries</span>
+            </label>
+            <label class="settings-checkbox">
+              <input
+                type="checkbox"
+                data-testid="pref-profile-chart-step-names"
+                checked={prefs.profileChartStepNames()}
+                disabled={!prefs.profileChartSteps()}
+                onChange={(e) =>
+                  prefs.setProfileChartStepNames(e.currentTarget.checked)
+                }
+              />
+              <span>Show step names</span>
+            </label>
+          </div>
+
+          <div class="settings-field settings-field--stack">
+            <span class="settings-field__label">Brew-prep thumbnail</span>
+            <label class="settings-checkbox">
+              <input
+                type="checkbox"
+                data-testid="pref-profile-chart-steps-thumbnail"
+                checked={prefs.profileChartStepsThumbnail()}
+                onChange={(e) =>
+                  prefs.setProfileChartStepsThumbnail(e.currentTarget.checked)
+                }
+              />
+              <span>Show step boundaries in thumbnails</span>
+            </label>
           </div>
         </div>
       </section>

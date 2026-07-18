@@ -61,6 +61,23 @@ export const DEFAULT_TRACE_VISIBILITY: TraceVisibility = {
 };
 
 /**
+ * Profile-curve step markers. Independent of the live-chart `steps` trace flag
+ * above — that one is legend-toggleable per shot; these govern the static
+ * profile curve. Split full-size preview from the compact brew-prep thumbnail
+ * because the thumbnail is glanceable and its dividers add noise there.
+ *
+ *  - `STEPS`           — full-size preview: dashed dividers + per-boundary
+ *                        times (and name chips, gated by `STEP_NAMES`). On.
+ *  - `STEP_NAMES`      — draw the step-name chips on the full-size preview.
+ *                        On. No effect when `STEPS` is off (or in thumbnails,
+ *                        which never draw names).
+ *  - `STEPS_THUMBNAIL` — dividers on the compact brew-prep thumbnail. Off.
+ */
+export const DEFAULT_PROFILE_CHART_STEPS = true;
+export const DEFAULT_PROFILE_CHART_STEP_NAMES = true;
+export const DEFAULT_PROFILE_CHART_STEPS_THUMBNAIL = false;
+
+/**
  * Display unit for the water-tank level. Reaprime streams `currentLevel` in
  * mm; the skin defaults to converting to mL for the user-facing readout.
  * `both` shows mL with a small mm secondary.

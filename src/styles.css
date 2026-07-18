@@ -2543,6 +2543,27 @@ html {
   stroke-width: 1.5;
 }
 
+/* Step boundaries — mirror the live/shot chart's dashed neutral divider and
+   ghost name chip (drawn there on canvas; here as SVG so they're theme-aware
+   and CSS-styled). */
+.profile-curve-chart__step-line {
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 5 4;
+  opacity: 0.55;
+}
+
+.profile-curve-chart__step-chip-bg {
+  fill: rgba(10, 10, 10, 0.5);
+}
+
+.profile-curve-chart__step-chip {
+  font-size: 11px;
+  font-weight: 700;
+  fill: var(--fg);
+  opacity: 0.72;
+}
+
 .profile-preview__chart-legend {
   display: flex;
   align-items: center;

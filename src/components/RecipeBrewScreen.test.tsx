@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { RecipeBrewScreen, stepToGatewayState, type BrewBundle } from './RecipeBrewScreen';
 import { WithRepositories } from '../test/repositories';
+import { WithPrefs } from '../test/prefs';
 import {
   LocalRoutineRepository,
   LocalRecipeRepository,
@@ -152,8 +153,9 @@ const renderScreen = (
     status: createSignal<'open'>('open')[0],
   };
   render(() => (
-    <WithRepositories routines={env.repos.routines} recipes={env.repos.recipes}>
-      <RecipeBrewScreen
+    <WithPrefs>
+      <WithRepositories routines={env.repos.routines} recipes={env.repos.recipes}>
+        <RecipeBrewScreen
         recipeId={opts.recipeId ?? 'rec-1'}
         bundleOverride={opts.bundleOverride}
         onExit={env.onExit}
@@ -186,8 +188,9 @@ const renderScreen = (
         updateShot={updateShot}
         saveDebounceMs={opts.saveDebounceMs ?? 0}
         fetchDrinkers={opts.fetchDrinkers ?? (() => Promise.resolve([]))}
-      />
-    </WithRepositories>
+        />
+      </WithRepositories>
+    </WithPrefs>
   ));
   return {
     ...env,

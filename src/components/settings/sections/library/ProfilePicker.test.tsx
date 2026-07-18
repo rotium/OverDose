@@ -1,8 +1,20 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
+import {
+  render as solidRender,
+  screen,
+  fireEvent,
+  waitFor,
+} from '@solidjs/testing-library';
 import { within } from '@solidjs/testing-library';
+import type { JSX } from 'solid-js';
 import { ProfilePicker } from './ProfilePicker';
 import type { ProfileRecord } from '../../../../api';
+import { WithPrefs } from '../../../../test/prefs';
+
+// ProfilePicker's preview pane (ProfilePreview) reads the profile-chart-steps
+// pref; wrap every render in a provider so the context resolves.
+const render = (factory: () => JSX.Element) =>
+  solidRender(() => <WithPrefs>{factory()}</WithPrefs>);
 
 const mkProfile = (over: Partial<ProfileRecord> = {}): ProfileRecord => ({
   id: over.id ?? 'profile:abc123',
