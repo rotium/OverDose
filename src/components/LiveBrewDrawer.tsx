@@ -161,7 +161,11 @@ export const LiveBrewDrawer: Component = () => {
       >
         <Switch>
           <Match when={activeView() === 'espresso'}>
-            <LiveEspressoView acc={accumulator} onStop={() => void stop()} />
+            <LiveEspressoView
+              acc={accumulator}
+              onStop={() => void stop()}
+              scaleConnected={scaleConnected}
+            />
           </Match>
           <Match when={activeView() === 'steam'}>
             <LiveSteamView

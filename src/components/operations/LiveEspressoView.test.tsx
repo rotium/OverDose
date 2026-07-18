@@ -55,7 +55,7 @@ describe('LiveEspressoView', () => {
   it('renders em-dashes before any frame arrives', () => {
     inRoot(() => {
       const acc = createLiveShotAccumulator();
-      render(() => <LiveEspressoView acc={acc} onStop={() => {}} />);
+      render(() => <LiveEspressoView acc={acc} onStop={() => {}} scaleConnected={() => true} />);
       expect(screen.getByTestId('live-shot-chart-stub')).toBeInTheDocument();
       // WEIGHT readout shows em-dash until scale weight arrives.
       expect(screen.getByTestId('readout-weight')).toHaveTextContent('—');
@@ -84,7 +84,7 @@ describe('LiveEspressoView', () => {
         }),
       );
 
-      render(() => <LiveEspressoView acc={acc} onStop={() => {}} />);
+      render(() => <LiveEspressoView acc={acc} onStop={() => {}} scaleConnected={() => true} />);
       expect(screen.getByText(/6\.2 bar/)).toBeInTheDocument();
       expect(screen.getByText(/2\.0 mL\/s/)).toBeInTheDocument();
       expect(screen.getByText(/92\.7 °C/)).toBeInTheDocument();
@@ -105,17 +105,17 @@ describe('LiveEspressoView', () => {
     inRoot(() => {
       const acc = createLiveShotAccumulator();
       const onStop = vi.fn();
-      render(() => <LiveEspressoView acc={acc} onStop={onStop} />);
+      render(() => <LiveEspressoView acc={acc} onStop={onStop} scaleConnected={() => true} />);
       fireEvent.click(screen.getByTestId('live-view-stop'));
       expect(onStop).toHaveBeenCalledTimes(1);
     });
   });
 
   describe('STOP button progress + trigger', () => {
-    it('fills proportionally to weight progress when targetYield is set and scale weight is leading', () => {
+    it('tracks weight toward targetYield when a scale is connected', () => {
       const acc = createLiveShotAccumulator();
-      // Profile total: 30s. Weight target: 36g. Halfway through both, but
-      // weight is at 25g → 69%, time at 5s → 17%. Weight leads.
+      // Weight target 36g, scale weight 25g → 69%. A profile time is present
+      // but ignored: with a scale, the gateway stops on weight.
       acc.start({
         context: { targetYield: 36 },
         profile: { title: 'p', steps: [{ name: 'a', seconds: 30 }] },
@@ -123,31 +123,121 @@ describe('LiveEspressoView', () => {
       acc.append(
         frame({ tMs: 5_000, weight: 25, substate: 'pouring', profileFrame: 0 }),
       );
-      render(() => <LiveEspressoView acc={acc} onStop={() => {}} />);
+      render(() => (
+        <LiveEspressoView
+          acc={acc}
+          onStop={() => {}}
+          scaleConnected={() => true}
+        />
+      ));
 
       const fill = screen.getByTestId('live-view-stop-fill') as HTMLElement;
       // 25/36 ≈ 69.4%
       expect(parseFloat(fill.style.width)).toBeCloseTo(69.4, 0);
-      // Trigger icon: weight.
       expect(
         screen.getByTestId('live-view-stop-trigger-weight'),
       ).toBeInTheDocument();
+      expect(
+        screen.queryByTestId('live-view-stop-trigger-volume'),
+      ).not.toBeInTheDocument();
       expect(
         screen.queryByTestId('live-view-stop-trigger-time'),
       ).not.toBeInTheDocument();
     });
 
-    it('switches the trigger icon to time when time progress overtakes weight', () => {
+    it('tracks counted volume toward target_volume when no scale is connected', () => {
       const acc = createLiveShotAccumulator();
-      // No yield target — weightProgress is 0. Time progress: 20/30 ≈ 67%.
+      // No scale. target_volume 50 mL, count-start at step 0. Two pouring
+      // frames integrate 4 mL/s over 5s → 20 mL counted → 40%.
+      acc.start({
+        profile: {
+          title: 'p',
+          steps: [{ name: 'a', seconds: 30 }],
+          target_volume: 50,
+          target_volume_count_start: 0,
+        },
+      });
+      acc.append(frame({ tMs: 0, flow: 4, substate: 'pouring', profileFrame: 0 }));
+      acc.append(
+        frame({ tMs: 5_000, flow: 4, substate: 'pouring', profileFrame: 0 }),
+      );
+      render(() => (
+        <LiveEspressoView
+          acc={acc}
+          onStop={() => {}}
+          scaleConnected={() => false}
+        />
+      ));
+
+      const fill = screen.getByTestId('live-view-stop-fill') as HTMLElement;
+      // 20/50 = 40%
+      expect(parseFloat(fill.style.width)).toBeCloseTo(40, 0);
+      expect(
+        screen.getByTestId('live-view-stop-trigger-volume'),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByTestId('live-view-stop-trigger-weight'),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId('live-view-stop-trigger-time'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('ignores the volume target and falls to time when a scale IS connected', () => {
+      const acc = createLiveShotAccumulator();
+      // Volume mode but a scale is present: no yield target, only
+      // target_volume. The gateway ignores volume while a scale is connected,
+      // so nothing volume can fire → the bar reflects the profile time.
+      acc.start({
+        profile: {
+          title: 'p',
+          steps: [{ name: 'a', seconds: 30 }],
+          target_volume: 50,
+          target_volume_count_start: 0,
+        },
+      });
+      acc.append(
+        frame({ tMs: 15_000, flow: 4, substate: 'pouring', profileFrame: 0 }),
+      );
+      render(() => (
+        <LiveEspressoView
+          acc={acc}
+          onStop={() => {}}
+          scaleConnected={() => true}
+        />
+      ));
+
+      expect(
+        screen.getByTestId('live-view-stop-trigger-time'),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByTestId('live-view-stop-trigger-volume'),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId('live-view-stop-trigger-weight'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('falls to time when no weight/volume stop is applicable', () => {
+      const acc = createLiveShotAccumulator();
+      // No yield target, no volume target — only a profile duration remains.
+      // Time: 20/30 ≈ 67%.
       acc.start({
         profile: { title: 'p', steps: [{ name: 'a', seconds: 30 }] },
       });
       acc.append(
         frame({ tMs: 20_000, weight: 25, substate: 'pouring', profileFrame: 0 }),
       );
-      render(() => <LiveEspressoView acc={acc} onStop={() => {}} />);
+      render(() => (
+        <LiveEspressoView
+          acc={acc}
+          onStop={() => {}}
+          scaleConnected={() => true}
+        />
+      ));
 
+      const fill = screen.getByTestId('live-view-stop-fill') as HTMLElement;
+      expect(parseFloat(fill.style.width)).toBeCloseTo(66.7, 0);
       expect(
         screen.getByTestId('live-view-stop-trigger-time'),
       ).toBeInTheDocument();
@@ -156,26 +246,41 @@ describe('LiveEspressoView', () => {
       ).not.toBeInTheDocument();
     });
 
-    it('flips severity to "over" once the leading trigger crosses 100%', () => {
+    it('flips severity to "over" once the active trigger crosses 100%', () => {
       const acc = createLiveShotAccumulator();
       acc.start({ context: { targetYield: 36 } });
       acc.append(frame({ weight: 40, substate: 'pouring' }));
-      render(() => <LiveEspressoView acc={acc} onStop={() => {}} />);
+      render(() => (
+        <LiveEspressoView
+          acc={acc}
+          onStop={() => {}}
+          scaleConnected={() => true}
+        />
+      ));
       expect(screen.getByTestId('live-view-stop')).toHaveAttribute(
         'data-severity',
         'over',
       );
     });
 
-    it('shows no progress fill and no trigger icon when neither weight target nor profile time is known', () => {
+    it('shows no progress fill and no trigger icon when neither weight/volume target nor profile time is known', () => {
       const acc = createLiveShotAccumulator();
       acc.start(null); // no workflow + no profile = no auto-stop info
       acc.append(frame({ tMs: 5_000, weight: 10, substate: 'pouring' }));
-      render(() => <LiveEspressoView acc={acc} onStop={() => {}} />);
+      render(() => (
+        <LiveEspressoView
+          acc={acc}
+          onStop={() => {}}
+          scaleConnected={() => true}
+        />
+      ));
       const fill = screen.getByTestId('live-view-stop-fill') as HTMLElement;
       expect(fill.style.width).toBe('0%');
       expect(
         screen.queryByTestId('live-view-stop-trigger-weight'),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId('live-view-stop-trigger-volume'),
       ).not.toBeInTheDocument();
       expect(
         screen.queryByTestId('live-view-stop-trigger-time'),
@@ -187,7 +292,7 @@ describe('LiveEspressoView', () => {
     it('is absent before any frame arrives', () => {
       inRoot(() => {
         const acc = createLiveShotAccumulator();
-        render(() => <LiveEspressoView acc={acc} onStop={() => {}} />);
+        render(() => <LiveEspressoView acc={acc} onStop={() => {}} scaleConnected={() => true} />);
         expect(screen.queryByTestId('live-view-state')).not.toBeInTheDocument();
       });
     });
@@ -197,7 +302,7 @@ describe('LiveEspressoView', () => {
         const acc = createLiveShotAccumulator();
         acc.start(null);
         acc.append(frame({ substate: 'preparingForShot' }));
-        render(() => <LiveEspressoView acc={acc} onStop={() => {}} />);
+        render(() => <LiveEspressoView acc={acc} onStop={() => {}} scaleConnected={() => true} />);
         expect(screen.getByTestId('live-view-state')).toHaveTextContent('Preparing');
       });
     });
@@ -207,7 +312,7 @@ describe('LiveEspressoView', () => {
         const acc = createLiveShotAccumulator();
         acc.start(null);
         acc.append(frame({ substate: 'pouring' }));
-        render(() => <LiveEspressoView acc={acc} onStop={() => {}} />);
+        render(() => <LiveEspressoView acc={acc} onStop={() => {}} scaleConnected={() => true} />);
         const state = screen.getByTestId('live-view-state');
         expect(state).toHaveTextContent('Pouring');
         expect(state).toHaveAttribute('data-substate', 'pouring');
@@ -219,7 +324,7 @@ describe('LiveEspressoView', () => {
         const acc = createLiveShotAccumulator();
         acc.start(null);
         acc.append(frame({ substate: 'pouringDone' }));
-        render(() => <LiveEspressoView acc={acc} onStop={() => {}} />);
+        render(() => <LiveEspressoView acc={acc} onStop={() => {}} scaleConnected={() => true} />);
         const state = screen.getByTestId('live-view-state');
         expect(state).toHaveTextContent('Done');
         expect(state).not.toHaveTextContent(/pouring/i);
@@ -232,7 +337,7 @@ describe('LiveEspressoView', () => {
         const acc = createLiveShotAccumulator();
         acc.start(null);
         acc.append(frame({ substate: 'idle' }));
-        render(() => <LiveEspressoView acc={acc} onStop={() => {}} />);
+        render(() => <LiveEspressoView acc={acc} onStop={() => {}} scaleConnected={() => true} />);
         expect(screen.queryByTestId('live-view-state')).not.toBeInTheDocument();
       });
     });
@@ -244,7 +349,7 @@ describe('LiveEspressoView', () => {
         const acc = createLiveShotAccumulator();
         acc.start(null);
         acc.append(frame({ tMs: 12_500, substate: 'pouring' }));
-        render(() => <LiveEspressoView acc={acc} onStop={() => {}} />);
+        render(() => <LiveEspressoView acc={acc} onStop={() => {}} scaleConnected={() => true} />);
         const timer = screen.getByTestId('live-view-timer');
         expect(timer).toHaveTextContent('12.5');
       });
@@ -253,7 +358,7 @@ describe('LiveEspressoView', () => {
     it('renders an em-dash in the header timer before any frame arrives', () => {
       inRoot(() => {
         const acc = createLiveShotAccumulator();
-        render(() => <LiveEspressoView acc={acc} onStop={() => {}} />);
+        render(() => <LiveEspressoView acc={acc} onStop={() => {}} scaleConnected={() => true} />);
         expect(screen.getByTestId('live-view-timer')).toHaveTextContent('—');
       });
     });
@@ -265,7 +370,7 @@ describe('LiveEspressoView', () => {
       // tests we need bindings live AFTER body finishes (which is when
       // jsdom's queued microtasks flush attribute updates).
       const acc = createLiveShotAccumulator();
-      render(() => <LiveEspressoView acc={acc} onStop={() => {}} />);
+      render(() => <LiveEspressoView acc={acc} onStop={() => {}} scaleConnected={() => true} />);
 
       const pressureBtn = screen.getByTestId('legend-toggle-pressure');
       expect(pressureBtn).toHaveAttribute('aria-pressed', 'true');
@@ -282,7 +387,7 @@ describe('LiveEspressoView', () => {
 
     it('targets toggle is a single button that controls all dashed series', () => {
       const acc = createLiveShotAccumulator();
-      render(() => <LiveEspressoView acc={acc} onStop={() => {}} />);
+      render(() => <LiveEspressoView acc={acc} onStop={() => {}} scaleConnected={() => true} />);
       const targetsBtn = screen.getByTestId('legend-toggle-targets');
       expect(targetsBtn).toHaveAttribute('aria-pressed', 'true');
       fireEvent.click(targetsBtn);
@@ -292,7 +397,7 @@ describe('LiveEspressoView', () => {
 
     it('toggling one trace does not affect others', () => {
       const acc = createLiveShotAccumulator();
-      render(() => <LiveEspressoView acc={acc} onStop={() => {}} />);
+      render(() => <LiveEspressoView acc={acc} onStop={() => {}} scaleConnected={() => true} />);
       fireEvent.click(screen.getByTestId('legend-toggle-weightFlow'));
       expect(
         screen.getByTestId('legend-toggle-weightFlow'),
@@ -309,7 +414,7 @@ describe('LiveEspressoView', () => {
     it('renders a legend with one entry per chart trace plus a "targets" note', () => {
       inRoot(() => {
         const acc = createLiveShotAccumulator();
-        render(() => <LiveEspressoView acc={acc} onStop={() => {}} />);
+        render(() => <LiveEspressoView acc={acc} onStop={() => {}} scaleConnected={() => true} />);
         const legend = screen.getByTestId('live-view-legend');
         // Inspect each legend item independently — textContent of the whole
         // legend smushes adjacent labels together, so the "weight flow" and
@@ -333,7 +438,7 @@ describe('LiveEspressoView', () => {
       inRoot(() => {
         const acc = createLiveShotAccumulator();
         acc.start({ profile: { title: 'Gentle and Sweet', steps: [{ name: 'ramp up' }] } });
-        render(() => <LiveEspressoView acc={acc} onStop={() => {}} />);
+        render(() => <LiveEspressoView acc={acc} onStop={() => {}} scaleConnected={() => true} />);
         expect(screen.getByTestId('live-view-profile')).toHaveTextContent(
           'Gentle and Sweet',
         );
@@ -344,7 +449,7 @@ describe('LiveEspressoView', () => {
       inRoot(() => {
         const acc = createLiveShotAccumulator();
         acc.start(null);
-        render(() => <LiveEspressoView acc={acc} onStop={() => {}} />);
+        render(() => <LiveEspressoView acc={acc} onStop={() => {}} scaleConnected={() => true} />);
         expect(screen.getByTestId('live-view-profile')).toHaveTextContent(
           'Espresso',
         );
@@ -363,7 +468,7 @@ describe('LiveEspressoView', () => {
           },
         });
         acc.append(frame({ profileFrame: 0, substate: 'pouring' }));
-        render(() => <LiveEspressoView acc={acc} onStop={() => {}} />);
+        render(() => <LiveEspressoView acc={acc} onStop={() => {}} scaleConnected={() => true} />);
         // capital-first: "Ramp up" (not "Ramp Up", not "ramp up")
         expect(screen.getByTestId('live-view-step')).toHaveTextContent(
           /step: Ramp up/,
@@ -381,7 +486,7 @@ describe('LiveEspressoView', () => {
           profile: { title: 'Gentle and Sweet', steps: [{ name: 'ramp up' }] },
         });
         acc.append(frame({ profileFrame: 0, substate: 'pouring' }));
-        render(() => <LiveEspressoView acc={acc} onStop={() => {}} />);
+        render(() => <LiveEspressoView acc={acc} onStop={() => {}} scaleConnected={() => true} />);
         const profileEl = screen.getByTestId('live-view-profile');
         const stepEl = screen.getByTestId('live-view-step');
         const stateEl = screen.getByTestId('live-view-state');
@@ -397,7 +502,7 @@ describe('LiveEspressoView', () => {
         const acc = createLiveShotAccumulator();
         acc.start({ profile: { title: 'Sparse', steps: [{ name: 'only' }] } });
         acc.append(frame({ profileFrame: 5, substate: 'pouring' }));
-        render(() => <LiveEspressoView acc={acc} onStop={() => {}} />);
+        render(() => <LiveEspressoView acc={acc} onStop={() => {}} scaleConnected={() => true} />);
         expect(screen.queryByTestId('live-view-step')).not.toBeInTheDocument();
       });
     });
