@@ -5,6 +5,7 @@ import {
   type ProfileCurve,
 } from '../../../../profile/curve';
 import { ProfileCurveChart } from './ProfileCurveChart';
+import { useUserPrefs } from '../../../../UserPrefsContext';
 
 /**
  * Detail pane for a single profile. Renders the title, metadata chips,
@@ -37,6 +38,7 @@ const fmtSec = (n: number): string =>
   n < 10 ? n.toFixed(1) : Math.round(n).toString();
 
 export const ProfilePreview: Component<ProfilePreviewProps> = (p) => {
+  const prefs = useUserPrefs();
   const record = (): ProfileRecord | null => p.record ?? null;
   const profile = () => record()?.profile;
   const curve = createMemo<ProfileCurve>(() =>
@@ -107,6 +109,8 @@ export const ProfilePreview: Component<ProfilePreviewProps> = (p) => {
           <div class="profile-preview__chart-wrap">
             <ProfileCurveChart
               curve={curve()}
+              showSteps={prefs.profileChartSteps()}
+              showStepNames={prefs.profileChartStepNames()}
               testId="profile-preview-chart"
             />
             <div class="profile-preview__chart-legend" aria-hidden="true">

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
 import { RecipeEditor } from './RecipeEditor';
 import { WithRepositories } from '../../../../test/repositories';
+import { WithPrefs } from '../../../../test/prefs';
 import {
   LocalRoutineRepository,
   LocalRecipeRepository,
@@ -99,7 +100,8 @@ const renderEditor = (opts: SeedOpts, recipeId = 'rec-1') => {
   const loadBeanById =
     opts.loadBeanById ?? (() => Promise.resolve<Bean | null>(null));
   render(() => (
-    <WithRepositories routines={repos.routines} recipes={repos.recipes}>
+    <WithPrefs>
+      <WithRepositories routines={repos.routines} recipes={repos.recipes}>
         <RecipeEditor
           recipeId={recipeId}
           onClose={onClose}
@@ -109,7 +111,8 @@ const renderEditor = (opts: SeedOpts, recipeId = 'rec-1') => {
           loadBeans={loadBeans}
           loadBeanById={loadBeanById}
         />
-    </WithRepositories>
+      </WithRepositories>
+    </WithPrefs>
   ));
   return { repos, onClose };
 };

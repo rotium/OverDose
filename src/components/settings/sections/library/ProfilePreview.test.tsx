@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { render, screen } from '@solidjs/testing-library';
+import { render as solidRender, screen } from '@solidjs/testing-library';
+import type { JSX } from 'solid-js';
 import { ProfilePreview } from './ProfilePreview';
 import type { ProfileRecord } from '../../../../api';
+import { WithPrefs } from '../../../../test/prefs';
+
+// ProfilePreview reads the profile-chart-steps pref; wrap every render in a
+// provider (fresh in-memory store) so the context resolves.
+const render = (factory: () => JSX.Element) =>
+  solidRender(() => <WithPrefs>{factory()}</WithPrefs>);
 
 const mkRecord = (over: Partial<ProfileRecord> = {}): ProfileRecord => ({
   id: 'profile:test',

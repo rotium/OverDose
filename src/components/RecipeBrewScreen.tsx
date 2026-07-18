@@ -132,6 +132,9 @@ export interface RecipeBrewScreenProps {
   /** Global default auto-stop mode (from prefs). Seeds the per-shot choice;
    *  the prep card can override it. Optional; defaults to `auto`. */
   autoStopMode?: Accessor<AutoStopMode>;
+  /** Whether the brew-prep profile thumbnail draws step boundaries (from
+   *  prefs). Optional; defaults to off. */
+  profileChartStepsThumbnail?: Accessor<boolean>;
   /** Live shotSettings stream — needed to build the full-body shotSettings
    *  POST that applies the chosen pitcher's steam temp + duration when a
    *  steam step starts. Optional: when absent (tests) the write is skipped
@@ -798,6 +801,7 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
                 onStart={startCurrentStep}
                 autoStopOn={autoStopOn}
                 onAutoStop={setAutoStopOn}
+                profileChartStepsThumbnail={p.profileChartStepsThumbnail}
                 scaleConnected={scaleOn}
                 stopModeWarning={stopModeWarning}
                 profile={() => profile() ?? null}
@@ -994,6 +998,8 @@ const PrepCard: Component<{
   autoStopOn: Accessor<boolean>;
   /** Toggle auto-stop on/off for this shot. */
   onAutoStop: (on: boolean) => void;
+  /** Whether the profile thumbnail draws step boundaries (from prefs). */
+  profileChartStepsThumbnail?: Accessor<boolean>;
   /** Live scale-connection state — decides which target the checkbox sits on. */
   scaleConnected: Accessor<boolean>;
   /** Warning when the global default can't apply to the current scale. */
@@ -1032,6 +1038,7 @@ const PrepCard: Component<{
             patchDraft={p.patchDraft}
             autoStopOn={p.autoStopOn}
             onAutoStop={p.onAutoStop}
+            profileChartStepsThumbnail={p.profileChartStepsThumbnail}
             scaleConnected={p.scaleConnected}
             stopModeWarning={p.stopModeWarning}
             profile={p.profile}
@@ -1187,6 +1194,7 @@ const BrewPrep: Component<{
   patchDraft: (patch: Partial<ShotDraft>) => void;
   autoStopOn: Accessor<boolean>;
   onAutoStop: (on: boolean) => void;
+  profileChartStepsThumbnail?: Accessor<boolean>;
   scaleConnected: Accessor<boolean>;
   stopModeWarning: Accessor<string | null>;
   /** Resolved profile for the draft's profileId (fetched by the screen so
@@ -1377,6 +1385,7 @@ const BrewPrep: Component<{
                     width={320}
                     height={96}
                     compact={true}
+                    showSteps={p.profileChartStepsThumbnail?.() ?? false}
                     testId="prep-card-profile-chart"
                   />
                 </div>

@@ -24,6 +24,9 @@ import {
   DEFAULT_STEAM_PURGE_STRATEGY,
   DEFAULT_STEAM_TARGET_TEMP,
   DEFAULT_TRACE_VISIBILITY,
+  DEFAULT_PROFILE_CHART_STEPS,
+  DEFAULT_PROFILE_CHART_STEP_NAMES,
+  DEFAULT_PROFILE_CHART_STEPS_THUMBNAIL,
   DEFAULT_WATER_UNIT,
   type AutoStopMode,
   type ChartSmoothing,
@@ -78,6 +81,9 @@ interface PersistedPrefs {
   waterWarnMm?: number;
   chartSmoothing?: ChartSmoothing;
   traceVisibility?: TraceVisibility;
+  profileChartSteps?: boolean;
+  profileChartStepNames?: boolean;
+  profileChartStepsThumbnail?: boolean;
   showSteamFlowSlider?: boolean;
   showWaterFlowSlider?: boolean;
   showFlushFlowSlider?: boolean;
@@ -105,6 +111,19 @@ export interface UserPrefsContextValue {
   setTraceVisibility: (v: TraceVisibility) => void;
   /** Update a single trace flag without rebuilding the whole object inline. */
   setTraceVisible: (k: keyof TraceVisibility, v: boolean) => void;
+  /** Whether the full-size profile-preview chart draws its step boundaries
+   *  (dividers + times). Independent of the live-chart `steps` trace flag.
+   *  Default on. */
+  profileChartSteps: Accessor<boolean>;
+  setProfileChartSteps: (v: boolean) => void;
+  /** Whether the full-size profile-preview chart draws step-name chips. No
+   *  effect when `profileChartSteps` is off. Default on. */
+  profileChartStepNames: Accessor<boolean>;
+  setProfileChartStepNames: (v: boolean) => void;
+  /** Whether the compact brew-prep profile thumbnail draws step dividers.
+   *  Default off — the thumbnail is glanceable and dividers add noise. */
+  profileChartStepsThumbnail: Accessor<boolean>;
+  setProfileChartStepsThumbnail: (v: boolean) => void;
   /**
    * Whether the live steam view exposes an in-session steam-flow slider.
    * Default off — the value is still shown in the readouts row regardless;
@@ -207,6 +226,18 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
     // (e.g. `steps`) take their default rather than reading as undefined/off.
     { ...DEFAULT_TRACE_VISIBILITY, ...initial.traceVisibility },
   );
+  const [profileChartSteps, setProfileChartSteps] = createSignal<boolean>(
+    initial.profileChartSteps ?? DEFAULT_PROFILE_CHART_STEPS,
+  );
+  const [profileChartStepNames, setProfileChartStepNames] =
+    createSignal<boolean>(
+      initial.profileChartStepNames ?? DEFAULT_PROFILE_CHART_STEP_NAMES,
+    );
+  const [profileChartStepsThumbnail, setProfileChartStepsThumbnail] =
+    createSignal<boolean>(
+      initial.profileChartStepsThumbnail ??
+        DEFAULT_PROFILE_CHART_STEPS_THUMBNAIL,
+    );
   const [showSteamFlowSlider, setShowSteamFlowSlider] = createSignal<boolean>(
     initial.showSteamFlowSlider ?? false,
   );
@@ -262,6 +293,9 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
       waterWarnMm: waterWarnMm(),
       chartSmoothing: chartSmoothing(),
       traceVisibility: traceVisibility(),
+      profileChartSteps: profileChartSteps(),
+      profileChartStepNames: profileChartStepNames(),
+      profileChartStepsThumbnail: profileChartStepsThumbnail(),
       showSteamFlowSlider: showSteamFlowSlider(),
       showWaterFlowSlider: showWaterFlowSlider(),
       showFlushFlowSlider: showFlushFlowSlider(),
@@ -349,6 +383,12 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
     traceVisibility,
     setTraceVisibility,
     setTraceVisible,
+    profileChartSteps,
+    setProfileChartSteps,
+    profileChartStepNames,
+    setProfileChartStepNames,
+    profileChartStepsThumbnail,
+    setProfileChartStepsThumbnail,
     showSteamFlowSlider,
     setShowSteamFlowSlider,
     showWaterFlowSlider,

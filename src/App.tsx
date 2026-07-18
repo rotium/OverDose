@@ -688,6 +688,7 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
               machineStream={() => p.streams.machine}
               scaleConnected={scaleConnected}
               autoStopMode={() => prefs.autoStopMode()}
+              profileChartStepsThumbnail={() => prefs.profileChartStepsThumbnail()}
               isWaterCritical={isWaterCritical}
               requestState={api.requestState}
               shotSettingsStream={() => p.streams.shotSettings}
@@ -715,6 +716,7 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
                 machineStream={() => p.streams.machine}
                 scaleConnected={scaleConnected}
                 autoStopMode={() => prefs.autoStopMode()}
+                profileChartStepsThumbnail={() => prefs.profileChartStepsThumbnail()}
                 isWaterCritical={isWaterCritical}
                 requestState={api.requestState}
                 shotSettingsStream={() => p.streams.shotSettings}
@@ -737,6 +739,7 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
               machineStream={() => p.streams.machine}
               scaleConnected={scaleConnected}
               autoStopMode={() => prefs.autoStopMode()}
+              profileChartStepsThumbnail={() => prefs.profileChartStepsThumbnail()}
               isWaterCritical={isWaterCritical}
               requestState={api.requestState}
               shotSettingsStream={() => p.streams.shotSettings}
