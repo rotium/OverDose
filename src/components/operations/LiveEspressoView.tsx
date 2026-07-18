@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal, type Component } from 'solid-js';
+import { For, Show, createMemo, createSignal, type Accessor, type Component } from 'solid-js';
 import type { ProfileSnapshot } from '../../api';
 import type { LiveShotAccumulator, LiveShotReadouts } from '../../liveShot';
 import {
@@ -8,7 +8,7 @@ import {
 import { useUserPrefs } from '../../UserPrefsContext';
 import type { MachineSubstate } from '../../snapshot';
 import { TRACE_COLOR } from '../chartTraces';
-import { ClockIcon, ScaleIcon } from '../icons';
+import { ClockIcon, ScaleIcon, WaterDropIcon } from '../icons';
 import { LiveShotChart } from '../LiveShotChart';
 
 /**
@@ -26,6 +26,9 @@ import { LiveShotChart } from '../LiveShotChart';
 export interface LiveEspressoViewProps {
   acc: LiveShotAccumulator;
   onStop: () => void;
+  /** Live scale presence — decides whether the STOP bar tracks weight or
+   *  volume, mirroring the gateway's own stop-trigger selection. */
+  scaleConnected: Accessor<boolean>;
 }
 
 /**
@@ -80,49 +83,65 @@ const severityFor = (pct: number): 'normal' | 'near' | 'over' => {
 };
 
 /**
- * The STOP button's fill represents "how close are we to the next auto-stop
- * event". The DE1's actual stop priority is weight → volume → time
- * (`ShotSequencer`), but in real-time we just pick whichever trigger is
- * currently the most advanced — that's the one most likely to fire next.
+ * The STOP button's fill represents "how close are we to the auto-stop that
+ * will actually fire". This is NOT a race between candidates — it mirrors the
+ * gateway's own selection rule (reaprime `ShotSequencer`), which is decided by
+ * scale presence, not by whichever number happens to be furthest along:
  *
- * `time` is the floor: every profile has a total duration (sum of step
- * `seconds`), so timeProgress is always available when a profile is loaded.
- * Without a profile or a yield target, the bar pegs at zero — no auto-stop
- * info to display.
+ *   - scale connected + weight target → stops on weight (volume is ignored)
+ *   - no scale + volume target        → stops on volume
+ *   - otherwise                       → runs to profile time / manual stop
+ *
+ * We commit to the real trigger up front (so the badge doesn't flicker between
+ * weight/volume/time as values move), even while its value is still 0 early in
+ * the shot. `time` is the floor: every profile has a total duration (sum of
+ * step `seconds`). With no applicable weight/volume stop and no profile time,
+ * the bar pegs at zero — nothing to display.
  */
-export type StopTrigger = 'weight' | 'time' | 'none';
+export type StopTrigger = 'weight' | 'volume' | 'time' | 'none';
 
 export interface StopProgress {
-  /** 0..1 progress toward the leading trigger. Capped at 1 for layout. */
+  /** 0..1 progress toward the active trigger. Capped at 1 for layout. */
   value: number;
-  /** Which trigger is currently leading (highest progress). */
+  /** Which trigger will actually stop the shot (drives the badge). */
   trigger: StopTrigger;
 }
 
 export const computeStopProgress = (
   weight: number,
   targetWeightG: number,
+  countedVolumeMl: number,
   elapsedSec: number,
   profile: ProfileSnapshot | null,
+  scaleConnected: boolean,
 ): StopProgress => {
   const profileTotalSec = (profile?.steps ?? []).reduce(
     (sum, s) => sum + (s.seconds ?? 0),
     0,
   );
-  const weightP =
-    targetWeightG > 0 && Number.isFinite(weight) && weight > 0
-      ? weight / targetWeightG
-      : 0;
+  const targetVolumeMl = profile?.target_volume ?? 0;
+
+  // Same determinant the gateway uses: a connected scale stops on weight and
+  // the volume target is ignored; without a scale it stops on volume.
+  if (scaleConnected && targetWeightG > 0) {
+    const p =
+      Number.isFinite(weight) && weight > 0 ? weight / targetWeightG : 0;
+    return { value: Math.min(1, p), trigger: 'weight' };
+  }
+  if (!scaleConnected && targetVolumeMl > 0) {
+    const p =
+      Number.isFinite(countedVolumeMl) && countedVolumeMl > 0
+        ? countedVolumeMl / targetVolumeMl
+        : 0;
+    return { value: Math.min(1, p), trigger: 'volume' };
+  }
+
+  // No weight/volume stop will fire — fall back to the profile-time floor.
   const timeP =
     profileTotalSec > 0 && elapsedSec > 0 ? elapsedSec / profileTotalSec : 0;
-
-  if (weightP === 0 && timeP === 0) {
-    return { value: 0, trigger: 'none' };
-  }
-  if (weightP >= timeP) {
-    return { value: Math.min(1, weightP), trigger: 'weight' };
-  }
-  return { value: Math.min(1, timeP), trigger: 'time' };
+  return timeP > 0
+    ? { value: Math.min(1, timeP), trigger: 'time' }
+    : { value: 0, trigger: 'none' };
 };
 
 /**
@@ -167,14 +186,17 @@ export const LiveEspressoView: Component<LiveEspressoViewProps> = (p) => {
   const elapsedSec = (): number | undefined => r()?.elapsedSec;
   const substateText = (): string => substateLabel(r()?.substate);
 
-  // STOP button progress — reflects whichever auto-stop is currently leading
-  // (weight target via `targetYieldG`, or the profile's total time).
+  // STOP button progress — reflects the auto-stop that will actually fire:
+  // weight (scale connected) or volume (no scale), else the profile's total
+  // time. Selection follows the gateway's own rule, not a max of candidates.
   const stopProgress = createMemo<StopProgress>(() =>
     computeStopProgress(
       r()?.weight ?? NaN,
       p.acc.targetYieldG(),
+      r()?.countedVolumeMl ?? NaN,
       r()?.elapsedSec ?? 0,
       profile(),
+      p.scaleConnected(),
     ),
   );
   const stopSeverity = createMemo<'normal' | 'near' | 'over'>(() =>
@@ -357,13 +379,26 @@ export const LiveEspressoView: Component<LiveEspressoViewProps> = (p) => {
           <Show
             when={stopProgress().trigger === 'weight'}
             fallback={
-              <Show when={stopProgress().trigger === 'time'}>
+              <Show
+                when={stopProgress().trigger === 'volume'}
+                fallback={
+                  <Show when={stopProgress().trigger === 'time'}>
+                    <span
+                      class="live-view__stop-trigger"
+                      data-testid="live-view-stop-trigger-time"
+                      aria-label="Time-based auto-stop"
+                    >
+                      <ClockIcon size={12} />
+                    </span>
+                  </Show>
+                }
+              >
                 <span
                   class="live-view__stop-trigger"
-                  data-testid="live-view-stop-trigger-time"
-                  aria-label="Time-based auto-stop"
+                  data-testid="live-view-stop-trigger-volume"
+                  aria-label="Volume-based auto-stop"
                 >
-                  <ClockIcon size={12} />
+                  <WaterDropIcon size={12} />
                 </span>
               </Show>
             }
