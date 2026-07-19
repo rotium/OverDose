@@ -349,6 +349,19 @@ html {
   min-width: 3rem;
 }
 
+/* Header icon-only actions (Maintenance, Settings) sit next to the labeled
+   Sleep button — give them a wider tap target for the tablet, and centre the
+   glyph within the extra width. Scoped to the header + excludes the labeled
+   Sleep button so icon-buttons elsewhere are untouched. */
+.app-header__actions .icon-btn:not(.icon-btn--labeled) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3.5rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
 /* ─── Card primitive ──────────────────────────────────────────────── */
 
 .card {
