@@ -24,9 +24,11 @@ import {
   DEFAULT_STEAM_PURGE_STRATEGY,
   DEFAULT_STEAM_TARGET_TEMP,
   DEFAULT_TRACE_VISIBILITY,
+  DEFAULT_RECIPE_SORT_MODE,
   DEFAULT_WATER_UNIT,
   type AutoStopMode,
   type ChartSmoothing,
+  type RecipeSortMode,
   type SteamAutoFlavor,
   type SteamMode,
   type SteamPurgeStrategy,
@@ -78,6 +80,7 @@ interface PersistedPrefs {
   waterWarnMm?: number;
   chartSmoothing?: ChartSmoothing;
   traceVisibility?: TraceVisibility;
+  recipeSortMode?: RecipeSortMode;
   showSteamFlowSlider?: boolean;
   showWaterFlowSlider?: boolean;
   showFlushFlowSlider?: boolean;
@@ -103,6 +106,10 @@ export interface UserPrefsContextValue {
   setChartSmoothing: (s: ChartSmoothing) => void;
   traceVisibility: Accessor<TraceVisibility>;
   setTraceVisibility: (v: TraceVisibility) => void;
+  /** Order of the Home recipe picker. Default `custom` (manual array order,
+   *  arranged in the Library). See {@link RecipeSortMode}. */
+  recipeSortMode: Accessor<RecipeSortMode>;
+  setRecipeSortMode: (m: RecipeSortMode) => void;
   /** Update a single trace flag without rebuilding the whole object inline. */
   setTraceVisible: (k: keyof TraceVisibility, v: boolean) => void;
   /**
@@ -202,6 +209,9 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
   const [chartSmoothing, setChartSmoothing] = createSignal<ChartSmoothing>(
     initial.chartSmoothing ?? DEFAULT_CHART_SMOOTHING,
   );
+  const [recipeSortMode, setRecipeSortMode] = createSignal<RecipeSortMode>(
+    initial.recipeSortMode ?? DEFAULT_RECIPE_SORT_MODE,
+  );
   const [traceVisibility, setTraceVisibility] = createSignal<TraceVisibility>(
     // Merge over the defaults so keys added after a user's prefs were saved
     // (e.g. `steps`) take their default rather than reading as undefined/off.
@@ -262,6 +272,7 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
       waterWarnMm: waterWarnMm(),
       chartSmoothing: chartSmoothing(),
       traceVisibility: traceVisibility(),
+      recipeSortMode: recipeSortMode(),
       showSteamFlowSlider: showSteamFlowSlider(),
       showWaterFlowSlider: showWaterFlowSlider(),
       showFlushFlowSlider: showFlushFlowSlider(),
@@ -346,6 +357,8 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
     setWaterWarnMm,
     chartSmoothing,
     setChartSmoothing,
+    recipeSortMode,
+    setRecipeSortMode,
     traceVisibility,
     setTraceVisibility,
     setTraceVisible,

@@ -387,3 +387,94 @@ describe('RecipesSection', () => {
     expect((await repos.recipes.list())[0].hidden).toBe(true);
   });
 });
+
+describe('RecipesSection — arrange Home', () => {
+  const routines: Routine[] = [
+    { id: 'r', name: 'Routine', steps: [routineStep('brew', {})] },
+  ];
+  // Array (custom) order: Zebra, apple, Mango (mixed case on purpose).
+  const recipes: Recipe[] = [
+    { id: 'z1', name: 'Zebra', routineId: 'r', overrides: {} },
+    { id: 'a1', name: 'apple', routineId: 'r', overrides: {} },
+    { id: 'm1', name: 'Mango', routineId: 'r', overrides: {} },
+  ];
+
+  const renderSection = () => {
+    const repos = seed(recipes, routines);
+    render(() => (
+      <WithPrefs>
+        <WithRepositories routines={repos.routines} recipes={repos.recipes}>
+          <RecipesSection />
+        </WithRepositories>
+      </WithPrefs>
+    ));
+    return repos;
+  };
+
+  const namesIn = (testId: string): string[] =>
+    [...screen.getByTestId(testId).querySelectorAll('.library-list__name')].map(
+      (el) => el.textContent ?? '',
+    );
+
+  it('shows the management list A–Z (case-insensitive), not array order', async () => {
+    renderSection();
+    await waitFor(() => screen.getByTestId('recipes-list'));
+    expect(namesIn('recipes-list')).toEqual(['apple', 'Mango', 'Zebra']);
+  });
+
+  it('opens the Arrange Home side-sheet, previewing custom (array) order', async () => {
+    renderSection();
+    await waitFor(() => screen.getByTestId('open-arrange-recipes'));
+    fireEvent.click(screen.getByTestId('open-arrange-recipes'));
+    await waitFor(() => screen.getByTestId('arrange-side-sheet'));
+    // Custom = the stored array order.
+    expect(namesIn('arrange-list')).toEqual(['Zebra', 'apple', 'Mango']);
+  });
+
+  it('reorders the custom (Home) order and persists it', async () => {
+    const repos = renderSection();
+    await waitFor(() => screen.getByTestId('open-arrange-recipes'));
+    fireEvent.click(screen.getByTestId('open-arrange-recipes'));
+    await waitFor(() => screen.getByTestId('arrange-list'));
+
+    // Move Zebra (first) down one slot.
+    fireEvent.click(screen.getByTestId('arrange-down-z1'));
+    await waitFor(() =>
+      expect(namesIn('arrange-list')).toEqual(['apple', 'Zebra', 'Mango']),
+    );
+    // Persisted to the repository's array order.
+    expect((await repos.recipes.list()).map((r) => r.id)).toEqual([
+      'a1',
+      'z1',
+      'm1',
+    ]);
+  });
+
+  it('switches to A–Z: read-only order, reorder buttons replaced by positions', async () => {
+    renderSection();
+    await waitFor(() => screen.getByTestId('open-arrange-recipes'));
+    fireEvent.click(screen.getByTestId('open-arrange-recipes'));
+    await waitFor(() => screen.getByTestId('arrange-list'));
+
+    fireEvent.change(screen.getByTestId('recipe-sort-mode'), {
+      target: { value: 'az' },
+    });
+    await waitFor(() =>
+      expect(namesIn('arrange-list')).toEqual(['apple', 'Mango', 'Zebra']),
+    );
+    // Auto mode: no manual reorder controls.
+    expect(screen.queryByTestId('arrange-down-z1')).not.toBeInTheDocument();
+  });
+
+  it('toggles a recipe hidden from the arrange sheet', async () => {
+    const repos = renderSection();
+    await waitFor(() => screen.getByTestId('open-arrange-recipes'));
+    fireEvent.click(screen.getByTestId('open-arrange-recipes'));
+    await waitFor(() => screen.getByTestId('arrange-toggle-hidden-z1'));
+
+    fireEvent.click(screen.getByTestId('arrange-toggle-hidden-z1'));
+    await waitFor(async () =>
+      expect((await repos.recipes.get('z1'))?.hidden).toBe(true),
+    );
+  });
+});

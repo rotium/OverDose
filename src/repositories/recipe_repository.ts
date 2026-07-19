@@ -18,6 +18,12 @@ export interface RecipeRepository {
   create(recipe: Recipe): Promise<Recipe>;
   update(recipe: Recipe): Promise<Recipe>;
   delete(id: string): Promise<void>;
+  /** Persist a new ordering by id. The stored array is rewritten to match
+   *  `orderedIds` (the Home picker's custom order = array position); ids not
+   *  present are ignored and any recipes missing from the list keep their
+   *  relative order at the end. Fires the change hook so the new order syncs
+   *  to the gateway (unlike `replaceAll`). */
+  reorder(orderedIds: string[]): Promise<void>;
   /** Replace the whole collection in one shot — used by the library sync to
    *  adopt the gateway's copy on pull. See docs/storage-sync.md. */
   replaceAll(recipes: Recipe[]): Promise<void>;

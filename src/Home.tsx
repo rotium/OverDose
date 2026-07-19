@@ -228,6 +228,7 @@ export const Home: Component<HomeProps> = (p) => {
               repository={p.recipeRepository}
               onSelect={p.onSelectRecipe}
               revision={p.recipeRevision}
+              sortMode={prefs.recipeSortMode}
             />
           </div>
           <ExploreTray

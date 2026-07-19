@@ -11,6 +11,7 @@ import {
 } from 'solid-js';
 import type { Recipe } from '../domain';
 import type { RecipeRepository } from '../repositories';
+import type { RecipeSortMode } from '../prefs';
 import { api, type ProfileRecord } from '../api';
 import { RecipeTile } from './RecipeTile';
 import { log } from '../debugLog';
@@ -43,6 +44,9 @@ export interface RecipePickerProps {
    *  sync pull (see docs/storage-sync.md). Optional so tests/standalone use
    *  still work (falls back to a one-shot load + the imperative refresh). */
   revision?: Accessor<number>;
+  /** How to order the tiles. `custom` (default) keeps the repository's array
+   *  order (the user's manual arrangement); `az`/`za` sort by name. */
+  sortMode?: Accessor<RecipeSortMode>;
 }
 
 export interface RecipePickerHandle {
@@ -63,6 +67,23 @@ export const RecipePicker: Component<
     () => p.repository.listVisible(),
   );
   p.ref?.({ recipes, refresh: () => void refetch() });
+
+  // Apply the Home sort mode. `custom` keeps the repository's array order
+  // (the manual arrangement saved in the Library); `az`/`za` sort by name,
+  // case-insensitive. A copy is sorted so the resource's array isn't mutated.
+  const sortedRecipes = createMemo<Recipe[]>(() => {
+    // Reading `recipes()` throws while the resource is errored; bail first so
+    // the memo can't disrupt the error-state render (the <For> that consumes
+    // this only mounts in the success branch anyway).
+    if (recipes.error) return [];
+    const list = recipes() ?? [];
+    const mode = (p.sortMode ?? (() => 'custom' as RecipeSortMode))();
+    if (mode === 'custom') return list;
+    const sorted = [...list].sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
+    );
+    return mode === 'za' ? sorted.reverse() : sorted;
+  });
 
   // Profile list — fetched once on mount, used to look up each tile's
   // profile title. Catches its own errors so an offline gateway just
@@ -110,7 +131,7 @@ export const RecipePicker: Component<
             }
           >
             <div class="picker__grid" data-testid="picker-grid">
-              <For each={recipes()}>
+              <For each={sortedRecipes()}>
                 {(r) => (
                   <RecipeTile
                     recipe={r}

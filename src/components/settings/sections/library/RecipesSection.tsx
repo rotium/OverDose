@@ -13,8 +13,14 @@ import {
 import { formatStepType } from '../../../../domain';
 import type { Routine, Recipe } from '../../../../domain';
 import { useRepositories } from '../../../../RepositoriesContext';
+import { useUserPrefs } from '../../../../UserPrefsContext';
+import type { RecipeSortMode } from '../../../../prefs';
 import { EyeIcon, EyeOffIcon } from '../../../icons';
 import { RecipeEditor } from './RecipeEditor';
+
+/** Case-insensitive A–Z compare on recipe name. */
+const byName = (a: Recipe, b: Recipe): number =>
+  a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
 
 const SHEET_ANIM_MS = 280;
 
@@ -35,6 +41,7 @@ const SHEET_ANIM_MS = 280;
  */
 export const RecipesSection: Component = () => {
   const repos = useRepositories();
+  const prefs = useUserPrefs();
   // Sourced on `repos.revision` so a gateway sync pull (or a cross-screen
   // edit) re-runs the list — see docs/storage-sync.md.
   const [recipes, { refetch: refetchRecipes }] = createResource(
@@ -50,6 +57,7 @@ export const RecipesSection: Component = () => {
 
   const [selectedId, setSelectedId] = createSignal<string | null>(null);
   const [animatingOut, setAnimatingOut] = createSignal(false);
+  const [arranging, setArranging] = createSignal(false);
   const [creating, setCreating] = createSignal(false);
   const [draftName, setDraftName] = createSignal('');
   const [draftRoutineId, setDraftRoutineId] = createSignal('');
@@ -66,6 +74,39 @@ export const RecipesSection: Component = () => {
     const steps = routineById()[routineId]?.steps ?? [];
     if (steps.length === 0) return '(no steps yet)';
     return steps.map((s) => formatStepType(s.type)).join(' → ');
+  };
+
+  // The management list is always shown A–Z (case-insensitive) — a stable
+  // place to find and edit a recipe. This is display-only; it never changes
+  // the stored array order (that IS the Home "custom" order, edited below).
+  const sortedRecipes = createMemo<Recipe[]>(() => {
+    if (recipes.error) return [];
+    return [...(recipes() ?? [])].sort(byName);
+  });
+
+  const sortMode = (): RecipeSortMode => prefs.recipeSortMode();
+
+  // The Arrange side-sheet previews the Home order. `custom` = the raw array
+  // order (reorderable); `az`/`za` = computed, read-only.
+  const arrangeList = createMemo<Recipe[]>(() => {
+    if (recipes.error) return [];
+    const all = recipes() ?? [];
+    const m = sortMode();
+    if (m === 'custom') return all;
+    const s = [...all].sort(byName);
+    return m === 'za' ? s.reverse() : s;
+  });
+
+  // Move a recipe one slot earlier/later in the stored array (= Home custom
+  // order). Operates on the full id list so hidden recipes keep their slot.
+  const moveRecipe = async (id: string, dir: -1 | 1) => {
+    const ids = (recipes() ?? []).map((r) => r.id);
+    const idx = ids.indexOf(id);
+    const target = idx + dir;
+    if (idx < 0 || target < 0 || target >= ids.length) return;
+    [ids[idx], ids[target]] = [ids[target]!, ids[idx]!];
+    await repos.recipes.reorder(ids);
+    void refetchRecipes();
   };
 
   // Quick hide/show toggle — keeps a recipe off the Home picker without
@@ -154,6 +195,7 @@ export const RecipesSection: Component = () => {
             parent Routine.
           </p>
 
+          <div class="recipes-section__toolbar">
           <Show
             when={creating()}
             fallback={
@@ -226,6 +268,18 @@ export const RecipesSection: Component = () => {
             </form>
           </Show>
 
+          <Show when={!creating() && !recipes.error && (recipes() ?? []).length > 0}>
+            <button
+              type="button"
+              class="btn recipes-section__arrange-btn"
+              data-testid="open-arrange-recipes"
+              onClick={() => setArranging(true)}
+            >
+              ↕ Arrange Home…
+            </button>
+          </Show>
+          </div>
+
           <Switch>
             <Match when={loading()}>
               <p class="muted">loading recipes…</p>
@@ -241,7 +295,7 @@ export const RecipesSection: Component = () => {
                 fallback={<p class="muted">no recipes yet</p>}
               >
                 <ul class="library-list" data-testid="recipes-list">
-                  <For each={recipes()}>
+                  <For each={sortedRecipes()}>
                     {(r) => (
                       <li
                         class="library-list__row library-list__row--clickable"
@@ -324,6 +378,134 @@ export const RecipesSection: Component = () => {
           </button>
           <div class="side-sheet__body">
             <RecipeEditor recipeId={selectedId()!} onClose={closeEditor} />
+          </div>
+        </aside>
+      </Show>
+
+      <Show when={arranging()}>
+        <div
+          class="side-sheet__backdrop"
+          data-state="open"
+          data-testid="arrange-backdrop"
+          aria-hidden="true"
+          onClick={() => setArranging(false)}
+        />
+        <aside
+          class="side-sheet"
+          data-state="open"
+          data-testid="arrange-side-sheet"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Arrange Home"
+        >
+          <button
+            type="button"
+            class="side-sheet__close"
+            aria-label="Close"
+            data-testid="arrange-close"
+            onClick={() => setArranging(false)}
+          >
+            ×
+          </button>
+          <div class="side-sheet__body">
+            <h2>Arrange Home</h2>
+            <p class="settings-help">
+              Order and show or hide the recipes on your Home screen.
+            </p>
+
+            <div class="settings-field">
+              <label class="settings-field__label" for="recipe-sort-mode">
+                Home order
+              </label>
+              <select
+                id="recipe-sort-mode"
+                class="recipe-editor__routine-select"
+                data-testid="recipe-sort-mode"
+                value={sortMode()}
+                onChange={(e) =>
+                  prefs.setRecipeSortMode(
+                    e.currentTarget.value as RecipeSortMode,
+                  )
+                }
+              >
+                <option value="custom">Custom (arrange manually)</option>
+                <option value="az">Name · A–Z</option>
+                <option value="za">Name · Z–A</option>
+              </select>
+              <p class="settings-help">
+                {sortMode() === 'custom'
+                  ? 'Use the ↑ ↓ buttons to set the order.'
+                  : 'Sorted automatically — switch to Custom to arrange.'}
+              </p>
+            </div>
+
+            <ul class="library-list" data-testid="arrange-list">
+              <For each={arrangeList()}>
+                {(r, i) => (
+                  <li
+                    class="library-list__row recipes-section__arrange-row"
+                    data-hidden={r.hidden ? 'true' : undefined}
+                    data-testid={`arrange-row-${r.id}`}
+                  >
+                    <Show
+                      when={sortMode() === 'custom'}
+                      fallback={
+                        <span class="recipes-section__arrange-pos">
+                          {i() + 1}
+                        </span>
+                      }
+                    >
+                      <div class="recipes-section__arrange-reorder">
+                        <button
+                          type="button"
+                          class="icon-btn icon-btn--compact"
+                          aria-label={`Move "${r.name}" earlier`}
+                          data-testid={`arrange-up-${r.id}`}
+                          disabled={i() === 0}
+                          onClick={() => void moveRecipe(r.id, -1)}
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          class="icon-btn icon-btn--compact"
+                          aria-label={`Move "${r.name}" later`}
+                          data-testid={`arrange-down-${r.id}`}
+                          disabled={i() === arrangeList().length - 1}
+                          onClick={() => void moveRecipe(r.id, 1)}
+                        >
+                          ↓
+                        </button>
+                      </div>
+                    </Show>
+                    <span class="recipes-section__arrange-info">
+                      <span class="library-list__name">{r.name}</span>
+                      <span class="library-list__meta recipes-section__meta">
+                        <span class="recipes-section__routine">
+                          {routineById()[r.routineId]?.name ??
+                            '(missing routine)'}
+                        </span>
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      class="library-list__action"
+                      data-testid={`arrange-toggle-hidden-${r.id}`}
+                      aria-pressed={r.hidden ? 'true' : 'false'}
+                      aria-label={
+                        r.hidden
+                          ? `Show "${r.name}" on the home screen`
+                          : `Hide "${r.name}" from the home screen`
+                      }
+                      title={r.hidden ? 'Hidden — tap to show' : 'Hide from home'}
+                      onClick={() => void toggleHidden(r)}
+                    >
+                      {r.hidden ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
+                    </button>
+                  </li>
+                )}
+              </For>
+            </ul>
           </div>
         </aside>
       </Show>
