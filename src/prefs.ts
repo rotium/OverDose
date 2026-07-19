@@ -78,6 +78,19 @@ export const DEFAULT_PROFILE_CHART_STEP_NAMES = true;
 export const DEFAULT_PROFILE_CHART_STEPS_THUMBNAIL = false;
 
 /**
+ * Order of the recipe tiles on the Home picker:
+ *  - `custom` — the user's manual arrangement (the recipe array position,
+ *               edited in the Library "Arrange Home" side-sheet). Default, so
+ *               Home keeps its existing order until the user rearranges.
+ *  - `az` / `za` — sort by recipe name, case-insensitive, ascending/descending.
+ * The Library recipes list itself is always shown A–Z regardless of this; this
+ * pref governs only the Home picker. Recently-used / most-used are deferred
+ * (need brew-event tracking the app doesn't collect yet).
+ */
+export type RecipeSortMode = 'custom' | 'az' | 'za';
+export const DEFAULT_RECIPE_SORT_MODE: RecipeSortMode = 'custom';
+
+/**
  * Display unit for the water-tank level. Reaprime streams `currentLevel` in
  * mm; the skin defaults to converting to mL for the user-facing readout.
  * `both` shows mL with a small mm secondary.

@@ -66,6 +66,23 @@ export class LocalRecipeRepository implements RecipeRepository {
     this.onChange?.();
   }
 
+  async reorder(orderedIds: string[]): Promise<void> {
+    const all = this.readAll();
+    const rank = new Map(orderedIds.map((id, i) => [id, i]));
+    // Stable sort by the requested rank; recipes absent from `orderedIds`
+    // (rank = Infinity) keep their existing relative order at the end.
+    const next = all
+      .map((r, i) => ({ r, i }))
+      .sort((a, b) => {
+        const ra = rank.get(a.r.id) ?? Infinity;
+        const rb = rank.get(b.r.id) ?? Infinity;
+        return ra === rb ? a.i - b.i : ra - rb;
+      })
+      .map((x) => x.r);
+    this.writeAll(next);
+    this.onChange?.();
+  }
+
   /** Replace the whole collection — used by the library sync on pull. Does
    *  not fire `onChange` (adopting gateway data must not push back). */
   async replaceAll(recipes: Recipe[]): Promise<void> {

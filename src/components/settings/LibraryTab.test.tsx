@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
 import { LibraryTab } from './LibraryTab';
 import { WithRepositories } from '../../test/repositories';
+import { WithPrefs } from '../../test/prefs';
 
 const renderLibrary = () =>
   render(() => (
-    <WithRepositories>
-      <LibraryTab />
-    </WithRepositories>
+    <WithPrefs>
+      <WithRepositories>
+        <LibraryTab />
+      </WithRepositories>
+    </WithPrefs>
   ));
 
 describe('LibraryTab', () => {

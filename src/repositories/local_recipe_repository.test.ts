@@ -96,6 +96,48 @@ describe('LocalRecipeRepository', () => {
     });
   });
 
+  describe('reorder', () => {
+    const seedThree = () => {
+      storage.setItem('starter-skin.recipes.seeded.v1', '1'); // skip seeding
+      const repo = new LocalRecipeRepository(storage);
+      return repo;
+    };
+
+    it('rewrites the stored array to match the given id order', async () => {
+      const repo = seedThree();
+      await repo.create(sampleRecipe('a'));
+      await repo.create(sampleRecipe('b'));
+      await repo.create(sampleRecipe('c'));
+
+      await repo.reorder(['c', 'a', 'b']);
+      expect((await repo.list()).map((r) => r.id)).toEqual(['c', 'a', 'b']);
+    });
+
+    it('keeps ids missing from the order at the end, in prior order', async () => {
+      const repo = seedThree();
+      await repo.create(sampleRecipe('a'));
+      await repo.create(sampleRecipe('b'));
+      await repo.create(sampleRecipe('c'));
+
+      // Only b is named — a and c keep their relative order after it.
+      await repo.reorder(['b']);
+      expect((await repo.list()).map((r) => r.id)).toEqual(['b', 'a', 'c']);
+    });
+
+    it('fires onChange so the new order syncs', async () => {
+      storage.setItem('starter-skin.recipes.seeded.v1', '1');
+      let changes = 0;
+      const repo = new LocalRecipeRepository(storage, () => {
+        changes += 1;
+      });
+      await repo.create(sampleRecipe('a')); // +1
+      await repo.create(sampleRecipe('b')); // +1
+      changes = 0;
+      await repo.reorder(['b', 'a']);
+      expect(changes).toBe(1);
+    });
+  });
+
   describe('storage corruption', () => {
     it('recovers from garbage data by returning empty list', async () => {
       storage.setItem('starter-skin.recipes.v1', '{not json');

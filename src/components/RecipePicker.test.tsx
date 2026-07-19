@@ -39,7 +39,52 @@ const repo = (
   create: async (r: Recipe) => r,
   update: async (r: Recipe) => r,
   delete: async () => {},
+  reorder: async () => {},
   replaceAll: async () => {},
+});
+
+const tileOrder = (): string[] =>
+  [...screen.getByTestId('picker-grid').querySelectorAll('.tile__name')].map(
+    (el) => el.textContent ?? '',
+  );
+
+describe('RecipePicker sort mode', () => {
+  // Array order is Cappuccino, Espresso, americano (mixed case on purpose).
+  const recipes = () => [
+    rec('b', 'Cappuccino'),
+    rec('a', 'Espresso'),
+    rec('c', 'americano'),
+  ];
+
+  it('keeps the repository array order for custom (default)', async () => {
+    render(() => <RecipePicker repository={repo(recipes())} onSelect={() => {}} />);
+    await waitFor(() => screen.getByTestId('picker-grid'));
+    expect(tileOrder()).toEqual(['Cappuccino', 'Espresso', 'americano']);
+  });
+
+  it('sorts A–Z case-insensitively when mode is az', async () => {
+    render(() => (
+      <RecipePicker
+        repository={repo(recipes())}
+        onSelect={() => {}}
+        sortMode={() => 'az'}
+      />
+    ));
+    await waitFor(() => screen.getByTestId('picker-grid'));
+    expect(tileOrder()).toEqual(['americano', 'Cappuccino', 'Espresso']);
+  });
+
+  it('sorts Z–A when mode is za', async () => {
+    render(() => (
+      <RecipePicker
+        repository={repo(recipes())}
+        onSelect={() => {}}
+        sortMode={() => 'za'}
+      />
+    ));
+    await waitFor(() => screen.getByTestId('picker-grid'));
+    expect(tileOrder()).toEqual(['Espresso', 'Cappuccino', 'americano']);
+  });
 });
 
 describe('RecipePicker', () => {
@@ -156,6 +201,7 @@ describe('RecipePicker', () => {
       create: async (x: Recipe) => x,
       update: async (x: Recipe) => x,
       delete: async () => {},
+      reorder: async () => {},
       replaceAll: async () => {},
     };
     let handle: { refresh: () => void } | undefined;
