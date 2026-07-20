@@ -385,11 +385,16 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
     ): (() => Promise<void>) => {
       let hydrated = false;
       let pushTimer: ReturnType<typeof setTimeout> | undefined;
+      // A local change is pending upload. While set, a pull must NOT apply the
+      // remote value — otherwise an instance can adopt a stale shared value
+      // (its own push not landed yet) and revert the user's own change. Cleared
+      // once our push has been written to the gateway.
+      let dirty = false;
 
       const pull = async (): Promise<void> => {
         try {
           const remote = await store.get<T>(key);
-          if (remote) apply(remote);
+          if (remote && !dirty) apply(remote);
         } catch (e) {
           // Offline / first run — keep the local mirror value.
           log.warn('steam', `${label} gateway pull failed`, e);
@@ -406,12 +411,16 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
       createEffect(() => {
         const cfg = snapshot();
         if (!hydrated) return;
+        dirty = true;
         if (pushTimer !== undefined) clearTimeout(pushTimer);
         pushTimer = setTimeout(() => {
           pushTimer = undefined;
-          void store.set(key, cfg).catch((e) =>
-            log.warn('steam', `${label} gateway push failed`, e),
-          );
+          void store
+            .set(key, cfg)
+            .catch((e) => log.warn('steam', `${label} gateway push failed`, e))
+            .finally(() => {
+              dirty = false;
+            });
         }, debounceMs);
       });
       onCleanup(() => {

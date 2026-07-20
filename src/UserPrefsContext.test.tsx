@@ -289,6 +289,27 @@ describe('UserPrefsContext', () => {
       expect(prefs.steamTargetTemp()).toBe(140);
     });
 
+    it('does not adopt while a local change is pending push (no self-clobber)', async () => {
+      // The race the real bug hit: you change a value; a peer briefly reverts
+      // the machine; you re-pull before your own push lands and must NOT adopt
+      // the stale shared value back over your change.
+      const { store, setMock } = fakeGatewayStore(); // empty → no adopt on mount
+      const prefs = withGatewayProvider(store, () => useUserPrefs());
+      await tick();
+
+      prefs.setSteamTargetTemp(165); // local change → dirty, push scheduled
+      await setMock('steamPolicy', {
+        mode: 'off',
+        targetTemp: 130,
+        idleTemp: 0,
+        autoFlavor: 'smart',
+        autoTimeoutMin: 5,
+      }); // a stale/other value on the gateway
+      await prefs.refreshSteamPolicy(); // must be skipped while dirty
+
+      expect(prefs.steamTargetTemp()).toBe(165); // our change preserved
+    });
+
     it('ignores an invalid mode from the gateway', async () => {
       const { store } = fakeGatewayStore({
         steamPolicy: { mode: 'bogus', targetTemp: 165 },
