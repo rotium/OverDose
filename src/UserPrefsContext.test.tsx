@@ -270,6 +270,25 @@ describe('UserPrefsContext', () => {
       );
     });
 
+    it('refreshSteamPolicy re-pulls and adopts a later change', async () => {
+      const { store, setMock } = fakeGatewayStore();
+      const prefs = withGatewayProvider(store, () => useUserPrefs());
+      await tick(); // mount pull settles (empty)
+
+      // Another OverDose instance changes the shared policy after mount.
+      await setMock('steamPolicy', {
+        mode: 'off',
+        targetTemp: 140,
+        idleTemp: 0,
+        autoFlavor: 'smart',
+        autoTimeoutMin: 5,
+      });
+      await prefs.refreshSteamPolicy();
+
+      expect(prefs.steamMode()).toBe('off');
+      expect(prefs.steamTargetTemp()).toBe(140);
+    });
+
     it('ignores an invalid mode from the gateway', async () => {
       const { store } = fakeGatewayStore({
         steamPolicy: { mode: 'bogus', targetTemp: 165 },

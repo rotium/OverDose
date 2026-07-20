@@ -47,6 +47,9 @@ interface Init {
   shotTemp?: number;
   /** Live steam-boiler temperature reported by the machine. */
   steamTemp?: number;
+  /** Called by the controller before re-asserting against an external change.
+   *  Default no-op (no gateway); tests can inject one that adopts. */
+  refreshPolicy?: () => Promise<void>;
 }
 
 const setup = (init: Init = {}) => {
@@ -54,23 +57,28 @@ const setup = (init: Init = {}) => {
   const [flavor, setFlavor] = createSignal<SteamAutoFlavor>(init.flavor ?? 'eco');
   const [state, setState] = createSignal<MachineState>(init.state ?? 'idle');
   const [steamTemp, setSteamTemp] = createSignal<number>(init.steamTemp ?? 0);
+  // Settable so a test can simulate "another instance changed the shared
+  // desired" from inside a refreshPolicy.
+  const [desired, setDesired] = createSignal<number>(DESIRED);
   const [shot, setShot] = createSignal<ShotSettingsSnapshot | null>(
     mkShot(init.shotTemp ?? 0),
   );
   // The write mimics the gateway echo: the new target becomes the live value,
   // so the controller's "already in sync" guard holds after a write.
   const write = vi.fn((b: ShotSettingsSnapshot) => setShot(b));
+  const refreshPolicy = init.refreshPolicy ?? (() => Promise.resolve());
   let ctl!: SteamController;
   const Probe = () => {
     ctl = createSteamController({
       mode,
       flavor,
-      desiredTemp: () => DESIRED,
+      desiredTemp: desired,
       idleTemp: () => init.idleTemp ?? 0,
       timeoutMin: () => TIMEOUT_MIN,
       machine: () => mkMachine(state(), steamTemp()),
       shotSettings: shot,
       write,
+      refreshPolicy,
     });
     return null;
   };
@@ -83,9 +91,16 @@ const setup = (init: Init = {}) => {
     setState,
     setShot,
     setSteamTemp,
+    setDesired,
     write,
     target,
   };
+};
+
+/** Flush the microtask queue so a refreshPolicy().finally() re-assert runs. */
+const flush = async (): Promise<void> => {
+  await Promise.resolve();
+  await Promise.resolve();
 };
 
 describe('createSteamController', () => {
@@ -111,11 +126,34 @@ describe('createSteamController', () => {
       expect(h.target()).toBe(DESIRED);
     });
 
-    it('re-asserts the desired temp after an external change', () => {
+    it('re-asserts the desired temp after an external change the shared policy did not change', async () => {
+      // No-op refreshPolicy = the shared policy is unchanged → the external
+      // change came from a non-OverDose source → re-assert our value.
       const h = setup({ mode: 'on', shotTemp: DESIRED });
       expect(h.write).not.toHaveBeenCalled(); // already in sync
       h.setShot(mkShot(160)); // external skin changed it
+      await flush(); // re-assert is deferred behind the policy re-pull
       expect(h.target()).toBe(DESIRED); // re-asserted
+    });
+
+    it('adopts a shared-policy change instead of fighting it', async () => {
+      // Another OverDose instance changed the shared desired to 160 and wrote
+      // it to the machine; our refreshPolicy adopts it → we converge, no fight.
+      const h = setup({
+        mode: 'on',
+        shotTemp: DESIRED,
+        refreshPolicy: () => {
+          h.setDesired(160);
+          return Promise.resolve();
+        },
+      });
+      h.setShot(mkShot(160)); // the peer's value arrives on the WS
+      await flush();
+      expect(h.target()).toBe(160); // adopted, not overwritten back to DESIRED
+      // No re-assert write happened (the adopt made us already in sync).
+      expect(
+        h.write.mock.calls.some((c) => c[0].targetSteamTemp === DESIRED),
+      ).toBe(false);
     });
   });
 
