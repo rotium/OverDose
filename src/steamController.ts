@@ -30,6 +30,11 @@ export interface SteamControllerDeps {
   shotSettings: () => ShotSettingsSnapshot | null;
   /** Writes the full shotSettings body with the controller's target temp. */
   write: (body: ShotSettingsSnapshot) => void;
+  /** Re-pull the shared steam policy from the gateway (adopting any change
+   *  another OverDose instance made). Called before re-asserting against an
+   *  external machine change so instances converge instead of fighting.
+   *  No-op / resolved when there's no gateway. */
+  refreshPolicy: () => Promise<void>;
 }
 
 export interface SteamController {
@@ -197,17 +202,62 @@ export const createSteamController = (
   });
 
   // The single write. React to the desired target, the machine *state* (not
-  // every snapshot frame), and the shotSettings base (so an external change is
-  // re-asserted). Skip while asleep or mid-steam.
+  // every snapshot frame), and the shotSettings base. Skip while asleep or
+  // mid-steam.
+  //
+  // Two ways `cur.targetSteamTemp !== want` arises:
+  //  - `want` just changed (mode/temp/context — our own intent): assert it
+  //    directly. We must NOT re-pull the shared policy here, or a stale shared
+  //    value could revert the user's own change.
+  //  - the machine value changed under us (external): before re-asserting, pull
+  //    the shared policy — another OverDose instance may have changed the
+  //    desired. Adopting it re-runs this effect and converges; only if it's
+  //    unchanged (a non-OverDose change) do we re-assert our own value. This is
+  //    what stops two instances endlessly fighting over `targetSteamTemp`.
   const machineState = createMemo(() => deps.machine()?.state.state);
+  // Track the last-observed want + machine temp *while active* so we can tell
+  // "the machine moved under us" (adopt-first) from "our intent changed / we
+  // just woke" (assert directly). Not updated while blocked, so waking still
+  // reads as an assert.
+  let prevWant: number | undefined;
+  let prevCur: number | undefined;
+  let refreshing = false;
   createEffect(() => {
     const st = machineState();
     const want = desiredTarget();
-    if (st === 'sleeping' || st === 'steam' || st === 'steamRinse') return;
     const cur = deps.shotSettings();
+
+    if (st === 'sleeping' || st === 'steam' || st === 'steamRinse') return;
     if (!cur) return;
-    if (cur.targetSteamTemp === want) return;
-    deps.write({ ...cur, targetSteamTemp: want });
+
+    const curTemp = cur.targetSteamTemp;
+    const wantChanged = want !== prevWant;
+    const curChanged = curTemp !== prevCur;
+    prevWant = want;
+    prevCur = curTemp;
+
+    if (curTemp === want) return; // already in sync
+
+    // Only the machine changing under us (our intent stable) is an external
+    // change to arbitrate. want-changes and wake/first-run assert directly —
+    // re-pulling there could revert the user's own change to a stale value.
+    const external = curChanged && !wantChanged;
+    if (!external) {
+      deps.write({ ...cur, targetSteamTemp: want });
+      return;
+    }
+
+    // Adopt the shared policy first, then re-check. One refresh at a time; the
+    // re-check reads the latest state after it resolves.
+    if (refreshing) return;
+    refreshing = true;
+    void deps.refreshPolicy().finally(() => {
+      refreshing = false;
+      const c = deps.shotSettings();
+      const w = desiredTarget();
+      if (!c || c.targetSteamTemp === w) return; // adopted → in sync
+      deps.write({ ...c, targetSteamTemp: w });
+    });
   });
 
   const phase = (): 'warm' | 'idle' => (warm() ? 'warm' : 'idle');

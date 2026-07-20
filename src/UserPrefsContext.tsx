@@ -183,6 +183,11 @@ export interface UserPrefsContextValue {
   /** Auto-mode config: minutes before dropping to the idle temperature. */
   steamAutoTimeoutMin: Accessor<number>;
   setSteamAutoTimeoutMin: (v: number) => void;
+  /** Re-pull the shared steam policy from the gateway, adopting any change made
+   *  by another OverDose instance. Resolves immediately (no-op) without a
+   *  gateway. The steam controller calls this before re-asserting against an
+   *  external machine change so instances converge instead of fighting. */
+  refreshSteamPolicy: () => Promise<void>;
 }
 
 const Ctx = createContext<UserPrefsContextValue>();
@@ -310,6 +315,11 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
   // on change, but only after the initial pull resolves so the locally-hydrated
   // value can't clobber a newer gateway value. No-op without a gatewayStore.
   // Display/device prefs are deliberately NOT synced — they stay per-device.
+  // `refreshSteamPolicy` re-pulls the shared steam policy on demand (the steam
+  // controller calls it to adopt another instance's change before re-asserting).
+  // Stays a no-op when there's no gateway.
+  let refreshSteamPolicyFn: () => Promise<void> = () => Promise.resolve();
+
   const gw = p.gatewayStore;
   if (gw) {
     const store = gw;
@@ -317,12 +327,17 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
 
     // Sync one KV key ⇄ local signals. `snapshot` reads the signals (so the
     // push effect tracks them); `apply` validates + writes a pulled value.
+    // Returns the pull fn so callers can re-pull on demand. A short push
+    // debounce (steamPolicy) propagates a change fast enough that a peer's
+    // adopt-before-reassert sees fresh data; a longer one (steamPurge) just
+    // coalesces edits.
     const registerKvSync = <T,>(
       key: string,
       label: string,
       snapshot: () => T,
       apply: (remote: T) => void,
-    ): void => {
+      debounceMs: number,
+    ): (() => Promise<void>) => {
       let hydrated = false;
       let pushTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -352,11 +367,13 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
           void store.set(key, cfg).catch((e) =>
             log.warn('steam', `${label} gateway push failed`, e),
           );
-        }, 400);
+        }, debounceMs);
       });
       onCleanup(() => {
         if (pushTimer !== undefined) clearTimeout(pushTimer);
       });
+
+      return pull;
     };
 
     registerKvSync<SteamPurgeConfig>(
@@ -374,9 +391,10 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
           setSteamAutoFlushSec(remote.autoFlushSec);
         }
       },
+      400,
     );
 
-    registerKvSync<SteamPolicyConfig>(
+    refreshSteamPolicyFn = registerKvSync<SteamPolicyConfig>(
       STEAM_POLICY_STORE_KEY,
       'steamPolicy',
       () => ({
@@ -399,6 +417,7 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
           setSteamAutoTimeoutMin(remote.autoTimeoutMin);
         }
       },
+      150,
     );
 
     onMount(() => {
@@ -452,6 +471,7 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
     setSteamIdleTemp,
     steamAutoTimeoutMin,
     setSteamAutoTimeoutMin,
+    refreshSteamPolicy: () => refreshSteamPolicyFn(),
   };
 
   return <Ctx.Provider value={value}>{p.children}</Ctx.Provider>;

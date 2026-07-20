@@ -214,6 +214,7 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
     machine: () => p.streams.machine.latest(),
     shotSettings: () => p.streams.shotSettings.latest(),
     write: onUpdateShotSettings,
+    refreshPolicy: prefs.refreshSteamPolicy,
   });
 
   onMount(() => {
