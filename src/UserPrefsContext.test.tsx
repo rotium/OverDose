@@ -10,7 +10,11 @@ import { MemoryStorage } from './test/memoryStorage';
 import { WATER_WARN_MM } from './water';
 import {
   DEFAULT_CHART_SMOOTHING,
+  DEFAULT_STEAM_AUTO_FLAVOR,
   DEFAULT_STEAM_AUTO_FLUSH_SEC,
+  DEFAULT_STEAM_AUTO_TIMEOUT_MIN,
+  DEFAULT_STEAM_IDLE_TEMP,
+  DEFAULT_STEAM_MODE,
   DEFAULT_TRACE_VISIBILITY,
   DEFAULT_WATER_UNIT,
 } from './prefs';
@@ -226,6 +230,54 @@ describe('UserPrefsContext', () => {
       withGatewayProvider(store, () => useUserPrefs());
       await tick();
       expect(setMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('steam-policy gateway sync', () => {
+    it('pulls the shared steam policy on mount, overriding local', async () => {
+      const { store, getMock } = fakeGatewayStore({
+        steamPolicy: {
+          mode: 'auto',
+          targetTemp: 160,
+          idleTemp: 80,
+          autoFlavor: 'eco',
+          autoTimeoutMin: 20,
+        },
+      });
+      const prefs = withGatewayProvider(store, () => useUserPrefs());
+      expect(getMock).toHaveBeenCalledWith('steamPolicy');
+      await waitFor(() => expect(prefs.steamMode()).toBe('auto'));
+      expect(prefs.steamTargetTemp()).toBe(160);
+      expect(prefs.steamIdleTemp()).toBe(80);
+      expect(prefs.steamAutoFlavor()).toBe('eco');
+      expect(prefs.steamAutoTimeoutMin()).toBe(20);
+    });
+
+    it('pushes the steam policy when a field changes (after hydration)', async () => {
+      const { store, setMock } = fakeGatewayStore(); // empty → pull resolves null
+      const prefs = withGatewayProvider(store, () => useUserPrefs());
+      await tick();
+
+      prefs.setSteamTargetTemp(155);
+      await waitFor(() =>
+        expect(setMock).toHaveBeenCalledWith('steamPolicy', {
+          mode: DEFAULT_STEAM_MODE,
+          targetTemp: 155,
+          idleTemp: DEFAULT_STEAM_IDLE_TEMP,
+          autoFlavor: DEFAULT_STEAM_AUTO_FLAVOR,
+          autoTimeoutMin: DEFAULT_STEAM_AUTO_TIMEOUT_MIN,
+        }),
+      );
+    });
+
+    it('ignores an invalid mode from the gateway', async () => {
+      const { store } = fakeGatewayStore({
+        steamPolicy: { mode: 'bogus', targetTemp: 165 },
+      });
+      const prefs = withGatewayProvider(store, () => useUserPrefs());
+      // Valid field applied; invalid `mode` left at the default.
+      await waitFor(() => expect(prefs.steamTargetTemp()).toBe(165));
+      expect(prefs.steamMode()).toBe(DEFAULT_STEAM_MODE);
     });
   });
 

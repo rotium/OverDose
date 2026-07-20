@@ -59,6 +59,23 @@ interface SteamPurgeConfig {
   autoFlushSec: number;
 }
 
+/**
+ * Steam policy shared across every OverDose client of a gateway (same
+ * mechanism as {@link STEAM_PURGE_STORE_KEY}). This MUST be shared: the steam
+ * controller reconciles `targetSteamTemp` in the background, so two instances
+ * holding different desired temps fight over the machine setting. Sharing the
+ * policy makes them agree. Display/device prefs deliberately stay local.
+ */
+const STEAM_POLICY_STORE_KEY = 'steamPolicy';
+
+interface SteamPolicyConfig {
+  mode: SteamMode;
+  targetTemp: number;
+  idleTemp: number;
+  autoFlavor: SteamAutoFlavor;
+  autoTimeoutMin: number;
+}
+
 /** Minimal gateway KV accessor surface (a subset of `api`), injected so the
  *  provider stays testable and so non-gateway contexts (tests) opt out simply
  *  by not passing it — in which case the prefs are localStorage-only. */
@@ -72,6 +89,9 @@ const STEAM_PURGE_STRATEGIES: readonly SteamPurgeStrategy[] = [
   'autoFlush',
   'manual',
 ];
+
+const STEAM_MODES: readonly SteamMode[] = ['off', 'auto', 'on'];
+const STEAM_AUTO_FLAVORS: readonly SteamAutoFlavor[] = ['eco', 'smart'];
 
 /**
  * Shape persisted to localStorage. All fields optional so a future field
@@ -325,62 +345,117 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
     storage.setItem(STORAGE_KEY, JSON.stringify(shape));
   });
 
-  // ── Gateway sync for the shared wand-purge config (Option A) ──
-  // Gateway is canonical; localStorage (above) is the cold-start mirror. We
-  // pull on mount + on focus, and push (debounced) on change — but only after
-  // the initial pull resolves, so the locally-hydrated value can't clobber a
-  // newer gateway value before we've read it. No-op without a gatewayStore.
+  // ── Gateway sync for shared steam config ──
+  // The wand-purge config and the steam policy are machine-scoped: they drive
+  // the machine and every OverDose client of a gateway must agree on them (two
+  // instances with different steam desireds fight over `targetSteamTemp`). So
+  // they live on the gateway, keyed separately; localStorage (above) is the
+  // cold-start / offline mirror. Gateway is canonical: a value found there on
+  // startup overrides the local mirror. Pull on mount + focus; push (debounced)
+  // on change, but only after the initial pull resolves so the locally-hydrated
+  // value can't clobber a newer gateway value. No-op without a gatewayStore.
+  // Display/device prefs are deliberately NOT synced — they stay per-device.
   const gw = p.gatewayStore;
   if (gw) {
-    let hydrated = false;
-    let pushTimer: ReturnType<typeof setTimeout> | undefined;
+    const store = gw;
+    const visiblePulls: Array<() => Promise<void>> = [];
 
-    const pull = async (): Promise<void> => {
-      try {
-        const remote = await gw.get<SteamPurgeConfig>(STEAM_PURGE_STORE_KEY);
-        if (remote) {
-          if (STEAM_PURGE_STRATEGIES.includes(remote.strategy)) {
-            setSteamPurgeStrategy(remote.strategy);
-          }
-          if (typeof remote.autoFlushSec === 'number') {
-            setSteamAutoFlushSec(remote.autoFlushSec);
-          }
+    // Sync one KV key ⇄ local signals. `snapshot` reads the signals (so the
+    // push effect tracks them); `apply` validates + writes a pulled value.
+    const registerKvSync = <T,>(
+      key: string,
+      label: string,
+      snapshot: () => T,
+      apply: (remote: T) => void,
+    ): void => {
+      let hydrated = false;
+      let pushTimer: ReturnType<typeof setTimeout> | undefined;
+
+      const pull = async (): Promise<void> => {
+        try {
+          const remote = await store.get<T>(key);
+          if (remote) apply(remote);
+        } catch (e) {
+          // Offline / first run — keep the local mirror value.
+          log.warn('steam', `${label} gateway pull failed`, e);
         }
-      } catch (e) {
-        // Offline / first run — keep the local mirror value.
-        log.warn('steam', 'steamPurge gateway pull failed', e);
-      }
+      };
+
+      onMount(() => {
+        void pull().finally(() => {
+          hydrated = true;
+        });
+      });
+      visiblePulls.push(pull);
+
+      createEffect(() => {
+        const cfg = snapshot();
+        if (!hydrated) return;
+        if (pushTimer !== undefined) clearTimeout(pushTimer);
+        pushTimer = setTimeout(() => {
+          pushTimer = undefined;
+          void store.set(key, cfg).catch((e) =>
+            log.warn('steam', `${label} gateway push failed`, e),
+          );
+        }, 400);
+      });
+      onCleanup(() => {
+        if (pushTimer !== undefined) clearTimeout(pushTimer);
+      });
     };
 
-    onMount(() => {
-      void pull().finally(() => {
-        hydrated = true;
-      });
-      const onVisible = (): void => {
-        if (document.visibilityState === 'visible') void pull();
-      };
-      document.addEventListener('visibilitychange', onVisible);
-      onCleanup(() => document.removeEventListener('visibilitychange', onVisible));
-    });
-
-    // Push on change. Reads both signals so it tracks them; bails until the
-    // initial pull has resolved (a pre-hydration run would be the local value).
-    createEffect(() => {
-      const cfg: SteamPurgeConfig = {
+    registerKvSync<SteamPurgeConfig>(
+      STEAM_PURGE_STORE_KEY,
+      'steamPurge',
+      () => ({
         strategy: steamPurgeStrategy(),
         autoFlushSec: steamAutoFlushSec(),
+      }),
+      (remote) => {
+        if (STEAM_PURGE_STRATEGIES.includes(remote.strategy)) {
+          setSteamPurgeStrategy(remote.strategy);
+        }
+        if (typeof remote.autoFlushSec === 'number') {
+          setSteamAutoFlushSec(remote.autoFlushSec);
+        }
+      },
+    );
+
+    registerKvSync<SteamPolicyConfig>(
+      STEAM_POLICY_STORE_KEY,
+      'steamPolicy',
+      () => ({
+        mode: steamMode(),
+        targetTemp: steamTargetTemp(),
+        idleTemp: steamIdleTemp(),
+        autoFlavor: steamAutoFlavor(),
+        autoTimeoutMin: steamAutoTimeoutMin(),
+      }),
+      (remote) => {
+        if (STEAM_MODES.includes(remote.mode)) setSteamMode(remote.mode);
+        if (typeof remote.targetTemp === 'number') {
+          setSteamTargetTemp(remote.targetTemp);
+        }
+        if (typeof remote.idleTemp === 'number') setSteamIdleTemp(remote.idleTemp);
+        if (STEAM_AUTO_FLAVORS.includes(remote.autoFlavor)) {
+          setSteamAutoFlavor(remote.autoFlavor);
+        }
+        if (typeof remote.autoTimeoutMin === 'number') {
+          setSteamAutoTimeoutMin(remote.autoTimeoutMin);
+        }
+      },
+    );
+
+    onMount(() => {
+      const onVisible = (): void => {
+        if (document.visibilityState === 'visible') {
+          for (const pull of visiblePulls) void pull();
+        }
       };
-      if (!hydrated) return;
-      if (pushTimer !== undefined) clearTimeout(pushTimer);
-      pushTimer = setTimeout(() => {
-        pushTimer = undefined;
-        void gw.set(STEAM_PURGE_STORE_KEY, cfg).catch((e) =>
-          log.warn('steam', 'steamPurge gateway push failed', e),
-        );
-      }, 400);
-    });
-    onCleanup(() => {
-      if (pushTimer !== undefined) clearTimeout(pushTimer);
+      document.addEventListener('visibilitychange', onVisible);
+      onCleanup(() =>
+        document.removeEventListener('visibilitychange', onVisible),
+      );
     });
   }
 
