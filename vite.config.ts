@@ -6,7 +6,7 @@ const env =
   (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } })
     .process?.env ?? {};
 
-// Point the dev server at a running Decent.app gateway.
+// Point the dev server at a running Decaid gateway.
 // Override with: GATEWAY_HOST=192.168.1.42:8080 npm run dev
 const GATEWAY_HOST = env.GATEWAY_HOST ?? 'localhost:8080';
 
