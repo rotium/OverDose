@@ -22,6 +22,15 @@ import {
 } from './snapshot';
 import type { WsStream } from './streams';
 import { log } from './debugLog';
+import {
+  adjustWaterTarget,
+  nextWaterStop,
+  WATER_SCALE_FRESH_MS,
+  WATER_TARE_CONFIRM_G,
+  WATER_TARE_SETTLE_MS,
+  type WaterStopSensor,
+  type WaterStopState,
+} from './hotWater';
 
 /**
  * Streams + side-effects the context needs in order to drive the
@@ -51,7 +60,27 @@ export interface LiveShotProviderProps {
   onUpdateMachineSettings?: (
     partial: Partial<MachineSettingsSnapshot>,
   ) => Promise<void> | void;
+  /** Zero the scale (PUT /api/v1/scale/tare). Hot water needs its own tare:
+   *  we write `volume = 0` to the machine so the gateway's HotWaterSequencer
+   *  never arms, which also means it never tares for us. */
+  onTareScale?: () => Promise<void> | void;
   children?: JSX.Element;
+}
+
+/**
+ * What the prep screen wants from the next hot-water pour. Published
+ * continuously rather than handed over on Start, so a pour begun at the group
+ * head picks up the same target — the machine itself is carrying `volume = 0`
+ * and can't stop on its own.
+ */
+export interface WaterIntent {
+  /** Target amount (mL ≈ g). 0 disables the auto-stop entirely. */
+  targetMl: number;
+  /** Configured hot-water flow — the lookahead rate until a measured one
+   *  becomes trustworthy. */
+  flow: number;
+  /** Use the scale when one is connected. False → count the water instead. */
+  useScale: boolean;
 }
 
 /**
@@ -113,6 +142,20 @@ export interface LiveShotContextValue {
    * underlying update promise so callers can await it (tests rely on this).
    */
   extendSteam: (deltaSec: number) => Promise<void>;
+  /** Publish (or clear, with null) what the next hot-water pour should target.
+   *  Called reactively by the prep screen. */
+  setWaterIntent: (intent: WaterIntent | null) => void;
+  /** Live hot-water target (mL ≈ g). Seeded from the intent when the pour arms,
+   *  then mutated by {@link adjustWaterVolume} mid-pour. 0 → no auto-stop. */
+  waterTarget: Accessor<number>;
+  /** Water counted so far (mL), integrated from group-head flow. Drives the
+   *  hero when there's no scale, and the stop on that path. */
+  waterPoured: Accessor<number>;
+  /** Which reading is driving this pour's stop — so the UI can name it. */
+  waterSensor: Accessor<WaterStopSensor>;
+  /** Nudge the live target mid-pour. Dropping it below what's already poured
+   *  stops immediately, which is the correct reading of "that's enough". */
+  adjustWaterVolume: (deltaMl: number) => void;
   /**
    * Latest firmware machine-settings snapshot, fetched on steam-session
    * start. Null until the fetch resolves (or if no fetcher was injected /
@@ -203,6 +246,14 @@ export const LiveShotProvider: Component<LiveShotProviderProps> = (p) => {
     const msg = p.scaleStream.latest();
     if (!msg || isScaleStatusFrame(msg)) return NaN;
     return msg.weight;
+  };
+
+  /** A status frame carries connectedness without a weight; a data frame
+   *  implies connected and carries one. Same derivation the header pill uses. */
+  const scaleConnectedNow = (): boolean => {
+    const msg = p.scaleStream.latest();
+    if (!msg) return false;
+    return isScaleStatusFrame(msg) ? msg.status === 'connected' : true;
   };
 
   const scaleWeightFlow = (): number => {
@@ -452,6 +503,144 @@ export const LiveShotProvider: Component<LiveShotProviderProps> = (p) => {
     void p.onStop().catch((e) => log.warn('steam', 'steam auto-stop failed', e));
   });
 
+  // ── Hot-water stop enforcement ──
+  // OverDose owns this stop outright. The gateway's HotWaterSequencer latches
+  // its target the moment the machine enters `hotWater` and never re-reads it,
+  // so a mid-pour ± could never move it — and its target is the DE1's
+  // single-byte volume field, capping vessels at 255 mL. We keep the firmware
+  // out of the way by writing `volume = 0` (the DE1's "no volume stop"
+  // convention), which also makes the sequencer decline to arm, so we never
+  // have to touch its machine-wide `stopHotWaterAtWeight` setting. The derived
+  // duration cap remains as the backstop if this code stops watching.
+  //
+  // Same comparator for both sensors: grams-and-g/s from the scale, or
+  // millilitres-and-mL/s integrated from the group head. Water is 1 g per mL.
+  const [waterIntent, setWaterIntent] = createSignal<WaterIntent | null>(null);
+  const [waterTarget, setWaterTarget] = createSignal(0);
+  const [waterPoured, setWaterPoured] = createSignal(0);
+  const [waterSensor, setWaterSensor] = createSignal<WaterStopSensor>('flow');
+
+  let waterStop: WaterStopState | null = null;
+  let waterArmedAtMs = 0;
+  let waterTareAtMs = 0;
+  let waterTareConfirmed = false;
+  let waterLastFrameMs = 0;
+
+  /** Is the latest scale frame recent enough to stop on? Compared against the
+   *  machine clock rather than wall-clock: both timestamps come from the
+   *  gateway, so this stays a single-clock delta (and stays testable). */
+  const scaleFreshAt = (nowMs: number): boolean => {
+    const msg = p.scaleStream.latest();
+    if (!msg || isScaleStatusFrame(msg)) return false;
+    const t = Date.parse(msg.timestamp);
+    if (Number.isNaN(t) || Number.isNaN(nowMs)) return false;
+    return Math.abs(nowMs - t) < WATER_SCALE_FRESH_MS;
+  };
+
+  const disarmWater = (): void => {
+    waterStop = null;
+    waterArmedAtMs = 0;
+    waterTareAtMs = 0;
+    waterTareConfirmed = false;
+    waterLastFrameMs = 0;
+  };
+
+  const adjustWaterVolume = (deltaMl: number): void => {
+    const next = adjustWaterTarget(waterTarget(), deltaMl);
+    setWaterTarget(next);
+    if (waterStop) waterStop = { ...waterStop, targetAmount: next };
+    log.debug('water.adjust', `${deltaMl > 0 ? '+' : ''}${deltaMl} → ${next}`);
+  };
+
+  createEffect(() => {
+    const snap = p.machineStream.latest();
+    if (!snap) return;
+    const inHotWater = snap.state.state === 'hotWater';
+    const nowMs = Date.parse(snap.timestamp);
+
+    if (!inHotWater && waterStop === null) return;
+
+    // --- arm on the first hotWater frame ---
+    if (inHotWater && waterStop === null) {
+      const intent = waterIntent();
+      const useScale = (intent?.useScale ?? true) && scaleConnectedNow();
+      setWaterSensor(useScale ? 'scale' : 'flow');
+      setWaterTarget(intent?.targetMl ?? 0);
+      setWaterPoured(0);
+      waterStop = {
+        targetAmount: intent?.targetMl ?? 0,
+        configuredFlow: intent?.flow && intent.flow > 0 ? intent.flow : 6,
+        activeSeen: false,
+        stopRequested: false,
+      };
+      waterArmedAtMs = Number.isNaN(nowMs) ? 0 : nowMs;
+      waterLastFrameMs = waterArmedAtMs;
+      waterTareConfirmed = false;
+      if (useScale) {
+        // Nobody else tares for us — the gateway's sequencer never armed.
+        waterTareAtMs = waterArmedAtMs;
+        void Promise.resolve(p.onTareScale?.()).catch((e) =>
+          log.warn('water', 'tare for hot water failed', e),
+        );
+      }
+      log.info(
+        'water.arm',
+        `sensor=${useScale ? 'scale' : 'flow'} target=${intent?.targetMl ?? 0}`,
+      );
+    }
+
+    if (!waterStop) return;
+
+    // --- integrate group-head flow (the counting sensor, and the no-scale hero) ---
+    if (inHotWater && !Number.isNaN(nowMs)) {
+      const dtSec = Math.max(0, (nowMs - waterLastFrameMs) / 1000);
+      waterLastFrameMs = nowMs;
+      if (dtSec > 0 && dtSec < 5) setWaterPoured((v) => v + snap.flow * dtSec);
+    }
+
+    const onScale = waterSensor() === 'scale';
+    const weight = scaleWeight();
+
+    // The tare is trusted only once the scale has been *observed* at or below
+    // the confirm threshold — a cup left on the platter with a lagging physical
+    // tare otherwise reads as a finished pour and stops instantly.
+    if (onScale && !waterTareConfirmed && Number.isFinite(weight)) {
+      if (weight <= WATER_TARE_CONFIRM_G) waterTareConfirmed = true;
+    }
+    const frameMs = Number.isNaN(nowMs) ? waterLastFrameMs : nowMs;
+    const measurementReady = onScale
+      ? waterTareConfirmed &&
+        waterTareAtMs > 0 &&
+        frameMs - waterTareAtMs >= WATER_TARE_SETTLE_MS &&
+        scaleFreshAt(frameMs)
+      : true;
+
+    const decision = nextWaterStop(waterStop, {
+      inHotWater,
+      sinceArmedMs: frameMs - waterArmedAtMs,
+      measurementReady,
+      measured: onScale
+        ? Number.isFinite(weight)
+          ? Math.max(0, weight)
+          : undefined
+        : waterPoured(),
+      rate: onScale ? scaleWeightFlow() : snap.flow,
+    });
+
+    if (decision.action === 'clear') {
+      disarmWater();
+      return;
+    }
+    waterStop = decision.state;
+    if (decision.action === 'stop') {
+      log.info(
+        'water.autostop',
+        `${waterSensor()} ${decision.measured.toFixed(1)} (projected ${decision.projected.toFixed(1)}) ≥ ${waterStop?.targetAmount} → stop`,
+      );
+      void p.onStop().catch((e) => log.warn('water', 'water auto-stop failed', e));
+    }
+  });
+
   const extendSteam = async (deltaSec: number): Promise<void> => {
     const cur = p.shotSettingsStream?.latest();
     if (!cur || !p.onUpdateShotSettings) return;
@@ -495,6 +684,11 @@ export const LiveShotProvider: Component<LiveShotProviderProps> = (p) => {
     shotSettingsStream: p.shotSettingsStream ?? null,
     stop: () => p.onStop(),
     extendSteam,
+    setWaterIntent,
+    waterTarget,
+    waterPoured,
+    waterSensor,
+    adjustWaterVolume,
     machineSettings,
     updateMachineSettings,
   };

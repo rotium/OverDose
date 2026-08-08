@@ -838,6 +838,7 @@ export const App: Component = () => {
             })
           }
           onUpdateMachineSettings={api.updateMachineSettings}
+          onTareScale={api.tareScale}
         >
           <AppBody streams={streams} />
         </LiveShotProvider>
