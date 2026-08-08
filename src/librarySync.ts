@@ -6,10 +6,12 @@ import {
   LocalRecipeRepository,
   LocalRoutineRepository,
   LocalPitcherRepository,
+  LocalVesselRepository,
   LocalCleaningRepository,
   type RecipeRepository,
   type RoutineRepository,
   type PitcherRepository,
+  type VesselRepository,
   type CleaningRepository,
 } from './repositories';
 
@@ -41,6 +43,7 @@ export interface LibrarySync {
     recipes: RecipeRepository;
     routines: RoutineRepository;
     pitchers: PitcherRepository;
+    vessels: VesselRepository;
     cleanings: CleaningRepository;
   };
   /** Bumps on every local mutation and every pull. List resources take this as
@@ -79,6 +82,7 @@ export function createLibrarySync(opts: LibrarySyncOptions = {}): LibrarySync {
   const recipes = new LocalRecipeRepository(storage, () => notifyLocalChange());
   const routines = new LocalRoutineRepository(storage, () => notifyLocalChange());
   const pitchers = new LocalPitcherRepository(storage, () => notifyLocalChange());
+  const vessels = new LocalVesselRepository(storage, () => notifyLocalChange());
   const cleanings = new LocalCleaningRepository(storage, () => notifyLocalChange());
 
   // Uniform read/replace per collection. `read` (for push) returns the whole
@@ -103,6 +107,11 @@ export function createLibrarySync(opts: LibrarySyncOptions = {}): LibrarySync {
       key: 'pitchers',
       read: () => pitchers.list() as Promise<unknown[]>,
       write: (a) => pitchers.replaceAll(a as never[]),
+    },
+    {
+      key: 'vessels',
+      read: () => vessels.list() as Promise<unknown[]>,
+      write: (a) => vessels.replaceAll(a as never[]),
     },
     {
       // v6: steam-purge step added to seeds (a distinct gateway key avoids
@@ -203,7 +212,7 @@ export function createLibrarySync(opts: LibrarySyncOptions = {}): LibrarySync {
   }
 
   return {
-    repos: { recipes, routines, pitchers, cleanings },
+    repos: { recipes, routines, pitchers, vessels, cleanings },
     revision,
     syncNow,
     dispose: () => {

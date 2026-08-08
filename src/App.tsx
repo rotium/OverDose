@@ -64,6 +64,7 @@ const {
   recipes: recipeRepository,
   routines: routineRepository,
   pitchers: pitcherRepository,
+  vessels: vesselRepository,
   cleanings: cleaningRepository,
 } = librarySync.repos;
 
@@ -819,6 +820,7 @@ export const App: Component = () => {
         routines={routineRepository}
         recipes={recipeRepository}
         pitchers={pitcherRepository}
+        vessels={vesselRepository}
         cleanings={cleaningRepository}
         revision={librarySync.revision}
       >

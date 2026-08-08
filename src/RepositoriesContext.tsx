@@ -9,6 +9,7 @@ import type {
   RoutineRepository,
   RecipeRepository,
   PitcherRepository,
+  VesselRepository,
   CleaningRepository,
 } from './repositories';
 
@@ -25,6 +26,7 @@ export interface RepositoriesContextValue {
   routines: RoutineRepository;
   recipes: RecipeRepository;
   pitchers: PitcherRepository;
+  vessels: VesselRepository;
   cleanings: CleaningRepository;
   /** Library revision — bumps on any local mutation or a gateway sync pull.
    *  List resources take this as a `createResource` source so a pull (or a
@@ -38,6 +40,7 @@ export interface RepositoriesProviderProps {
   routines: RoutineRepository;
   recipes: RecipeRepository;
   pitchers: PitcherRepository;
+  vessels: VesselRepository;
   cleanings: CleaningRepository;
   /** Optional so test harnesses can mount without the sync coordinator; falls
    *  back to a constant (no live pulls in tests). */
@@ -51,6 +54,7 @@ export const RepositoriesProvider: Component<RepositoriesProviderProps> = (p) =>
     routines: p.routines,
     recipes: p.recipes,
     pitchers: p.pitchers,
+    vessels: p.vessels,
     cleanings: p.cleanings,
     revision: p.revision ?? (() => 0),
   };
