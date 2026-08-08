@@ -60,6 +60,33 @@ export const EXPLORE_STEAM_RECIPE_ID = 'explore-steam';
  * pick) → live → summary pipeline via `bundleOverride`. No pitcher is set, so
  * the steam prep seeds from the machine's current settings.
  */
+export const EXPLORE_WATER_RECIPE_ID = 'explore-water';
+
+/**
+ * Build the one-off hot water that the Explore "Hot Water" tile runs. A
+ * synthetic single water-step routine so `RecipeBrewScreen` runs its prep
+ * (vessel pick) → live → summary pipeline via `bundleOverride`. No vessel is
+ * set, so the prep starts unpicked and seeds its temperature from the global
+ * default.
+ *
+ * Before this, the tile fired `requestState('hotWater')` directly — no prep at
+ * all, and no way to say how much you wanted.
+ */
+export const buildExploreWaterBundle = (): BrewBundle => {
+  const routine: Routine = {
+    id: 'explore-water-routine',
+    name: 'Hot Water',
+    steps: [routineStep('water', {}, 'explore-water-step')],
+  };
+  const recipe: Recipe = {
+    id: EXPLORE_WATER_RECIPE_ID,
+    name: 'Hot Water',
+    routineId: routine.id,
+    overrides: {},
+  };
+  return { recipe, routine };
+};
+
 export const buildExploreSteamBundle = (): BrewBundle => {
   const routine: Routine = {
     id: 'explore-steam-routine',

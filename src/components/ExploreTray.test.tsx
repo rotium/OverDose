@@ -27,7 +27,7 @@ describe('ExploreTray', () => {
     expect(onSelect).toHaveBeenLastCalledWith('brew');
   });
 
-  it('disables water/flush with a droplet icon when blockReason is water-critical; brew + steam stay enabled', () => {
+  it('locks only flush at critical water; brew, steam and water stay navigable', () => {
     const onSelect = vi.fn();
     render(() => (
       <ExploreTray
@@ -35,34 +35,32 @@ describe('ExploreTray', () => {
         blockReason={() => 'water-critical'}
       />
     ));
-    // brew + steam open a prep screen, so their tiles stay navigable.
-    expect(screen.getByTestId('explore-brew')).not.toBeDisabled();
-    expect(screen.getByTestId('explore-steam')).not.toBeDisabled();
-    for (const op of ['water', 'flush']) {
-      const tile = screen.getByTestId(`explore-${op}`);
-      expect(tile).toBeDisabled();
-      expect(tile).toHaveAttribute('data-block-reason', 'water-critical');
-      expect(screen.getByTestId(`explore-${op}-reason`)).toBeInTheDocument();
+    // Everything with a prep screen stays navigable — gating moves to Start.
+    for (const op of ['brew', 'steam', 'water']) {
+      expect(screen.getByTestId(`explore-${op}`)).not.toBeDisabled();
     }
-    fireEvent.click(screen.getByTestId('explore-flush'));
+    const tile = screen.getByTestId('explore-flush');
+    expect(tile).toBeDisabled();
+    expect(tile).toHaveAttribute('data-block-reason', 'water-critical');
+    expect(screen.getByTestId('explore-flush-reason')).toBeInTheDocument();
+    fireEvent.click(tile);
     expect(onSelect).not.toHaveBeenCalled();
   });
 
-  it('disables water/flush with a power icon when blockReason is heater-off; brew + steam stay enabled', () => {
+  it('locks only flush when the heater is off; brew, steam and water stay navigable', () => {
     render(() => (
       <ExploreTray
         onSelect={() => {}}
         blockReason={() => 'heater-off'}
       />
     ));
-    for (const op of ['water', 'flush']) {
-      const tile = screen.getByTestId(`explore-${op}`);
-      expect(tile).toBeDisabled();
-      expect(tile).toHaveAttribute('data-block-reason', 'heater-off');
+    const tile = screen.getByTestId('explore-flush');
+    expect(tile).toBeDisabled();
+    expect(tile).toHaveAttribute('data-block-reason', 'heater-off');
+    // The rest remain tappable — their prep screens do their own gating.
+    for (const op of ['brew', 'steam', 'water']) {
+      expect(screen.getByTestId(`explore-${op}`)).not.toBeDisabled();
     }
-    // Brew + steam remain tappable — their prep screens do their own gating.
-    expect(screen.getByTestId('explore-brew')).not.toBeDisabled();
-    expect(screen.getByTestId('explore-steam')).not.toBeDisabled();
   });
 
   it('lets steam through to its prep screen even when blocked', () => {

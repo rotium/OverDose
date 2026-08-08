@@ -31,8 +31,10 @@ import type { ExploreOp } from './components/ExploreTray';
 import {
   buildExploreBrewBundle,
   buildExploreSteamBundle,
+  buildExploreWaterBundle,
   EXPLORE_BREW_RECIPE_ID,
   EXPLORE_STEAM_RECIPE_ID,
+  EXPLORE_WATER_RECIPE_ID,
 } from './exploreBrew';
 import { NumericKeypad } from './numericKeypad';
 import { LiveShotProvider, useLiveShot } from './LiveShotContext';
@@ -49,7 +51,6 @@ import { cleaningDue, dueOccurrence, nextOccurrence } from './domain';
 import {
   isScaleStatusFrame,
   type MachineSnapshot,
-  type MachineState,
   type ScaleMessage,
   type ShotSettingsSnapshot,
   type WaterLevelsSnapshot,
@@ -322,6 +323,7 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
   // closes on idle.
   const [exploreBrewing, setExploreBrewing] = createSignal(false);
   const [exploreSteaming, setExploreSteaming] = createSignal(false);
+  const [exploreWater, setExploreWater] = createSignal(false);
   const [exploreBundle] = createResource(exploreBrewing, async () => {
     const [workflow, profiles] = await Promise.all([
       api.workflow().catch(() => null),
@@ -338,8 +340,15 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
       setExploreSteaming(true);
       return;
     }
-    const state: MachineState = op === 'water' ? 'hotWater' : 'flush';
-    void api.requestState(state).catch((e) => log.warn('explore', `explore ${op} failed`, e));
+    // Hot water opens a prep screen too now — there is a vessel to pick and a
+    // volume to set. Only flush still fires straight at the machine.
+    if (op === 'water') {
+      setExploreWater(true);
+      return;
+    }
+    void api
+      .requestState('flush')
+      .catch((e) => log.warn('explore', `explore ${op} failed`, e));
   };
   // Frozen-shot hand-off to LastShotCard. The signal is *sticky*: it's set
   // once on each freeze and persists until the next brew overwrites it.
@@ -420,6 +429,7 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
     if (activeBrewRecipeId() !== null) return 'brew';
     if (exploreBrewing()) return 'explore-brew';
     if (exploreSteaming()) return 'explore-steam';
+    if (exploreWater()) return 'explore-water';
     return 'home';
   };
   let lastScreen = '';
@@ -752,6 +762,26 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
               onSteamContext={steam.setSteamContext}
               steamMode={prefs.steamMode}
               onTurnOnSteam={() => prefs.setSteamMode('on')}
+              optimisticShot={optimisticShot}
+            />
+          </Match>
+          <Match when={exploreWater()}>
+            <RecipeBrewScreen
+              recipeId={EXPLORE_WATER_RECIPE_ID}
+              bundleOverride={buildExploreWaterBundle()}
+              onExit={() => setExploreWater(false)}
+              machineStream={() => p.streams.machine}
+              scaleConnected={scaleConnected}
+              isWaterCritical={isWaterCritical}
+              requestState={api.requestState}
+              shotSettingsStream={() => p.streams.shotSettings}
+              hotWaterTempC={prefs.hotWaterTempC}
+              hotWaterAutoStop={prefs.hotWaterAutoStop}
+              showWaterFlowField={() => prefs.showWaterFlowSlider()}
+              onWaterIntent={live.setWaterIntent}
+              traceVisibility={prefs.traceVisibility}
+              fetchLatestShot={api.shotsLatest}
+              fetchShot={api.shotById}
               optimisticShot={optimisticShot}
             />
           </Match>
