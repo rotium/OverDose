@@ -38,6 +38,37 @@ interface LibraryMeta {
  *  `starter-skin.` prefix like the collection keys — see [[starter-skin-name]]). */
 const META_KEY = 'starter-skin.library-meta.v1';
 
+/**
+ * Every gateway KV key this sync owns, meta included. Hoisted out of
+ * `createLibrarySync` so a reset can clear them without constructing a sync.
+ *
+ * Clearing the local mirror alone does not reset anything on a device that has
+ * ever synced: local meta goes to 0, the gateway's is > 0, so the very next
+ * `syncNow` pulls the old library back over the fresh seeds.
+ */
+export const LIBRARY_STORE_KEYS = [
+  'meta',
+  'recipes',
+  'routines',
+  'pitchers',
+  'vessels',
+  'cleanings.v6',
+] as const;
+
+/**
+ * Drop the gateway's copy of the library. Paired with clearing localStorage by
+ * the Developer reset; on its own it would just be re-pushed from the mirror.
+ * Rejects if any delete fails, so the caller can decline to reload rather than
+ * leave the user with a reset that silently undoes itself.
+ */
+export async function clearLibraryStore(
+  storeDelete: (key: string) => Promise<void> = (k) => api.storeDelete(k),
+): Promise<void> {
+  for (const key of LIBRARY_STORE_KEYS) {
+    await storeDelete(key);
+  }
+}
+
 export interface LibrarySync {
   repos: {
     recipes: RecipeRepository;

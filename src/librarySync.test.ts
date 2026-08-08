@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createLibrarySync } from './librarySync';
+import {
+  clearLibraryStore,
+  createLibrarySync,
+  LIBRARY_STORE_KEYS,
+} from './librarySync';
 import { MemoryStorage } from './test/memoryStorage';
 
 const META_KEY = 'starter-skin.library-meta.v1';
@@ -141,5 +145,47 @@ describe('createLibrarySync', () => {
     await tick();
     expect((gw.map.get('meta') as { updatedAt: number }).updatedAt).toBe(5000);
     sync.dispose();
+  });
+});
+
+describe('clearLibraryStore', () => {
+  it('deletes every gateway key the sync owns, meta included', async () => {
+    const deleted: string[] = [];
+    await clearLibraryStore(async (k) => {
+      deleted.push(k);
+    });
+    // meta must go too: leaving it behind means the next syncNow sees a
+    // gateway newer than the wiped-to-zero local mirror and pulls the old
+    // library straight back over the fresh seeds.
+    expect(deleted).toEqual([...LIBRARY_STORE_KEYS]);
+    expect(deleted).toContain('meta');
+  });
+
+  it('covers every collection the sync actually pushes', async () => {
+    // Guards the hoisted key list drifting from `collections` — a collection
+    // missing here would survive a reset and be pulled back.
+    const pushed: string[] = [];
+    const sync = createLibrarySync({
+      storage: new MemoryStorage(),
+      storeGet: async () => null,
+      storeSet: async (k) => {
+        pushed.push(k);
+      },
+      debounceMs: 0,
+    });
+    await sync.syncNow();
+    sync.dispose();
+    for (const key of pushed) {
+      expect(LIBRARY_STORE_KEYS as readonly string[]).toContain(key);
+    }
+    expect(pushed.length).toBeGreaterThan(1);
+  });
+
+  it('rejects when a delete fails, so the caller can skip the reload', async () => {
+    await expect(
+      clearLibraryStore(async (k) => {
+        if (k === 'recipes') throw new Error('offline');
+      }),
+    ).rejects.toThrow('offline');
   });
 });

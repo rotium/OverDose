@@ -3,8 +3,11 @@ import { useUserPrefs } from '../../../UserPrefsContext';
 import { LOG_LEVELS, type LogLevel } from '../../../debugLog';
 import { api } from '../../../api';
 import { BUILD_INFO, buildInfoLine } from '../../../buildInfo';
+import { clearLibraryStore } from '../../../librarySync';
+import { log } from '../../../debugLog';
 
 type CopyState = 'idle' | 'copying' | 'copied' | 'empty' | 'error';
+type ResetState = 'idle' | 'working' | 'error';
 
 const COPY_LABEL: Record<CopyState, string> = {
   idle: 'Copy device log',
@@ -24,6 +27,7 @@ export const DeveloperSection: Component = () => {
   const prefs = useUserPrefs();
   const [copyState, setCopyState] = createSignal<CopyState>('idle');
   const [confirmingReset, setConfirmingReset] = createSignal(false);
+  const [resetState, setResetState] = createSignal<ResetState>('idle');
 
   // Pull the gateway's captured WebView console log (this skin's console.*
   // output, ~1 MB of the current session) and copy it out. The gateway is the
@@ -54,11 +58,24 @@ export const DeveloperSection: Component = () => {
     setTimeout(() => setCopyState('idle'), 2000);
   };
 
-  const resetData = () => {
-    const keys = Object.keys(localStorage).filter((k) =>
-      k.startsWith('starter-skin.'),
-    );
-    keys.forEach((k) => localStorage.removeItem(k));
+  // Clearing localStorage alone does not reset anything on a device that has
+  // ever synced: the gateway still holds the library, its meta is newer than
+  // the wiped-to-zero local one, and the very next syncNow pulls it straight
+  // back over the fresh seeds. So the gateway's copy has to go first — and if
+  // that fails we must NOT reload, or the user gets another reset that
+  // silently undoes itself.
+  const resetData = async () => {
+    setResetState('working');
+    try {
+      await clearLibraryStore();
+    } catch (e) {
+      log.warn('reset', 'could not clear the gateway library', e);
+      setResetState('error');
+      return;
+    }
+    Object.keys(localStorage)
+      .filter((k) => k.startsWith('starter-skin.'))
+      .forEach((k) => localStorage.removeItem(k));
     location.reload();
   };
 
@@ -120,9 +137,11 @@ export const DeveloperSection: Component = () => {
       <div class="settings-subsection" aria-labelledby="dev-reset-heading">
         <h3 class="settings-subheading" id="dev-reset-heading">Reset</h3>
         <p class="settings-help">
-          Clears all locally-stored skin data — preferences, recipes, routines,
-          and pitchers — then reloads, like a fresh install. Gateway data
-          (profiles, shots) is not touched.
+          Clears this skin's data — preferences, recipes, routines, vessels and
+          pitchers — on this device <em>and</em> on the gateway, then reloads,
+          like a fresh install. Both are needed: the gateway keeps the synced
+          copy, so clearing only this device would pull it right back. Your
+          profiles and shot history are not touched.
         </p>
         <Show
           when={confirmingReset()}
@@ -144,9 +163,10 @@ export const DeveloperSection: Component = () => {
                 type="button"
                 class="btn btn--danger"
                 data-testid="confirm-reset-app-data"
-                onClick={resetData}
+                disabled={resetState() === 'working'}
+                onClick={() => void resetData()}
               >
-                Yes, reset
+                {resetState() === 'working' ? 'Resetting…' : 'Yes, reset'}
               </button>
               <button
                 type="button"
@@ -156,6 +176,13 @@ export const DeveloperSection: Component = () => {
                 Cancel
               </button>
             </div>
+            <Show when={resetState() === 'error'}>
+              <p class="settings-help" role="alert" data-testid="reset-error">
+                Couldn't reach the gateway to clear its copy, so nothing was
+                reset — it would have come straight back. Check the connection
+                and try again.
+              </p>
+            </Show>
           </div>
         </Show>
       </div>
