@@ -4,6 +4,7 @@ import type { WsStream } from '../../streams';
 import { RoutinesSection } from './sections/library/RoutinesSection';
 import { RecipesSection } from './sections/library/RecipesSection';
 import { SteamSection } from './sections/library/SteamSection';
+import { HotWaterSection } from './sections/library/HotWaterSection';
 import { BeansSection } from './sections/library/BeansSection';
 import { ProfilesSection } from './sections/library/ProfilesSection';
 import { EquipmentSection } from './sections/library/EquipmentSection';
@@ -20,6 +21,7 @@ type SectionId =
   | 'routines'
   | 'recipes'
   | 'steam'
+  | 'hotwater'
   | 'beans'
   | 'profiles'
   | 'equipment'
@@ -30,6 +32,7 @@ const SECTIONS: { id: SectionId; label: string }[] = [
   { id: 'beans', label: 'Beans' },
   { id: 'profiles', label: 'Profiles' },
   { id: 'steam', label: 'Steam' },
+  { id: 'hotwater', label: 'Hot Water' },
   { id: 'cleanings', label: 'Cleanings' },
   { id: 'equipment', label: 'Equipment' },
   { id: 'routines', label: 'Routines' },
@@ -75,6 +78,9 @@ export const LibraryTab: Component<LibraryTabProps> = (p) => {
           </Match>
           <Match when={section() === 'steam'}>
             <SteamSection shotSettingsStream={p.shotSettingsStream} />
+          </Match>
+          <Match when={section() === 'hotwater'}>
+            <HotWaterSection />
           </Match>
           <Match when={section() === 'beans'}>
             <BeansSection />

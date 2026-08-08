@@ -18,6 +18,7 @@ import {
   type SteamPurgeStrategy,
 } from '../../prefs';
 import { useUserPrefs } from '../../UserPrefsContext';
+import { HOT_WATER_TEMP_MAX_C, HOT_WATER_TEMP_MIN_C } from '../../prefs';
 import { isSteamOn } from '../../steam';
 import { DebouncedSliderField } from './DebouncedSliderField';
 import { DebouncedNumberField } from './sections/library/DebouncedNumberField';
@@ -407,6 +408,41 @@ export const MachineTab: Component<MachineTabProps> = (p) => {
                     : 'How long after you close a steam recipe before steam cools to the off temperature.'}
                 </p>
               </div>
+            </section>
+
+            <section class="settings-section" data-testid="machine-hotwater-section">
+              <h2>Hot water</h2>
+              <p class="settings-help">
+                Defaults for a hot-water pour. Temperature is the starting point
+                when you open hot water without a recipe — a recipe's water step
+                can set its own. Auto-stop ends the pour at the volume you asked
+                for; with a scale connected you can switch to counting the water
+                for a single pour, in prep.
+              </p>
+              <div class="settings-field settings-field--stack">
+                <label class="settings-field__label" for="machine-hotwater-temp">
+                  Default temperature
+                </label>
+                <DebouncedSliderField
+                  testId="machine-hotwater-temp"
+                  value={prefs.hotWaterTempC()}
+                  onCommit={(v) => prefs.setHotWaterTempC(v)}
+                  min={HOT_WATER_TEMP_MIN_C}
+                  max={HOT_WATER_TEMP_MAX_C}
+                  step={1}
+                  ariaLabel="Default hot water temperature in Celsius"
+                  formatValue={(v) => `${v.toFixed(0)} °C`}
+                />
+              </div>
+              <label class="settings-checkbox" data-testid="machine-hotwater-autostop">
+                <input
+                  type="checkbox"
+                  checked={prefs.hotWaterAutoStop()}
+                  onChange={(e) => prefs.setHotWaterAutoStop(e.currentTarget.checked)}
+                  data-testid="machine-hotwater-autostop-check"
+                />
+                <span>Auto-stop at the target volume</span>
+              </label>
             </section>
 
             <section class="settings-section" data-testid="machine-flush-section">
