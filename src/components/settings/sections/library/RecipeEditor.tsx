@@ -3,6 +3,7 @@ import {
   Match,
   Show,
   Switch,
+  createMemo,
   createResource,
   createSignal,
   type Accessor,
@@ -88,10 +89,15 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
   );
   const visibleRoutines = (): Routine[] =>
     (routines() ?? []).filter((b) => !b.hidden);
+  // `.latest` deliberately, not `routines()`. The resource is sourced on
+  // `repos.revision`, and saving a recipe bumps it — so on every auto-save the
+  // fetcher re-runs and `routines()` is briefly undefined. Reading that would
+  // collapse the step list to empty mid-edit and tear down the field the user
+  // is typing into.
   const parentRoutine = (): Routine | undefined => {
     const r = recipe();
     if (!r) return undefined;
-    return (routines() ?? []).find((b) => b.id === r.routineId);
+    return (routines.latest ?? []).find((b) => b.id === r.routineId);
   };
   const parentStepSequence = (): string => {
     const steps = parentRoutine()?.steps ?? [];
@@ -185,7 +191,7 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
   // different settings — pre-warm the cup, brew, then dilute — so the vessel,
   // volume and temperature live on the step, in Recipe.overrides[stepId].
   const waterSteps = (): RoutineStep[] =>
-    (parentRoutine()?.steps ?? []).filter((s) => s.type === 'water');
+    stepList().filter((s) => s.type === 'water');
 
   const waterCfg = (stepId: string): WaterConfig =>
     (recipe()?.overrides?.[stepId] as WaterConfig | undefined) ?? {};
@@ -243,11 +249,29 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
   };
 
 
+  /**
+   * The step list the editor renders groups from, held stable across saves.
+   *
+   * `repos.routines.list()` re-parses localStorage, so every revision bump
+   * hands back equivalent-but-new step objects. `<For>` keys by reference, so
+   * without this it would rebuild every group on each auto-save — destroying
+   * the input under the user's cursor and closing the keypad. The custom
+   * `equals` keeps the memo (and the DOM) still unless the steps really change.
+   */
+  const stepList = createMemo<RoutineStep[]>(
+    () => parentRoutine()?.steps ?? [],
+    [],
+    {
+      equals: (a, b) =>
+        a.length === b.length &&
+        a.every((s, i) => s.id === b[i]!.id && s.type === b[i]!.type),
+    },
+  );
+
   /** Recipe-level groups (Brewing, Pitcher) render once, at their first step of
    *  that type; per-step groups (Hot water) render for every one. */
   const isFirstOfType = (step: RoutineStep): boolean =>
-    (parentRoutine()?.steps ?? []).find((s) => s.type === step.type)?.id ===
-    step.id;
+    stepList().find((s) => s.type === step.type)?.id === step.id;
   const isFirstWaterStep = (step: RoutineStep): boolean =>
     waterSteps()[0]?.id === step.id;
 
@@ -594,7 +618,7 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
                   Pitcher are recipe-level, so they render once at their first
                   step; Hot water is per-step and repeats. A routine with no
                   brew step (Tea) correctly shows no Brewing group at all. */}
-              <For each={parentRoutine()?.steps ?? []}>
+              <For each={stepList()}>
                 {(step) => (
                   <Switch>
                     <Match when={step.type === 'brew' && isFirstOfType(step)}>

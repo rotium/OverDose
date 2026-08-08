@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createSignal } from 'solid-js';
 import { render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
 import { RecipeEditor } from './RecipeEditor';
 import { WithRepositories } from '../../../../test/repositories';
@@ -912,5 +913,87 @@ describe('RecipeEditor — section order and grouping', () => {
     });
     await screen.findByTestId('recipe-brewing-section');
     expect(groupOrder()).toEqual(['recipe-brewing-section']);
+  });
+});
+
+describe('RecipeEditor — the form survives its own auto-save', () => {
+  /**
+   * Regression: saving bumps `repos.revision`, which re-sources the routines
+   * resource. While that fetch is in flight `routines()` is undefined, and it
+   * resolves with freshly-parsed (equivalent but new) step objects. A step list
+   * read straight off that would empty and then rebuild on every keystroke's
+   * commit — destroying the input under the cursor and closing the keypad.
+   */
+  const renderLive = (routines: Routine[], recipes: Recipe[]) => {
+    const bStore = new MemoryStorage();
+    bStore.setItem('starter-skin.routines.v1', JSON.stringify(routines));
+    bStore.setItem('starter-skin.routines.seeded.v1', '1');
+    const rStore = new MemoryStorage();
+    rStore.setItem('starter-skin.recipes.v1', JSON.stringify(recipes));
+    rStore.setItem('starter-skin.recipes.seeded.v1', '1');
+
+    const [revision, setRevision] = createSignal(0);
+    const bump = () => setRevision((n) => n + 1);
+    // Same wiring librarySync uses: a repo mutation bumps the revision.
+    const recipeRepo = new LocalRecipeRepository(rStore, bump);
+    const routineRepo = new LocalRoutineRepository(bStore, bump);
+
+    render(() => (
+      <WithPrefs>
+        <WithRepositories
+          routines={routineRepo}
+          recipes={recipeRepo}
+          revision={revision}
+        >
+          <RecipeEditor
+            recipeId="rec-1"
+            onClose={() => {}}
+            debounceMs={0}
+            loadProfiles={() => Promise.resolve([])}
+            loadProfileById={() => Promise.resolve(null)}
+            loadBeans={() => Promise.resolve([])}
+            loadBeanById={() => Promise.resolve(null)}
+          />
+        </WithRepositories>
+      </WithPrefs>
+    ));
+    return { recipeRepo, revision };
+  };
+
+  it('keeps the dose input alive across a save', async () => {
+    const { recipeRepo, revision } = renderLive(
+      [{ id: 'rt-b', name: 'Brew', steps: [routineStep('brew', {}, 's1')] }],
+      [{ id: 'rec-1', name: 'Espresso', routineId: 'rt-b', overrides: {} }],
+    );
+    const before = await screen.findByTestId('recipe-dose-input');
+
+    fireEvent.input(before, { target: { value: '1' } });
+    fireEvent.blur(before);
+    await waitFor(async () =>
+      expect((await recipeRepo.get('rec-1'))?.doseGrams).toBe(1),
+    );
+    // The save really did re-source the resource...
+    expect(revision()).toBeGreaterThan(0);
+    // ...and the very same DOM node is still there. A new node means the
+    // browser dropped focus and the keypad closed.
+    expect(screen.getByTestId('recipe-dose-input')).toBe(before);
+  });
+
+  it('keeps a water step input alive across a save', async () => {
+    const { recipeRepo } = renderLive(
+      [{ id: 'rt-w', name: 'Water', steps: [routineStep('water', {}, 's1')] }],
+      [{ id: 'rec-1', name: 'Tea', routineId: 'rt-w', overrides: {} }],
+    );
+    const before = await screen.findByTestId('recipe-water-temp-s1');
+
+    fireEvent.input(before, { target: { value: '85' } });
+    fireEvent.blur(before);
+    await waitFor(async () => {
+      const cfg = (await recipeRepo.get('rec-1'))?.overrides['s1'] as
+        | { tempC?: number }
+        | undefined;
+      expect(cfg?.tempC).toBe(85);
+    });
+    expect(screen.getByTestId('recipe-water-temp-s1')).toBe(before);
   });
 });

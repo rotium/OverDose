@@ -1,4 +1,4 @@
-import type { Component, JSX } from 'solid-js';
+import type { Accessor, Component, JSX } from 'solid-js';
 import { RepositoriesProvider } from '../RepositoriesContext';
 import {
   LocalRoutineRepository,
@@ -27,6 +27,11 @@ export const WithRepositories: Component<{
   pitchers?: PitcherRepository;
   vessels?: VesselRepository;
   cleanings?: CleaningRepository;
+  /** Library revision. Defaults to a constant, which keeps most tests still —
+   *  pass a signal wired to repo mutations to exercise the refetch-on-save
+   *  path (resources sourced on `revision` re-run, and anything keyed off them
+   *  rebuilds). */
+  revision?: Accessor<number>;
 }> = (p) => {
   const routines = p.routines ?? new LocalRoutineRepository(new MemoryStorage());
   const recipes = p.recipes ?? new LocalRecipeRepository(new MemoryStorage());
@@ -41,6 +46,7 @@ export const WithRepositories: Component<{
       pitchers={pitchers}
       vessels={vessels}
       cleanings={cleanings}
+      revision={p.revision}
     >
       {p.children}
     </RepositoriesProvider>
