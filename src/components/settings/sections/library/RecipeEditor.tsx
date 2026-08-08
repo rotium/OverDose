@@ -5,6 +5,7 @@ import {
   Switch,
   createResource,
   createSignal,
+  type Accessor,
   type Component,
 } from 'solid-js';
 import { formatStepType } from '../../../../domain';
@@ -171,10 +172,6 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
     void saveRecipe({ ...r, routineId });
   };
 
-  // The pitcher picker only matters when the routine actually steams.
-  const hasSteamStep = (): boolean =>
-    (parentRoutine()?.steps ?? []).some((s) => s.type === 'steam');
-
   const handlePitcherChange = (value: string) => {
     const r = recipe();
     if (!r) return;
@@ -244,6 +241,267 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
     await repos.recipes.delete(p.recipeId);
     p.onClose();
   };
+
+
+  /** Recipe-level groups (Brewing, Pitcher) render once, at their first step of
+   *  that type; per-step groups (Hot water) render for every one. */
+  const isFirstOfType = (step: RoutineStep): boolean =>
+    (parentRoutine()?.steps ?? []).find((s) => s.type === step.type)?.id ===
+    step.id;
+  const isFirstWaterStep = (step: RoutineStep): boolean =>
+    waterSteps()[0]?.id === step.id;
+
+  const brewingGroup = (r: Accessor<Recipe>) => (
+    <section class="settings-section" data-testid="recipe-brewing-section">
+      <h3>Brewing</h3>
+      <p class="settings-help">
+        The espresso profile this recipe brews with, the bean it's
+        dialled in for, and the numbers. Profiles live on the gateway;
+        manage beans in Library → Beans.
+      </p>
+      <span class="recipe-editor__subfield-label">Profile</span>
+      <ProfileFieldRow
+        selectedId={r().profileId}
+        selectedProfile={() => selectedProfile() ?? null}
+        loading={selectedProfile.loading}
+        onOpen={() => setProfileDialogOpen(true)}
+        onClear={handleProfileClear}
+      />
+      <span class="recipe-editor__subfield-label">Bean</span>
+      <BeanFieldRow
+        selectedId={r().beanId}
+        selectedBean={() => selectedBean() ?? null}
+        loading={selectedBean.loading}
+        onOpen={() => setBeanDialogOpen(true)}
+        onClear={handleBeanClear}
+      />
+      <div class="recipe-editor__field-row recipe-editor__field-row--stack">
+        <label class="recipe-editor__field">
+          <span class="recipe-editor__field-label">Dose</span>
+          <DebouncedNumberField
+            value={r().doseGrams}
+            onCommit={handleDoseCommit}                      min={0}
+            step={1}
+            decimal
+            steppers
+            unit="g"
+            recentsKey="dose"
+            ariaLabel="Dose"
+            testId="recipe-dose-input"
+            debounceMs={p.debounceMs}
+            class="step-field__input"
+          />                  </label>
+        <label class="recipe-editor__field">
+          <span class="recipe-editor__field-label">
+            Grinder setting
+          </span>
+          <DebouncedNumberField
+            value={r().grinderSetting}
+            onCommit={handleGrinderSettingCommit}
+            placeholder="—"
+            step={1}
+            decimal
+            steppers
+            recentsKey="grinder"
+            ariaLabel="Grinder setting"
+            testId="recipe-grinder-setting-input"
+            debounceMs={p.debounceMs}
+            class="step-field__input"
+          />
+        </label>
+        <label class="recipe-editor__field">
+          <span class="recipe-editor__field-label">
+            Target yield
+          </span>
+          <DebouncedNumberField
+            value={r().targetYieldGrams}
+            onCommit={handleTargetYieldCommit}                      min={0}
+            step={1}
+            decimal
+            steppers
+            unit="g"
+            recentsKey="yield"
+            ariaLabel="Target yield"
+            testId="recipe-target-yield-input"
+            debounceMs={p.debounceMs}
+            class="step-field__input"
+          />                  </label>
+        <label class="recipe-editor__field">
+          <span class="recipe-editor__field-label">
+            Target volume
+          </span>
+          <DebouncedNumberField
+            value={r().targetVolumeMl}
+            onCommit={handleTargetVolumeCommit}                      min={0}
+            step={1}
+            steppers
+            unit="mL"
+            recentsKey="volume"
+            ariaLabel="Target volume"
+            testId="recipe-target-volume-input"
+            debounceMs={p.debounceMs}
+            class="step-field__input"
+          />                  </label>
+      </div>
+      <p class="settings-help">
+        Target yield stops the shot at this cup weight — needs a
+        connected scale. Target volume is the fallback stop used
+        when no scale is connected.
+      </p>
+    </section>
+  );
+
+  const pitcherGroup = (r: Accessor<Recipe>) => (
+    <section class="settings-section" data-testid="recipe-pitcher-section">
+      <h3>Pitcher</h3>
+      <p class="settings-help">
+        Which milk pitcher this recipe steams with. The pitcher's
+        steam settings are applied at brew time. Manage pitchers in
+        Library → Steam.
+      </p>
+      <Show
+        when={!pitchers.loading}
+        fallback={<p class="muted">loading pitchers…</p>}
+      >
+        <select
+          class="recipe-editor__routine-select"
+          aria-label="Pitcher"
+          data-testid="recipe-pitcher-select"
+          value={r().pitcherId ?? ''}
+          onChange={(e) => handlePitcherChange(e.currentTarget.value)}
+        >
+          <option value="">No pitcher (use machine default)</option>
+          <For each={pitchers() ?? []}>
+            {(pt) => (
+              <option value={pt.id}>
+                {pt.name} — {pt.capacityMl} mL
+              </option>
+            )}
+          </For>
+          <Show
+            when={
+              r().pitcherId &&
+              !(pitchers() ?? []).some((pt) => pt.id === r().pitcherId)
+            }
+          >
+            {/* Keep a dangling reference selectable + visible. */}
+            <option value={r().pitcherId}>
+              (missing pitcher — {r().pitcherId})
+            </option>
+          </Show>
+        </select>
+      </Show>
+    </section>
+  );
+
+  const waterGroup = (step: RoutineStep) => (
+    <section
+      class="settings-section"
+      data-testid={`recipe-water-section-${step.id}`}
+    >
+      <h3>
+        Hot water
+        {/* Only label the step when there is more than one to
+            tell apart — an ordinary recipe should read like a
+            flat field group, not a step list. */}
+        <Show when={waterSteps().length > 1}>
+          <span class="recipe-editor__step-tag">
+            step {(parentRoutine()?.steps ?? []).indexOf(step) + 1}
+          </span>
+        </Show>
+      </h3>
+      <Show when={isFirstWaterStep(step)}>
+        <p class="settings-help">
+          Which vessel this pours into, and how much. Manage
+          vessels in Library → Hot Water.
+        </p>
+      </Show>
+      <Show
+        when={!vessels.loading}
+        fallback={<p class="muted">loading vessels…</p>}
+      >
+        <select
+          class="recipe-editor__routine-select"
+          aria-label="Vessel"
+          data-testid={`recipe-vessel-select-${step.id}`}
+          value={waterCfg(step.id).vesselId ?? ''}
+          onChange={(e) =>
+            void patchWater(step.id, {
+              vesselId: e.currentTarget.value || undefined,
+            })
+          }
+        >
+          <option value="">No vessel (pick at brew time)</option>
+          <For each={vessels() ?? []}>
+            {(v) => (
+              <option value={v.id}>
+                {v.name} — {v.capacityMl} mL
+              </option>
+            )}
+          </For>
+          <Show
+            when={
+              waterCfg(step.id).vesselId &&
+              !(vessels() ?? []).some(
+                (v) => v.id === waterCfg(step.id).vesselId,
+              )
+            }
+          >
+            {/* Keep a dangling reference selectable + visible. */}
+            <option value={waterCfg(step.id).vesselId}>
+              (missing vessel — {waterCfg(step.id).vesselId})
+            </option>
+          </Show>
+        </select>
+      </Show>
+      <div class="recipe-editor__field-row recipe-editor__field-row--stack">
+        <label class="recipe-editor__field">
+          <span class="recipe-editor__field-label">Volume</span>
+          <DebouncedNumberField
+            value={waterCfg(step.id).volumeMl}
+            onCommit={(v) =>
+              void patchWater(step.id, {
+                volumeMl:
+                  v === undefined
+                    ? undefined
+                    : clampVolumeToVessel(
+                        v,
+                        stepVessel(step.id)?.capacityMl,
+                      ),
+              })
+            }
+            min={10}
+            max={stepVessel(step.id)?.capacityMl ?? VESSEL_CAPACITY_MAX_ML}
+            step={10}
+            steppers
+            unit="mL"
+            placeholder="vessel size"
+            ariaLabel="Hot water volume (millilitres)"
+            testId={`recipe-water-volume-${step.id}`}
+            debounceMs={p.debounceMs}
+            class="step-field__input"
+          />
+        </label>
+        <label class="recipe-editor__field">
+          <span class="recipe-editor__field-label">Temp</span>
+          <DebouncedNumberField
+            value={waterCfg(step.id).tempC}
+            onCommit={(v) => void patchWater(step.id, { tempC: v })}
+            min={HOT_WATER_TEMP_MIN_C}
+            max={HOT_WATER_TEMP_MAX_C}
+            step={1}
+            steppers
+            unit="°C"
+            placeholder="default"
+            ariaLabel="Hot water temperature (Celsius)"
+            testId={`recipe-water-temp-${step.id}`}
+            debounceMs={p.debounceMs}
+            class="step-field__input"
+          />
+        </label>
+      </div>
+    </section>
+  );
 
   return (
     <div class="settings-section-stack" data-testid="recipe-editor">
@@ -331,264 +589,25 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
                 </p>
               </section>
 
-              <section class="settings-section">
-                <h3>Espresso profile</h3>
-                <p class="settings-help">
-                  Which espresso profile the brew step uses. Profiles live
-                  on the gateway; pick from the library.
-                </p>
-                <ProfileFieldRow
-                  selectedId={r().profileId}
-                  selectedProfile={() => selectedProfile() ?? null}
-                  loading={selectedProfile.loading}
-                  onOpen={() => setProfileDialogOpen(true)}
-                  onClear={handleProfileClear}
-                />
-              </section>
+              {/* Step-derived groups, in the order the routine runs them —
+                  the editor should read like the drink is made. Brewing and
+                  Pitcher are recipe-level, so they render once at their first
+                  step; Hot water is per-step and repeats. A routine with no
+                  brew step (Tea) correctly shows no Brewing group at all. */}
+              <For each={parentRoutine()?.steps ?? []}>
+                {(step) => (
+                  <Switch>
+                    <Match when={step.type === 'brew' && isFirstOfType(step)}>
+                      {brewingGroup(r)}
+                    </Match>
+                    <Match when={step.type === 'steam' && isFirstOfType(step)}>
+                      {pitcherGroup(r)}
+                    </Match>
+                    <Match when={step.type === 'water'}>{waterGroup(step)}</Match>
+                  </Switch>
+                )}
+              </For>
 
-              <Show when={hasSteamStep()}>
-                <section class="settings-section" data-testid="recipe-pitcher-section">
-                  <h3>Pitcher</h3>
-                  <p class="settings-help">
-                    Which milk pitcher this recipe steams with. The pitcher's
-                    steam settings are applied at brew time. Manage pitchers in
-                    Library → Steam.
-                  </p>
-                  <Show
-                    when={!pitchers.loading}
-                    fallback={<p class="muted">loading pitchers…</p>}
-                  >
-                    <select
-                      class="recipe-editor__routine-select"
-                      aria-label="Pitcher"
-                      data-testid="recipe-pitcher-select"
-                      value={r().pitcherId ?? ''}
-                      onChange={(e) => handlePitcherChange(e.currentTarget.value)}
-                    >
-                      <option value="">No pitcher (use machine default)</option>
-                      <For each={pitchers() ?? []}>
-                        {(pt) => (
-                          <option value={pt.id}>
-                            {pt.name} — {pt.capacityMl} mL
-                          </option>
-                        )}
-                      </For>
-                      <Show
-                        when={
-                          r().pitcherId &&
-                          !(pitchers() ?? []).some((pt) => pt.id === r().pitcherId)
-                        }
-                      >
-                        {/* Keep a dangling reference selectable + visible. */}
-                        <option value={r().pitcherId}>
-                          (missing pitcher — {r().pitcherId})
-                        </option>
-                      </Show>
-                    </select>
-                  </Show>
-                </section>
-              </Show>
-
-              <Show when={waterSteps().length > 0}>
-                <For each={waterSteps()}>
-                  {(step, i) => (
-                    <section
-                      class="settings-section"
-                      data-testid={`recipe-water-section-${step.id}`}
-                    >
-                      <h3>
-                        Hot water
-                        {/* Only label the step when there is more than one to
-                            tell apart — an ordinary recipe should read like a
-                            flat field group, not a step list. */}
-                        <Show when={waterSteps().length > 1}>
-                          <span class="recipe-editor__step-tag">
-                            step {(parentRoutine()?.steps ?? []).indexOf(step) + 1}
-                          </span>
-                        </Show>
-                      </h3>
-                      <Show when={i() === 0}>
-                        <p class="settings-help">
-                          Which vessel this pours into, and how much. Manage
-                          vessels in Library → Hot Water.
-                        </p>
-                      </Show>
-                      <Show
-                        when={!vessels.loading}
-                        fallback={<p class="muted">loading vessels…</p>}
-                      >
-                        <select
-                          class="recipe-editor__routine-select"
-                          aria-label="Vessel"
-                          data-testid={`recipe-vessel-select-${step.id}`}
-                          value={waterCfg(step.id).vesselId ?? ''}
-                          onChange={(e) =>
-                            void patchWater(step.id, {
-                              vesselId: e.currentTarget.value || undefined,
-                            })
-                          }
-                        >
-                          <option value="">No vessel (pick at brew time)</option>
-                          <For each={vessels() ?? []}>
-                            {(v) => (
-                              <option value={v.id}>
-                                {v.name} — {v.capacityMl} mL
-                              </option>
-                            )}
-                          </For>
-                          <Show
-                            when={
-                              waterCfg(step.id).vesselId &&
-                              !(vessels() ?? []).some(
-                                (v) => v.id === waterCfg(step.id).vesselId,
-                              )
-                            }
-                          >
-                            {/* Keep a dangling reference selectable + visible. */}
-                            <option value={waterCfg(step.id).vesselId}>
-                              (missing vessel — {waterCfg(step.id).vesselId})
-                            </option>
-                          </Show>
-                        </select>
-                      </Show>
-                      <div class="recipe-editor__field-row recipe-editor__field-row--stack">
-                        <label class="recipe-editor__field">
-                          <span class="recipe-editor__field-label">Volume</span>
-                          <DebouncedNumberField
-                            value={waterCfg(step.id).volumeMl}
-                            onCommit={(v) =>
-                              void patchWater(step.id, {
-                                volumeMl:
-                                  v === undefined
-                                    ? undefined
-                                    : clampVolumeToVessel(
-                                        v,
-                                        stepVessel(step.id)?.capacityMl,
-                                      ),
-                              })
-                            }
-                            min={10}
-                            max={stepVessel(step.id)?.capacityMl ?? VESSEL_CAPACITY_MAX_ML}
-                            step={10}
-                            steppers
-                            unit="mL"
-                            placeholder="vessel size"
-                            ariaLabel="Hot water volume (millilitres)"
-                            testId={`recipe-water-volume-${step.id}`}
-                            debounceMs={p.debounceMs}
-                            class="step-field__input"
-                          />
-                        </label>
-                        <label class="recipe-editor__field">
-                          <span class="recipe-editor__field-label">Temp</span>
-                          <DebouncedNumberField
-                            value={waterCfg(step.id).tempC}
-                            onCommit={(v) => void patchWater(step.id, { tempC: v })}
-                            min={HOT_WATER_TEMP_MIN_C}
-                            max={HOT_WATER_TEMP_MAX_C}
-                            step={1}
-                            steppers
-                            unit="°C"
-                            placeholder="default"
-                            ariaLabel="Hot water temperature (Celsius)"
-                            testId={`recipe-water-temp-${step.id}`}
-                            debounceMs={p.debounceMs}
-                            class="step-field__input"
-                          />
-                        </label>
-                      </div>
-                    </section>
-                  )}
-                </For>
-              </Show>
-
-              <section class="settings-section">
-                <h3>Brewing</h3>
-                <p class="settings-help">
-                  Which bean this recipe is dialled in for. Manage beans in
-                  Library → Beans.
-                </p>
-                <BeanFieldRow
-                  selectedId={r().beanId}
-                  selectedBean={() => selectedBean() ?? null}
-                  loading={selectedBean.loading}
-                  onOpen={() => setBeanDialogOpen(true)}
-                  onClear={handleBeanClear}
-                />
-                <div class="recipe-editor__field-row recipe-editor__field-row--stack">
-                  <label class="recipe-editor__field">
-                    <span class="recipe-editor__field-label">Dose</span>
-                    <DebouncedNumberField
-                      value={r().doseGrams}
-                      onCommit={handleDoseCommit}                      min={0}
-                      step={1}
-                      decimal
-                      steppers
-                      unit="g"
-                      recentsKey="dose"
-                      ariaLabel="Dose"
-                      testId="recipe-dose-input"
-                      debounceMs={p.debounceMs}
-                      class="step-field__input"
-                    />                  </label>
-                  <label class="recipe-editor__field">
-                    <span class="recipe-editor__field-label">
-                      Grinder setting
-                    </span>
-                    <DebouncedNumberField
-                      value={r().grinderSetting}
-                      onCommit={handleGrinderSettingCommit}
-                      placeholder="—"
-                      step={1}
-                      decimal
-                      steppers
-                      recentsKey="grinder"
-                      ariaLabel="Grinder setting"
-                      testId="recipe-grinder-setting-input"
-                      debounceMs={p.debounceMs}
-                      class="step-field__input"
-                    />
-                  </label>
-                  <label class="recipe-editor__field">
-                    <span class="recipe-editor__field-label">
-                      Target yield
-                    </span>
-                    <DebouncedNumberField
-                      value={r().targetYieldGrams}
-                      onCommit={handleTargetYieldCommit}                      min={0}
-                      step={1}
-                      decimal
-                      steppers
-                      unit="g"
-                      recentsKey="yield"
-                      ariaLabel="Target yield"
-                      testId="recipe-target-yield-input"
-                      debounceMs={p.debounceMs}
-                      class="step-field__input"
-                    />                  </label>
-                  <label class="recipe-editor__field">
-                    <span class="recipe-editor__field-label">
-                      Target volume
-                    </span>
-                    <DebouncedNumberField
-                      value={r().targetVolumeMl}
-                      onCommit={handleTargetVolumeCommit}                      min={0}
-                      step={1}
-                      steppers
-                      unit="mL"
-                      recentsKey="volume"
-                      ariaLabel="Target volume"
-                      testId="recipe-target-volume-input"
-                      debounceMs={p.debounceMs}
-                      class="step-field__input"
-                    />                  </label>
-                </div>
-                <p class="settings-help">
-                  Target yield stops the shot at this cup weight — needs a
-                  connected scale. Target volume is the fallback stop used
-                  when no scale is connected.
-                </p>
-              </section>
 
               <section class="settings-section">
                 <h3>Coming soon</h3>

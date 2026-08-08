@@ -794,3 +794,123 @@ describe('RecipeEditor — hot water steps', () => {
     });
   });
 });
+
+describe('RecipeEditor — section order and grouping', () => {
+  const rt = (id: string, steps: ReturnType<typeof routineStep>[]): Routine => ({
+    id,
+    name: id,
+    steps,
+  });
+
+  /** Step-derived groups in the order they appear in the document. */
+  const groupOrder = (): string[] =>
+    Array.from(
+      document.querySelectorAll<HTMLElement>(
+        '[data-testid="recipe-brewing-section"],[data-testid="recipe-pitcher-section"],[data-testid^="recipe-water-section-"]',
+      ),
+    ).map((el) => el.dataset.testid!);
+
+  it('puts the profile picker inside Brewing, not in its own section', async () => {
+    renderEditor({
+      routines: [rt('rt-b', [routineStep('brew', {}, 's1')])],
+      recipes: [{ id: 'rec-1', name: 'Espresso', routineId: 'rt-b', overrides: {} }],
+    });
+    const brewing = await screen.findByTestId('recipe-brewing-section');
+    expect(
+      brewing.querySelector('[data-testid="recipe-editor-profile-field"]'),
+    ).toBeTruthy();
+    expect(
+      brewing.querySelector('[data-testid="recipe-editor-bean-field"]'),
+    ).toBeTruthy();
+  });
+
+  it('orders the groups the way the routine runs them: brew then water', async () => {
+    renderEditor({
+      routines: [
+        rt('rt-a', [routineStep('brew', {}, 's1'), routineStep('water', {}, 's2')]),
+      ],
+      recipes: [{ id: 'rec-1', name: 'Americano', routineId: 'rt-a', overrides: {} }],
+    });
+    await screen.findByTestId('recipe-brewing-section');
+    expect(groupOrder()).toEqual([
+      'recipe-brewing-section',
+      'recipe-water-section-s2',
+    ]);
+  });
+
+  it('puts water first when the routine pours first', async () => {
+    // Same two step types, opposite order — the editor must follow the routine
+    // rather than a fixed layout.
+    renderEditor({
+      routines: [
+        rt('rt-a', [routineStep('water', {}, 's1'), routineStep('brew', {}, 's2')]),
+      ],
+      recipes: [{ id: 'rec-1', name: 'Long black', routineId: 'rt-a', overrides: {} }],
+    });
+    await screen.findByTestId('recipe-brewing-section');
+    expect(groupOrder()).toEqual([
+      'recipe-water-section-s1',
+      'recipe-brewing-section',
+    ]);
+  });
+
+  it('interleaves a repeated water step around the brew', async () => {
+    renderEditor({
+      routines: [
+        rt('rt-a', [
+          routineStep('water', {}, 's-warm'),
+          routineStep('brew', {}, 's-brew'),
+          routineStep('water', {}, 's-dilute'),
+        ]),
+      ],
+      recipes: [{ id: 'rec-1', name: 'Americano', routineId: 'rt-a', overrides: {} }],
+    });
+    await screen.findByTestId('recipe-brewing-section');
+    expect(groupOrder()).toEqual([
+      'recipe-water-section-s-warm',
+      'recipe-brewing-section',
+      'recipe-water-section-s-dilute',
+    ]);
+  });
+
+  it('places the pitcher group at the steam step', async () => {
+    renderEditor({
+      routines: [
+        rt('rt-a', [routineStep('brew', {}, 's1'), routineStep('steam', {}, 's2')]),
+      ],
+      recipes: [{ id: 'rec-1', name: 'Cappuccino', routineId: 'rt-a', overrides: {} }],
+    });
+    await screen.findByTestId('recipe-pitcher-section');
+    expect(groupOrder()).toEqual([
+      'recipe-brewing-section',
+      'recipe-pitcher-section',
+    ]);
+  });
+
+  it('shows no Brewing group for a routine with no coffee in it', async () => {
+    // Tea: dose, yield and profile are meaningless, so the group is absent
+    // rather than present-and-empty.
+    renderEditor({
+      routines: [rt('rt-w', [routineStep('water', {}, 's1')])],
+      recipes: [{ id: 'rec-1', name: 'Tea', routineId: 'rt-w', overrides: {} }],
+    });
+    await screen.findByTestId('recipe-water-section-s1');
+    expect(
+      screen.queryByTestId('recipe-brewing-section'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId('recipe-editor-profile-field'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('renders the recipe-level groups once even if a step type repeats', async () => {
+    renderEditor({
+      routines: [
+        rt('rt-a', [routineStep('brew', {}, 's1'), routineStep('brew', {}, 's2')]),
+      ],
+      recipes: [{ id: 'rec-1', name: 'Double', routineId: 'rt-a', overrides: {} }],
+    });
+    await screen.findByTestId('recipe-brewing-section');
+    expect(groupOrder()).toEqual(['recipe-brewing-section']);
+  });
+});
