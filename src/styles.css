@@ -6103,3 +6103,35 @@ input[inputmode='none']:focus {
   font-size: 0.85rem;
   color: var(--muted);
 }
+
+/* Label for a field group nested inside a settings section — the Profile and
+   Bean rows inside Brewing. Quieter than an <h3> so the section keeps a single
+   heading, with enough room above to read as a break between the two pickers.
+   The first one follows the section's help text, which already spaces it. */
+.recipe-editor__subfield-label {
+  display: block;
+  margin: 1.5rem 0 0.4rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.recipe-editor__subfield-label:first-of-type {
+  margin-top: 0.6rem;
+}
+
+/* Step marker on a repeated per-step field group (hot water). Only rendered
+   when a routine has more than one of that step, so an ordinary recipe still
+   reads as a flat field group rather than a step list. */
+.recipe-editor__step-tag {
+  margin-left: 0.5rem;
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--muted);
+  vertical-align: middle;
+}
