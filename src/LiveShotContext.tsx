@@ -81,6 +81,8 @@ export interface WaterIntent {
   flow: number;
   /** Use the scale when one is connected. False → count the water instead. */
   useScale: boolean;
+  /** Vessel being poured into, for the live view's header. */
+  vesselName?: string | null;
 }
 
 /**
@@ -153,6 +155,8 @@ export interface LiveShotContextValue {
   waterPoured: Accessor<number>;
   /** Which reading is driving this pour's stop — so the UI can name it. */
   waterSensor: Accessor<WaterStopSensor>;
+  /** Vessel name captured when the pour armed. Null for an unpicked pour. */
+  waterVesselName: Accessor<string | null>;
   /** Nudge the live target mid-pour. Dropping it below what's already poured
    *  stops immediately, which is the correct reading of "that's enough". */
   adjustWaterVolume: (deltaMl: number) => void;
@@ -519,6 +523,7 @@ export const LiveShotProvider: Component<LiveShotProviderProps> = (p) => {
   const [waterTarget, setWaterTarget] = createSignal(0);
   const [waterPoured, setWaterPoured] = createSignal(0);
   const [waterSensor, setWaterSensor] = createSignal<WaterStopSensor>('flow');
+  const [waterVesselName, setWaterVesselName] = createSignal<string | null>(null);
 
   let waterStop: WaterStopState | null = null;
   let waterArmedAtMs = 0;
@@ -566,6 +571,7 @@ export const LiveShotProvider: Component<LiveShotProviderProps> = (p) => {
       const useScale = (intent?.useScale ?? true) && scaleConnectedNow();
       setWaterSensor(useScale ? 'scale' : 'flow');
       setWaterTarget(intent?.targetMl ?? 0);
+      setWaterVesselName(intent?.vesselName ?? null);
       setWaterPoured(0);
       waterStop = {
         targetAmount: intent?.targetMl ?? 0,
@@ -688,6 +694,7 @@ export const LiveShotProvider: Component<LiveShotProviderProps> = (p) => {
     waterTarget,
     waterPoured,
     waterSensor,
+    waterVesselName,
     adjustWaterVolume,
     machineSettings,
     updateMachineSettings,

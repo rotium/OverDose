@@ -1,33 +1,39 @@
 import { Show, createMemo, type Accessor, type Component } from 'solid-js';
 import type { MachineSnapshot, ShotSettingsSnapshot } from '../../snapshot';
-import { ClockIcon, ScaleIcon } from '../icons';
+import { ScaleIcon, WaterDropIcon } from '../icons';
 import { DebouncedSliderField } from '../settings/DebouncedSliderField';
+import { WATER_ADJUST_DELTA_ML, type WaterStopSensor } from '../../hotWater';
 
 /**
- * Drawer body for a hot-water dispense. Layout mirrors the steam view's
- * shell (header → hero → optional slider → readouts + STOP), but the hero is
- * the *measured quantity in the cup*, not a clock:
+ * Drawer body for a hot-water dispense. Layout mirrors the steam view's shell
+ * (header → hero → optional slider → readouts + STOP), but the hero is the
+ * *measured quantity in the cup*, not a clock — "is my cup full yet?" is the
+ * question the user is actually asking, and it's how both Decaid and Decenza
+ * present hot water.
  *
- *   - scale connected → grams poured / target g, with a fill bar. This is the
- *     question the user is actually asking ("is my cup full yet?"), and it's
- *     how both Decent.app and Decenza present hot water. Water is ~1 g/mL, so
- *     the target volume (mL) reads as grams.
- *   - no scale        → fall back to an elapsed-time count-up; there's no live
- *     measured quantity to show progress against, so the targets move to a
- *     muted sub-line and the bar is dropped.
+ * Both sensors get the same hero, because both are a measured amount against a
+ * target and water is 1 g per mL:
  *
- * Stop semantics: the gateway auto-stops on its volume target (with the
- * duration as a safety cap), so the grams bar / STOP fill is a close proxy
- * for "how near the auto-stop are we" — we don't run a client-side
- * stop-on-weight. The current `hotWaterFlow` is adjustable mid-pour via the
- * optional slider (opt-in behind a user pref, like the steam-flow slider).
+ *   - scale → grams poured / target g
+ *   - count → millilitres integrated from group-head flow / target mL
+ *
+ * The elapsed-time fallback this view used to show without a scale is gone:
+ * OverDose now integrates the flow itself (see `hotWater.ts`), so there is a
+ * real measured quantity in both modes and no reason to fall back to a
+ * stopwatch that answered a different question.
+ *
+ * Stop semantics: OverDose owns the stop outright — the machine is carrying
+ * `volume = 0` and will not end the pour on its own before the derived duration
+ * cap. So the bar and the STOP fill track *our* target, and the ± pair really
+ * moves it mid-pour (the gateway's own sequencer latches at arm time and could
+ * never have supported this).
  */
 export interface LiveWaterViewProps {
   /** Latest machine snapshot — `mixTemperature` (live water temp) + the
    *  timestamp used for elapsed-time. */
   machineSnapshot: Accessor<MachineSnapshot | null>;
-  /** Latest shotSettings — target temp / volume / duration. May be null
-   *  before the WS pushes a frame; the view degrades to em-dashes. */
+  /** Latest shotSettings — read only for the target *temperature* now. Volume
+   *  no longer lives here: we write 0 to the machine and own the target. */
   shotSettings: Accessor<ShotSettingsSnapshot | null>;
   /** Epoch ms when the dispense began (snapshot timestamp on entering
    *  `hotWater`). 0 → not started. */
@@ -35,9 +41,18 @@ export interface LiveWaterViewProps {
   /** Live cup weight (g) from the scale. Undefined when no scale frame has
    *  arrived. */
   scaleWeight: Accessor<number | undefined>;
-  /** Whether a scale is connected — drives scale-first vs time-fallback hero. */
-  scaleConnected: Accessor<boolean>;
+  /** Water counted so far (mL), integrated from group-head flow. */
+  poured: Accessor<number>;
+  /** Which reading is driving the stop — picks the hero's source and unit. */
+  sensor: Accessor<WaterStopSensor>;
+  /** Live target (mL ≈ g). 0 → no auto-stop; the hero counts up with no bar. */
+  targetAmount: Accessor<number>;
+  /** Vessel name for the header. Falls back to "Hot Water" when unset. */
+  vesselName?: Accessor<string | null>;
   onStop: () => void;
+  /** Nudge the live target mid-pour by ±{@link WATER_ADJUST_DELTA_ML}. Hidden
+   *  when undefined or when there's no target to move. */
+  onAdjust?: (deltaMl: number) => void;
   /** Current `hotWaterFlow` (mL/s) from machine settings. Undefined → readout
    *  shows em-dash; slider falls back to its min if visible. */
   flow?: Accessor<number | undefined>;
@@ -49,45 +64,37 @@ export interface LiveWaterViewProps {
   showSlider?: boolean;
 }
 
-/** DE1 hot-water flow range, matching reaprime's `hot_water_form.dart`. */
+/** DE1 hot-water flow range. The ceiling is 10.0 rather than
+ *  `hot_water_form.dart`'s 8.0 because the gateway's own `HotWaterData`
+ *  default ships `flow: 10` — see `domain/vessel.ts`. */
 export const WATER_FLOW_MIN = 1.0;
-export const WATER_FLOW_MAX = 8.0;
+export const WATER_FLOW_MAX = 10.0;
 export const WATER_FLOW_STEP = 0.5;
 
-export type WaterStopTrigger = 'weight' | 'time' | 'none';
 export interface WaterStopProgress {
-  /** 0..1 toward the leading trigger. Capped at 1 for layout. */
+  /** 0..1 toward the target. Capped at 1 for layout. */
   value: number;
-  trigger: WaterStopTrigger;
+  /** Which reading is driving it, or `none` when there's no target. */
+  trigger: WaterStopSensor | 'none';
 }
 
 /**
- * STOP-fill progress. With a scale + a volume target, weight is the live
- * measure that tracks the (volume-based) auto-stop most closely. Without a
- * scale, the duration cap is the only thing we can track live, so the fill
- * counts toward that. `weightG === undefined` is the "no scale" signal.
+ * STOP-fill progress — measured against the live target, whichever sensor is
+ * feeding it. A zero/absent target means no auto-stop, so nothing is being
+ * counted toward and the fill stays empty.
  */
 export const computeWaterStopProgress = (
-  weightG: number | undefined,
-  targetVolume: number | undefined,
-  elapsedSec: number | undefined,
-  targetDurationSec: number | undefined,
+  measured: number | undefined,
+  target: number | undefined,
+  sensor: WaterStopSensor,
 ): WaterStopProgress => {
-  if (weightG !== undefined && targetVolume !== undefined && targetVolume > 0) {
-    return {
-      value: Math.min(1, Math.max(0, weightG) / targetVolume),
-      trigger: 'weight',
-    };
+  if (measured === undefined || !target || target <= 0) {
+    return { value: 0, trigger: 'none' };
   }
-  if (
-    targetDurationSec !== undefined &&
-    targetDurationSec > 0 &&
-    elapsedSec !== undefined &&
-    elapsedSec > 0
-  ) {
-    return { value: Math.min(1, elapsedSec / targetDurationSec), trigger: 'time' };
-  }
-  return { value: 0, trigger: 'none' };
+  return {
+    value: Math.min(1, Math.max(0, measured) / target),
+    trigger: sensor,
+  };
 };
 
 const severityFor = (pct: number): 'normal' | 'near' | 'over' => {
@@ -120,14 +127,6 @@ export const LiveWaterView: Component<LiveWaterViewProps> = (p) => {
     const t = settings()?.targetHotWaterTemp;
     return typeof t === 'number' && t > 0 ? t : undefined;
   };
-  const targetVolume = (): number | undefined => {
-    const v = settings()?.targetHotWaterVolume;
-    return typeof v === 'number' && v > 0 ? v : undefined;
-  };
-  const targetDurationSec = (): number | undefined => {
-    const d = settings()?.targetHotWaterDuration;
-    return typeof d === 'number' && d > 0 ? d : undefined;
-  };
 
   // Elapsed = latest snapshot time − startedAtMs (machine clock, so replay
   // paths stay correct). Identical to the steam view.
@@ -140,29 +139,24 @@ export const LiveWaterView: Component<LiveWaterViewProps> = (p) => {
     return Math.max(0, (nowMs - startMs) / 1000);
   };
 
-  const scaleMode = (): boolean => p.scaleConnected();
-  const weight = (): number | undefined => p.scaleWeight();
+  const onScale = (): boolean => p.sensor() === 'scale';
+  /** The amount in the cup, from whichever sensor is running. */
+  const measured = (): number | undefined =>
+    onScale() ? p.scaleWeight() : p.poured();
+  const unit = (): string => (onScale() ? 'g' : 'mL');
+  const target = (): number | undefined =>
+    p.targetAmount() > 0 ? p.targetAmount() : undefined;
 
   const stop = createMemo<WaterStopProgress>(() =>
-    computeWaterStopProgress(
-      scaleMode() ? (weight() ?? 0) : undefined,
-      targetVolume(),
-      elapsedSec(),
-      targetDurationSec(),
-    ),
+    computeWaterStopProgress(measured(), target(), p.sensor()),
   );
   const stopSeverity = createMemo<'normal' | 'near' | 'over'>(() =>
     severityFor(stop().value * 100),
   );
 
-  // Muted target sub-line for the time-fallback hero. Volume is the thing
-  // being poured, so it leads; duration is the fallback when no volume target.
-  const timeTargetLine = (): string | null => {
-    const v = targetVolume();
-    if (v !== undefined) return `target ${v.toFixed(0)} mL`;
-    const d = targetDurationSec();
-    return d !== undefined ? `target ${d.toFixed(0)} s` : null;
-  };
+  // Nothing to nudge without a target — in manual mode the ± pair would be
+  // adjusting a number that isn't driving anything.
+  const showAdjust = (): boolean => !!p.onAdjust && p.targetAmount() > 0;
 
   return (
     <div class="live-view" data-testid="live-water-view">
@@ -170,7 +164,7 @@ export const LiveWaterView: Component<LiveWaterViewProps> = (p) => {
         <div class="live-view__title">
           <div class="live-view__title-row">
             <div class="live-view__profile" data-testid="live-view-profile">
-              Hot water
+              {p.vesselName?.() || 'Hot Water'}
             </div>
           </div>
           <div class="live-view__subtitle">
@@ -179,52 +173,55 @@ export const LiveWaterView: Component<LiveWaterViewProps> = (p) => {
         </div>
       </header>
 
-      <section
-        class="op-hero"
-        data-testid="water-hero"
-        data-mode={scaleMode() ? 'scale' : 'time'}
-      >
-        <Show
-          when={scaleMode()}
-          fallback={
-            // No scale: elapsed count-up is the only thing moving live.
-            <>
-              <div class="op-hero__primary" data-severity={stopSeverity()}>
-                <span class="op-hero__num" data-testid="water-hero-value">
-                  {elapsedSec() === undefined ? '—' : elapsedSec()!.toFixed(1)}
-                </span>
-                <span class="op-hero__unit">s</span>
-              </div>
-              <Show when={timeTargetLine()}>
-                <div class="op-hero__target" data-testid="water-hero-target">
-                  {timeTargetLine()}
-                </div>
-              </Show>
-            </>
-          }
-        >
-          <div class="op-hero__primary" data-severity={stopSeverity()}>
-            <span class="op-hero__num" data-testid="water-hero-value">
-              {weight() === undefined ? '—' : Math.max(0, weight()!).toFixed(0)}
-            </span>
-            <span class="op-hero__unit">g</span>
+      <section class="op-hero" data-testid="water-hero" data-mode={p.sensor()}>
+        <div class="op-hero__primary" data-severity={stopSeverity()}>
+          <span class="op-hero__num" data-testid="water-hero-value">
+            {measured() === undefined ? '—' : Math.max(0, measured()!).toFixed(0)}
+          </span>
+          <span class="op-hero__unit">{unit()}</span>
+        </div>
+        <Show when={target()}>
+          <div class="op-hero__target" data-testid="water-hero-target">
+            / {target()!.toFixed(0)} {unit()}
           </div>
-          <Show when={targetVolume()}>
-            <div class="op-hero__target" data-testid="water-hero-target">
-              / {targetVolume()!.toFixed(0)} g
-            </div>
-            <div
-              class="op-hero__bar"
-              data-severity={stopSeverity()}
-              aria-hidden="true"
+          <div
+            class="op-hero__bar"
+            data-severity={stopSeverity()}
+            aria-hidden="true"
+          >
+            <span
+              class="op-hero__bar-fill"
+              data-testid="water-hero-bar-fill"
+              style={{ width: `${Math.min(100, stop().value * 100)}%` }}
+            />
+          </div>
+        </Show>
+
+        {/* ±10 mL hangs under the amount, the same cause-effect placement as
+            steam's ±5s: see the number climbing → tap to move where it ends.
+            Real because we own the stop; the gateway's sequencer latched its
+            target at arm time and would have ignored this. */}
+        <Show when={showAdjust()}>
+          <div class="op-adjust-row" data-testid="water-adjust-row">
+            <button
+              type="button"
+              class="op-adjust op-adjust--hero"
+              data-testid="water-adjust-minus"
+              aria-label={`Reduce target by ${WATER_ADJUST_DELTA_ML} millilitres`}
+              onClick={() => p.onAdjust!(-WATER_ADJUST_DELTA_ML)}
             >
-              <span
-                class="op-hero__bar-fill"
-                data-testid="water-hero-bar-fill"
-                style={{ width: `${Math.min(100, stop().value * 100)}%` }}
-              />
-            </div>
-          </Show>
+              −{WATER_ADJUST_DELTA_ML}
+            </button>
+            <button
+              type="button"
+              class="op-adjust op-adjust--hero"
+              data-testid="water-adjust-plus"
+              aria-label={`Increase target by ${WATER_ADJUST_DELTA_ML} millilitres`}
+              onClick={() => p.onAdjust!(WATER_ADJUST_DELTA_ML)}
+            >
+              +{WATER_ADJUST_DELTA_ML}
+            </button>
+          </div>
         </Show>
       </section>
 
@@ -283,15 +280,15 @@ export const LiveWaterView: Component<LiveWaterViewProps> = (p) => {
             aria-hidden="true"
           />
           <Show
-            when={stop().trigger === 'weight'}
+            when={stop().trigger === 'scale'}
             fallback={
-              <Show when={stop().trigger === 'time'}>
+              <Show when={stop().trigger === 'flow'}>
                 <span
                   class="live-view__stop-trigger"
-                  data-testid="live-view-stop-trigger-time"
-                  aria-label="Time-based auto-stop"
+                  data-testid="live-view-stop-trigger-flow"
+                  aria-label="Counted-water auto-stop"
                 >
-                  <ClockIcon size={12} />
+                  <WaterDropIcon size={12} />
                 </span>
               </Show>
             }

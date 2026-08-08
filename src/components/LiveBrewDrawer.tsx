@@ -61,9 +61,25 @@ export const LiveBrewDrawer: Component = () => {
     shotSettingsStream,
     stop,
     extendSteam,
+    waterPoured,
+    waterSensor,
+    waterTarget,
+    waterVesselName,
+    adjustWaterVolume,
     machineSettings,
     updateMachineSettings,
   } = ctx;
+  // A pour we prepped carries our own target and we own its stop. One started
+  // at the group head while OverDose was elsewhere doesn't — the machine kept
+  // its own volume target and will stop on that, so mirror it for the hero
+  // rather than showing nothing. The +/- pair stays hidden there: it would be
+  // moving a number the machine isn't reading.
+  const weOwnWaterTarget = (): boolean => waterTarget() > 0;
+  const waterDisplayTarget = (): number =>
+    weOwnWaterTarget()
+      ? waterTarget()
+      : (shotSettingsAccessor()?.targetHotWaterVolume ?? 0);
+
   const [visible, setVisible] = createSignal(false);
   const [animatingOut, setAnimatingOut] = createSignal(false);
   let exitTimer: number | undefined;
@@ -190,7 +206,11 @@ export const LiveBrewDrawer: Component = () => {
               shotSettings={shotSettingsAccessor}
               startedAtMs={operationSession.startedAtMs}
               scaleWeight={scaleWeight}
-              scaleConnected={scaleConnected}
+              poured={waterPoured}
+              sensor={waterSensor}
+              targetAmount={waterDisplayTarget}
+              vesselName={waterVesselName}
+              onAdjust={weOwnWaterTarget() ? adjustWaterVolume : undefined}
               onStop={() => void stop()}
               flow={() => machineSettings()?.hotWaterFlow}
               onChangeFlow={(v) =>
