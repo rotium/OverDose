@@ -16,6 +16,8 @@ import {
 import {
   formatStepType,
   type Pitcher,
+  type Vessel,
+  type WaterConfig,
   type Routine,
   type RoutineStep,
   type Recipe,
@@ -47,7 +49,13 @@ import { deriveShotStats } from '../shotStats';
 import { gatewayCaughtUp } from '../liveShotAdapter';
 import { ShotReview } from './ShotReview';
 import { BeanCard, GrindCard, BeanPickerDialog } from './ShotFieldCards';
-import { type AutoStopMode, type SteamMode, type TraceVisibility } from '../prefs';
+import {
+  HOT_WATER_TEMP_MAX_C,
+  HOT_WATER_TEMP_MIN_C,
+  type AutoStopMode,
+  type SteamMode,
+  type TraceVisibility,
+} from '../prefs';
 import {
   autoStopLabel,
   autoStopUnavailableReason,
@@ -60,6 +68,13 @@ import { BeanPicker } from './settings/sections/library/BeanPicker';
 import { PickerDialog } from './PickerDialog';
 import { DebouncedNumberField } from './settings/sections/library/DebouncedNumberField';
 import { log } from '../debugLog';
+import {
+  clampVolumeToVessel,
+  waterDurationCapSec,
+  waterEtaSec,
+} from '../hotWater';
+import type { WaterIntent } from '../LiveShotContext';
+import { VESSEL_CAPACITY_MAX_ML, VESSEL_FLOW_MAX, VESSEL_FLOW_MIN } from '../domain';
 
 /**
  * Recipe-driven brewing runtime — full-screen replacement for Home that
@@ -94,6 +109,13 @@ export type StepStatus =
   | 'running'
   | 'done'
   | 'skipped';
+
+/** Fallbacks for an ad-hoc pour with no vessel and no recipe step. Constants
+ *  rather than a machine read: a vessel is a size the user is about to type,
+ *  so there is nothing worth copying off the firmware. */
+const DEFAULT_WATER_FLOW = 6.0;
+const DEFAULT_WATER_VOLUME_ML = 250;
+const DEFAULT_WATER_TEMP_C = 90;
 
 export const stepToGatewayState = (t: StepType): MachineState => {
   switch (t) {
@@ -163,6 +185,23 @@ export interface RecipeBrewScreenProps {
   /** Pitcher-list fetcher for the steam step's pitcher picker. Defaults to
    *  the repository (`repos.pitchers.list`). */
   loadPitchers?: () => Promise<Pitcher[]>;
+  /** Vessel-list fetcher for the water step's vessel picker. Defaults to the
+   *  repository (`repos.vessels.list`). */
+  loadVessels?: () => Promise<Vessel[]>;
+  /** Global default hot-water temperature — the bottom of the water step's
+   *  resolution chain (prep edit -> recipe step -> this). */
+  hotWaterTempC?: Accessor<number>;
+  /** Whether hot water auto-stops at its target by default. When false the
+   *  pour runs until STOP (or the firmware duration cap). */
+  hotWaterAutoStop?: Accessor<boolean>;
+  /** Publishes what the next hot-water pour should target, to whoever owns the
+   *  stop (LiveShotContext). Called reactively, not only on Start, so a pour
+   *  begun at the group head picks up the same target. */
+  onWaterIntent?: (intent: WaterIntent | null) => void;
+  /** Whether the hot-water flow field is editable in water prep — mirrors the
+   *  "Show hot-water flow slider" pref. Flow still comes from the vessel
+   *  either way, just not editable here. */
+  showWaterFlowField?: () => boolean;
   /** Whether the steam-flow slider is shown in steam prep — mirrors the
    *  "Show steam-flow slider during steaming" pref. Default false; flow is
    *  still applied from the pitcher either way, just not editable here. */
@@ -606,6 +645,150 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
     setSteamTouched(false);
   });
 
+  // ── Hot water: vessel + the pour it takes ──
+  // The vessel is a physical object (capacity + flow); the pour itself
+  // (volume, temp) comes off the recipe's water step, falling back to the
+  // vessel's capacity and the global temperature default. Editing volume or
+  // temp does NOT detach from the vessel — neither is a vessel field. Only
+  // flow can go custom.
+  const [vessels] = createResource<Vessel[]>(() =>
+    (p.loadVessels ?? (() => repos.vessels.list()))(),
+  );
+  const [vesselId, setVesselId] = createSignal<string | null>(null);
+  const [waterVolumeMl, setWaterVolumeMl] = createSignal<number | null>(null);
+  const [waterTempC, setWaterTempC] = createSignal<number | null>(null);
+  const [waterFlow, setWaterFlow] = createSignal<number | null>(null);
+  // The sensor choice for this pour. Only meaningful with a scale attached —
+  // with none, counting is the only reading available.
+  const [waterUseScale, setWaterUseScale] = createSignal(true);
+  const [waterTouched, setWaterTouched] = createSignal(false);
+  const waterReady = (): boolean => waterVolumeMl() !== null;
+
+  const selectedVessel = (): Vessel | null =>
+    (vessels() ?? []).find((v) => v.id === vesselId()) ?? null;
+
+  /** The water step's saved config, if this recipe configured one. */
+  const waterStepConfig = (): WaterConfig | null => {
+    const step = steps()[currentIdx()];
+    if (!step || step.type !== 'water') return null;
+    const rec = bundle()?.recipe;
+    return (rec?.overrides?.[step.id] as WaterConfig | undefined) ?? null;
+  };
+
+  const selectVessel = (id: string) => {
+    const v = (vessels() ?? []).find((x) => x.id === id);
+    // Re-tapping the vessel you're already on is a no-op, so it can't wipe a
+    // volume you just dialled in.
+    if (!v || vesselId() === v.id) return;
+    setVesselId(v.id);
+    setWaterFlow(v.flow);
+    // Picking a vessel seeds the pour to its capacity — you chose the mug, so
+    // start it full and dial down.
+    setWaterVolumeMl(v.capacityMl);
+    setWaterTouched(true);
+  };
+
+  const editWaterVolume = (v: number) => {
+    setWaterVolumeMl(clampVolumeToVessel(v, selectedVessel()?.capacityMl));
+    setWaterTouched(true);
+  };
+  const editWaterTemp = (v: number) => {
+    setWaterTempC(v);
+    setWaterTouched(true);
+  };
+  // Flow is the one vessel-owned value here, so overriding it detaches.
+  const editWaterFlow = (v: number) => {
+    setWaterFlow(v);
+    setVesselId(null);
+    setWaterTouched(true);
+  };
+
+  // Seed once the vessel list is in. Prefer the recipe's water step; otherwise
+  // leave the vessel unpicked and start from the global temperature default,
+  // so an untouched prep is a no-op and the machine keeps its settings.
+  createEffect(() => {
+    if (waterReady()) return;
+    const list = vessels();
+    if (!list || bundle.loading) return;
+    if (!steps().some((st) => st.type === 'water')) return;
+    const cfg = waterStepConfig();
+    const v = cfg?.vesselId ? list.find((x) => x.id === cfg.vesselId) : undefined;
+    setVesselId(v?.id ?? null);
+    setWaterFlow(v?.flow ?? DEFAULT_WATER_FLOW);
+    setWaterVolumeMl(
+      clampVolumeToVessel(cfg?.volumeMl ?? v?.capacityMl ?? DEFAULT_WATER_VOLUME_ML, v?.capacityMl),
+    );
+    setWaterTempC(cfg?.tempC ?? p.hotWaterTempC?.() ?? DEFAULT_WATER_TEMP_C);
+    setWaterTouched(false);
+  });
+
+  /** The target we intend to stop at — zero when auto-stop is off, which the
+   *  stop owner reads as "manual". */
+  const waterTargetMl = (): number =>
+    (p.hotWaterAutoStop?.() ?? true) ? (waterVolumeMl() ?? 0) : 0;
+
+  /**
+   * Push the hot-water params. One atomic `PUT /api/v1/workflow` — the gateway
+   * diffs and does both machine writes itself, which beats the two-endpoint
+   * dance steam needs (steam only splits because the steam controller owns its
+   * temperature separately).
+   *
+   * `volume: 0` is deliberate: the DE1's "no volume stop" convention. It keeps
+   * the firmware from ending the pour on a target we don't own, and makes the
+   * gateway's own HotWaterSequencer decline to arm — so we never have to touch
+   * its machine-wide `stopHotWaterAtWeight`. The derived duration cap is the
+   * remaining backstop.
+   */
+  const applyWater = async (): Promise<void> => {
+    if (!waterTouched() && vesselId() === null) return;
+    const temp = waterTempC();
+    const flow = waterFlow();
+    if (temp == null || flow == null) return;
+    const body: WorkflowUpdate = {
+      hotWaterData: {
+        targetTemperature: Math.round(temp),
+        duration: waterDurationCapSec(waterVolumeMl() ?? undefined, flow),
+        volume: 0,
+        flow,
+      },
+    };
+    log.debug(
+      'water.apply',
+      `vessel=${vesselId() ?? 'custom'} vol=${waterVolumeMl()}mL temp=${temp} flow=${flow} cap=${body.hotWaterData!.duration}s`,
+    );
+    await (p.onApplyWorkflow ?? ((b: WorkflowUpdate) => api.setWorkflow(b)))(body);
+  };
+
+  // Reactive push during prep, mirroring the steam effect: the params must be
+  // in place no matter how the pour starts, including a physical group-head
+  // button that bypasses our Start.
+  createEffect(() => {
+    void waterVolumeMl();
+    void waterTempC();
+    void waterFlow();
+    void waterTouched();
+    void vesselId();
+    void applyWater().catch((e) =>
+      log.warn('water', 'prep water push failed', e),
+    );
+  });
+
+  // Publish the intent continuously so the stop owner has it even when the
+  // pour is started at the group head. Cleared when the screen closes.
+  createEffect(() => {
+    if (!steps().some((st) => st.type === 'water')) {
+      p.onWaterIntent?.(null);
+      return;
+    }
+    p.onWaterIntent?.({
+      targetMl: waterTargetMl(),
+      flow: waterFlow() ?? DEFAULT_WATER_FLOW,
+      useScale: waterUseScale(),
+      vesselName: selectedVessel()?.name ?? null,
+    });
+  });
+  onCleanup(() => p.onWaterIntent?.(null));
+
   // Apply the steam parameters before steaming. Temp + duration ride
   // shotSettings (full-body overlay — no PATCH); flow rides machineSettings
   // (sparse). When nothing was picked or changed, skip entirely so the
@@ -814,6 +997,22 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
                 pitchersLoading={() => pitchers.loading}
                 selectedPitcherId={pitcherId}
                 onSelectPitcher={selectPitcher}
+                vessels={() => vessels() ?? []}
+                vesselsLoading={() => vessels.loading}
+                selectedVesselId={vesselId}
+                onSelectVessel={selectVessel}
+                waterReady={waterReady}
+                waterVolumeMl={waterVolumeMl}
+                waterTempC={waterTempC}
+                waterFlow={waterFlow}
+                waterCapacityMl={() => selectedVessel()?.capacityMl}
+                waterAutoStop={() => p.hotWaterAutoStop?.() ?? true}
+                waterUseScale={waterUseScale}
+                onToggleWaterSensor={setWaterUseScale}
+                onChangeWaterVolume={editWaterVolume}
+                onChangeWaterTemp={editWaterTemp}
+                onChangeWaterFlow={editWaterFlow}
+                showWaterFlow={() => p.showWaterFlowField?.() ?? false}
                 steamReady={steamReady}
                 steamDuration={steamDurationSec}
                 steamFlow={steamFlow}
@@ -1014,6 +1213,22 @@ const PrepCard: Component<{
   pitchersLoading: Accessor<boolean>;
   selectedPitcherId: Accessor<string | null>;
   onSelectPitcher: (id: string) => void;
+  vessels: Accessor<Vessel[]>;
+  vesselsLoading: Accessor<boolean>;
+  selectedVesselId: Accessor<string | null>;
+  onSelectVessel: (id: string) => void;
+  waterReady: Accessor<boolean>;
+  waterVolumeMl: Accessor<number | null>;
+  waterTempC: Accessor<number | null>;
+  waterFlow: Accessor<number | null>;
+  waterCapacityMl: Accessor<number | undefined>;
+  waterAutoStop: Accessor<boolean>;
+  waterUseScale: Accessor<boolean>;
+  onToggleWaterSensor: (useScale: boolean) => void;
+  onChangeWaterVolume: (v: number) => void;
+  onChangeWaterTemp: (v: number) => void;
+  onChangeWaterFlow: (v: number) => void;
+  showWaterFlow: Accessor<boolean>;
   steamReady: Accessor<boolean>;
   steamDuration: Accessor<number | null>;
   steamFlow: Accessor<number | null>;
@@ -1065,7 +1280,28 @@ const PrepCard: Component<{
             onChangeFlow={p.onChangeSteamFlow}
           />
         </Match>
-        <Match when={p.step().type === 'water' || p.step().type === 'flush'}>
+        <Match when={p.step().type === 'water'}>
+          <WaterPrep
+            vessels={p.vessels}
+            loading={p.vesselsLoading}
+            selectedId={p.selectedVesselId}
+            onSelect={p.onSelectVessel}
+            ready={p.waterReady}
+            volumeMl={p.waterVolumeMl}
+            tempC={p.waterTempC}
+            flow={p.waterFlow}
+            capacityMl={p.waterCapacityMl}
+            autoStop={p.waterAutoStop}
+            useScale={p.waterUseScale}
+            scaleConnected={p.scaleConnected}
+            onToggleSensor={p.onToggleWaterSensor}
+            showFlow={p.showWaterFlow}
+            onChangeVolume={p.onChangeWaterVolume}
+            onChangeTemp={p.onChangeWaterTemp}
+            onChangeFlow={p.onChangeWaterFlow}
+          />
+        </Match>
+        <Match when={p.step().type === 'flush'}>
           <p class="prep__no-params">No prep needed.</p>
         </Match>
       </Switch>
@@ -1550,6 +1786,215 @@ const BrewPrep: Component<{
           </p>
         </Show>
       </div>
+    </div>
+  );
+};
+
+/**
+ * Water-step prep. Same shell as steam: preset cards on top, an editable
+ * targets block under a divider, quiet read-only facts beside them. Volume
+ * takes Duration's slot.
+ *
+ * Two deliberate differences from steam. Temperature is editable (nothing owns
+ * hot-water temp the way the steam controller owns the boiler's). And there is
+ * no readiness gate or live "now" temperature: the DE1 blends tank and
+ * steam-boiler water on demand rather than pre-heating, so `mixTemperature` at
+ * idle predicts nothing about what the tap will deliver — a "now" line there
+ * would be confidently wrong.
+ *
+ * The stop line is a control, not a caption, and only when there's a scale to
+ * switch away from. Its label states the outcome of its current position,
+ * because a toggle whose "off" still does something has to say what.
+ */
+const WaterPrep: Component<{
+  vessels: Accessor<Vessel[]>;
+  loading: Accessor<boolean>;
+  selectedId: Accessor<string | null>;
+  onSelect: (id: string) => void;
+  ready: Accessor<boolean>;
+  volumeMl: Accessor<number | null>;
+  tempC: Accessor<number | null>;
+  flow: Accessor<number | null>;
+  capacityMl: Accessor<number | undefined>;
+  autoStop: Accessor<boolean>;
+  useScale: Accessor<boolean>;
+  scaleConnected: Accessor<boolean>;
+  onToggleSensor: (useScale: boolean) => void;
+  showFlow: Accessor<boolean>;
+  onChangeVolume: (v: number) => void;
+  onChangeTemp: (v: number) => void;
+  onChangeFlow: (v: number) => void;
+}> = (p) => {
+  const flowReadout = (): string => {
+    const f = p.flow();
+    return f == null ? '—' : `${f.toFixed(1)} mL/s`;
+  };
+  const etaReadout = (): string => {
+    const eta = waterEtaSec(p.volumeMl() ?? undefined, p.flow() ?? undefined);
+    return eta === undefined ? '—' : `~${Math.round(eta)} s`;
+  };
+  /** Counting is the only reading available without a scale, so the switch
+   *  disappears rather than offering a choice that isn't there. */
+  const canChooseSensor = (): boolean => p.autoStop() && p.scaleConnected();
+  const onScale = (): boolean => p.useScale() && p.scaleConnected();
+  const amount = (): string => (p.volumeMl() ?? 0).toFixed(0);
+
+  return (
+    <div class="water-prep" data-testid="water-prep">
+      <span class="prep__field-label">Vessel</span>
+      <Show
+        when={!p.loading()}
+        fallback={<p class="prep__no-params">loading vessels…</p>}
+      >
+        <Show
+          when={p.vessels().length > 0}
+          fallback={
+            <p class="prep__no-params" data-testid="water-prep-empty">
+              No vessels yet — add one in Library → Hot Water.
+            </p>
+          }
+        >
+          <div class="steam-pitchers" role="group" aria-label="Vessel">
+            <For each={p.vessels()}>
+              {(v) => (
+                <button
+                  type="button"
+                  class="steam-pitcher"
+                  data-testid={`vessel-${v.id}`}
+                  data-selected={p.selectedId() === v.id ? 'true' : undefined}
+                  aria-pressed={p.selectedId() === v.id}
+                  onClick={() => p.onSelect(v.id)}
+                >
+                  <span class="steam-pitcher__name">{v.name}</span>
+                  <span class="steam-pitcher__cap">{v.capacityMl} mL</span>
+                  <span class="steam-pitcher__params">
+                    {v.flow.toFixed(1)} mL/s
+                  </span>
+                </button>
+              )}
+            </For>
+          </div>
+        </Show>
+      </Show>
+
+      <Show when={p.ready()}>
+        <div class="steam-params" data-testid="water-params">
+          <span class="steam-params__head">Hot water targets</span>
+          <div class="steam-params__row">
+            <div class="steam-params__cards">
+              <label class="prep__stat">
+                <span class="prep__stat-label">Volume</span>
+                <span class="prep__stat-edit">
+                  <DebouncedNumberField
+                    value={p.volumeMl() ?? undefined}
+                    onCommit={(v) => v !== undefined && p.onChangeVolume(v)}
+                    min={10}
+                    max={p.capacityMl() ?? VESSEL_CAPACITY_MAX_ML}
+                    step={10}
+                    steppers
+                    unit="mL"
+                    recentsKey="waterVolume"
+                    debounceMs={0}
+                    ariaLabel="Hot water volume (millilitres)"
+                    testId="water-param-volume"
+                    class="prep__stat-input"
+                  />
+                </span>
+              </label>
+              <label class="prep__stat">
+                <span class="prep__stat-label">Temp</span>
+                <span class="prep__stat-edit">
+                  <DebouncedNumberField
+                    value={p.tempC() ?? undefined}
+                    onCommit={(v) => v !== undefined && p.onChangeTemp(v)}
+                    min={HOT_WATER_TEMP_MIN_C}
+                    max={HOT_WATER_TEMP_MAX_C}
+                    step={1}
+                    steppers
+                    unit="°C"
+                    recentsKey="waterTemp"
+                    debounceMs={0}
+                    ariaLabel="Hot water temperature (Celsius)"
+                    testId="water-param-temp"
+                    class="prep__stat-input"
+                  />
+                </span>
+              </label>
+              <Show when={p.showFlow()}>
+                <label class="prep__stat">
+                  <span class="prep__stat-label">Flow</span>
+                  <span class="prep__stat-edit">
+                    <DebouncedNumberField
+                      value={p.flow() ?? undefined}
+                      onCommit={(v) => v !== undefined && p.onChangeFlow(v)}
+                      min={VESSEL_FLOW_MIN}
+                      max={VESSEL_FLOW_MAX}
+                      step={0.5}
+                      decimal
+                      steppers
+                      unit="mL/s"
+                      recentsKey="waterFlow"
+                      debounceMs={0}
+                      ariaLabel="Hot water flow (mL/s)"
+                      testId="water-param-flow"
+                      class="prep__stat-input"
+                    />
+                  </span>
+                </label>
+              </Show>
+            </div>
+            <dl class="steam-facts-ro" data-testid="water-facts">
+              <Show when={!p.showFlow()}>
+                <div class="rstat">
+                  <dt class="rstat__label">Flow</dt>
+                  <dd class="rstat__value">{flowReadout()}</dd>
+                </div>
+              </Show>
+              <div class="rstat">
+                <dt class="rstat__label">Takes</dt>
+                <dd class="rstat__value" data-testid="water-eta">
+                  {etaReadout()}
+                </dd>
+              </div>
+            </dl>
+          </div>
+
+          {/* Which reading ends the pour. A switch only where there is a
+              choice; otherwise a line stating what will happen. */}
+          <Show
+            when={canChooseSensor()}
+            fallback={
+              <p class="water-stopline" data-testid="water-stopline">
+                <Show
+                  when={p.autoStop()}
+                  fallback={<>No auto-stop — you stop it yourself.</>}
+                >
+                  <WaterDropIcon size={14} /> Counts the water to {amount()} mL
+                </Show>
+              </p>
+            }
+          >
+            <label class="prep__autostop" data-testid="water-sensor-switch">
+              <input
+                type="checkbox"
+                class="prep__autostop-input"
+                checked={onScale()}
+                onChange={(e) => p.onToggleSensor(e.currentTarget.checked)}
+                data-testid="water-sensor-check"
+              />
+              <span class="prep__autostop-track" aria-hidden="true" />
+              <span>
+                <Show
+                  when={onScale()}
+                  fallback={<>Count the water to {amount()} mL</>}
+                >
+                  Stop on the scale at {amount()} g
+                </Show>
+              </span>
+            </label>
+          </Show>
+        </div>
+      </Show>
     </div>
   );
 };

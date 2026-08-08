@@ -108,6 +108,14 @@ const renderScreen = (
     autoStopMode?: () => import('../autoStop').AutoStopMode;
     /** Steam mode — when 'off' on a steam step, Start becomes "Turn on steam". */
     steamMode?: () => SteamMode;
+    /** Vessel list for the water step's picker. Omit to use the seeded repo. */
+    loadVessels?: () => Promise<import('../domain').Vessel[]>;
+    /** Global default hot-water temperature. */
+    hotWaterTempC?: () => number;
+    /** Whether hot water auto-stops by default. */
+    hotWaterAutoStop?: () => boolean;
+    /** Whether the hot-water flow field shows in water prep. Default false. */
+    showWaterFlowField?: () => boolean;
   },
 ): ReturnType<typeof mkSetup> & {
   onApplyWorkflow: ReturnType<typeof vi.fn>;
@@ -116,6 +124,7 @@ const renderScreen = (
   updateMachineSettings: ReturnType<typeof vi.fn>;
   onSteamContext: ReturnType<typeof vi.fn>;
   onTurnOnSteam: ReturnType<typeof vi.fn>;
+  onWaterIntent: ReturnType<typeof vi.fn>;
 } => {
   const env = mkSetup({ routines: opts.routines, recipes: opts.recipes });
   // Default profile fetchers return empty/null so the brew-step prep card
@@ -145,6 +154,7 @@ const renderScreen = (
   );
   const onSteamContext = vi.fn();
   const onTurnOnSteam = vi.fn();
+  const onWaterIntent = vi.fn();
   const [shotSettings] = createSignal<ShotSettingsSnapshot | null>(
     opts.shotSettingsSnap ?? null,
   );
@@ -172,6 +182,11 @@ const renderScreen = (
           opts.loadMachineSettings ?? (() => Promise.resolve(null))
         }
         loadPitchers={opts.loadPitchers}
+        loadVessels={opts.loadVessels}
+        hotWaterTempC={opts.hotWaterTempC}
+        hotWaterAutoStop={opts.hotWaterAutoStop}
+        showWaterFlowField={opts.showWaterFlowField}
+        onWaterIntent={onWaterIntent}
         showFlowSlider={opts.showFlowSlider}
         scaleConnected={opts.scaleConnected}
         autoStopMode={opts.autoStopMode}
@@ -198,6 +213,7 @@ const renderScreen = (
     updateShot,
     onSteamContext,
     onTurnOnSteam,
+    onWaterIntent,
     updateShotSettings,
     updateMachineSettings,
   };
@@ -2080,5 +2096,210 @@ describe('RecipeBrewScreen', () => {
       fireEvent.click(await waitFor(() => screen.getByTestId('brew-back-button')));
       expect(env.onExit).toHaveBeenCalledOnce();
     });
+  });
+});
+
+describe('RecipeBrewScreen — hot water prep', () => {
+  const VESSELS = [
+    { id: 'v-cup', name: 'Cup', capacityMl: 150, flow: 6 },
+    { id: 'v-mug', name: 'Mug', capacityMl: 300, flow: 4 },
+  ];
+  const waterSetup = (
+    over: Parameters<typeof renderScreen>[0] extends infer T ? Partial<T> : never = {},
+  ) =>
+    renderScreen({
+      routines: [
+        {
+          id: 'rt-w',
+          name: 'Water',
+          steps: [routineStep('water', {}, 'step-water')],
+        },
+      ],
+      recipes: [
+        { id: 'rec-1', name: 'Tea', routineId: 'rt-w', overrides: {} },
+      ],
+      loadVessels: () => Promise.resolve(VESSELS),
+      ...over,
+    } as Parameters<typeof renderScreen>[0]);
+
+  it('replaces "No prep needed" with the vessel picker', async () => {
+    waterSetup();
+    expect(await screen.findByTestId('water-prep')).toBeInTheDocument();
+    expect(screen.queryByText('No prep needed.')).not.toBeInTheDocument();
+    expect(await screen.findByTestId('vessel-v-cup')).toBeInTheDocument();
+  });
+
+  it('starts from the global temperature default with no vessel picked', async () => {
+    waterSetup({ hotWaterTempC: () => 82 });
+    const temp = (await screen.findByTestId('water-param-temp')) as HTMLInputElement;
+    expect(temp.value).toBe('82');
+    expect(screen.queryByTestId('vessel-v-cup')).not.toHaveAttribute(
+      'data-selected',
+    );
+  });
+
+  it('resolves vessel, volume and temp from the recipe step', async () => {
+    waterSetup({
+      recipes: [
+        {
+          id: 'rec-1',
+          name: 'Tea',
+          routineId: 'rt-w',
+          overrides: { 'step-water': { vesselId: 'v-mug', volumeMl: 280, tempC: 95 } },
+        },
+      ],
+      hotWaterTempC: () => 82,
+    });
+    const vol = (await screen.findByTestId('water-param-volume')) as HTMLInputElement;
+    const temp = screen.getByTestId('water-param-temp') as HTMLInputElement;
+    expect(vol.value).toBe('280');
+    expect(temp.value).toBe('95'); // step wins over the global default
+    expect(screen.getByTestId('vessel-v-mug')).toHaveAttribute('data-selected', 'true');
+  });
+
+  it('picking a vessel seeds the pour to its capacity', async () => {
+    waterSetup();
+    fireEvent.click(await screen.findByTestId('vessel-v-mug'));
+    await waitFor(() => {
+      const vol = screen.getByTestId('water-param-volume') as HTMLInputElement;
+      expect(vol.value).toBe('300');
+    });
+  });
+
+  it('clamps a volume above the vessel capacity', async () => {
+    waterSetup();
+    fireEvent.click(await screen.findByTestId('vessel-v-cup'));
+    await waitFor(() => {
+      const vol = screen.getByTestId('water-param-volume') as HTMLInputElement;
+      expect(vol.value).toBe('150');
+    });
+    const vol = screen.getByTestId('water-param-volume') as HTMLInputElement;
+    fireEvent.input(vol, { target: { value: '400' } });
+    fireEvent.blur(vol);
+    await waitFor(() => {
+      expect(
+        (screen.getByTestId('water-param-volume') as HTMLInputElement).value,
+      ).toBe('150');
+    });
+  });
+
+  it('shows the estimated pour time', async () => {
+    waterSetup({
+      recipes: [
+        {
+          id: 'rec-1',
+          name: 'Tea',
+          routineId: 'rt-w',
+          overrides: { 'step-water': { vesselId: 'v-cup', volumeMl: 150 } },
+        },
+      ],
+    });
+    // 150mL at the Cup's 6 mL/s.
+    expect(await screen.findByTestId('water-eta')).toHaveTextContent('~25 s');
+  });
+
+  it('pushes volume 0 with the derived duration cap', async () => {
+    const { onApplyWorkflow } = waterSetup({
+      recipes: [
+        {
+          id: 'rec-1',
+          name: 'Tea',
+          routineId: 'rt-w',
+          overrides: { 'step-water': { vesselId: 'v-cup', volumeMl: 150, tempC: 90 } },
+        },
+      ],
+    });
+    await waitFor(() => {
+      const call = onApplyWorkflow.mock.calls.find(
+        (c) => (c[0] as { hotWaterData?: unknown }).hotWaterData,
+      );
+      expect(call).toBeTruthy();
+      expect(call![0].hotWaterData).toEqual({
+        targetTemperature: 90,
+        // volume 0 keeps the firmware from stopping on a target we do not own,
+        // and makes the gateway's own sequencer decline to arm.
+        volume: 0,
+        duration: 38, // ceil(25 * 1.5)
+        flow: 6,
+      });
+    });
+  });
+
+  it('publishes the intent so the stop owner has a target', async () => {
+    const { onWaterIntent } = waterSetup({
+      recipes: [
+        {
+          id: 'rec-1',
+          name: 'Tea',
+          routineId: 'rt-w',
+          overrides: { 'step-water': { vesselId: 'v-mug', volumeMl: 280 } },
+        },
+      ],
+    });
+    await waitFor(() => {
+      expect(onWaterIntent).toHaveBeenCalledWith(
+        expect.objectContaining({ targetMl: 280, flow: 4, vesselName: 'Mug' }),
+      );
+    });
+  });
+
+  it('publishes a zero target when auto-stop is off', async () => {
+    const { onWaterIntent } = waterSetup({ hotWaterAutoStop: () => false });
+    await waitFor(() => {
+      expect(onWaterIntent).toHaveBeenCalledWith(
+        expect.objectContaining({ targetMl: 0 }),
+      );
+    });
+  });
+
+  describe('the sensor switch', () => {
+    it('offers the choice only when a scale is connected', async () => {
+      waterSetup({ scaleConnected: () => true });
+      expect(await screen.findByTestId('water-sensor-switch')).toBeInTheDocument();
+    });
+
+    it('states what will happen when there is no choice to make', async () => {
+      waterSetup({ scaleConnected: () => false });
+      expect(await screen.findByTestId('water-stopline')).toHaveTextContent(
+        /Counts the water/,
+      );
+      expect(screen.queryByTestId('water-sensor-switch')).not.toBeInTheDocument();
+    });
+
+    it('says so when auto-stop is off entirely', async () => {
+      waterSetup({ scaleConnected: () => true, hotWaterAutoStop: () => false });
+      expect(await screen.findByTestId('water-stopline')).toHaveTextContent(
+        /you stop it yourself/,
+      );
+    });
+
+    it('swaps its label to the outcome of its position', async () => {
+      const { onWaterIntent } = waterSetup({ scaleConnected: () => true });
+      const check = (await screen.findByTestId('water-sensor-check')) as HTMLInputElement;
+      expect(screen.getByTestId('water-sensor-switch')).toHaveTextContent(
+        /Stop on the scale/,
+      );
+      fireEvent.click(check);
+      await waitFor(() => {
+        expect(screen.getByTestId('water-sensor-switch')).toHaveTextContent(
+          /Count the water/,
+        );
+      });
+      expect(onWaterIntent).toHaveBeenCalledWith(
+        expect.objectContaining({ useScale: false }),
+      );
+    });
+  });
+
+  it('shows the flow field only behind the pref', async () => {
+    waterSetup({ showWaterFlowField: () => true });
+    expect(await screen.findByTestId('water-param-flow')).toBeInTheDocument();
+  });
+
+  it('reports an empty library instead of an empty picker', async () => {
+    waterSetup({ loadVessels: () => Promise.resolve([]) });
+    expect(await screen.findByTestId('water-prep-empty')).toHaveTextContent(
+      /Library → Hot Water/,
+    );
   });
 });
