@@ -667,3 +667,130 @@ describe('RecipeEditor — pitcher picker', () => {
     });
   });
 });
+
+describe('RecipeEditor — hot water steps', () => {
+  const waterRoutine = (steps: ReturnType<typeof routineStep>[]): Routine => ({
+    id: 'rt-w',
+    name: 'Water routine',
+    steps,
+  });
+
+  it('shows no hot-water group when the routine never pours water', async () => {
+    renderEditor({
+      routines: [waterRoutine([routineStep('brew', {}, 's-brew')])],
+      recipes: [{ id: 'rec-1', name: 'Espresso', routineId: 'rt-w', overrides: {} }],
+    });
+    await waitFor(() => screen.getByTestId('recipe-editor'));
+    expect(
+      screen.queryByTestId('recipe-water-section-s-brew'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('renders one unlabelled group for a single water step', async () => {
+    renderEditor({
+      routines: [waterRoutine([routineStep('water', {}, 's-water')])],
+      recipes: [{ id: 'rec-1', name: 'Tea', routineId: 'rt-w', overrides: {} }],
+    });
+    // With one water step it should read like any other flat field group.
+    expect(
+      await screen.findByTestId('recipe-water-section-s-water'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/^step \d/)).not.toBeInTheDocument();
+  });
+
+  it('labels each group by step when a recipe pours twice', async () => {
+    // The pre-warm-then-dilute case that put this config on the step.
+    renderEditor({
+      routines: [
+        waterRoutine([
+          routineStep('water', {}, 's-warm'),
+          routineStep('brew', {}, 's-brew'),
+          routineStep('water', {}, 's-dilute'),
+        ]),
+      ],
+      recipes: [{ id: 'rec-1', name: 'Americano', routineId: 'rt-w', overrides: {} }],
+    });
+    expect(await screen.findByTestId('recipe-water-section-s-warm')).toBeInTheDocument();
+    expect(screen.getByTestId('recipe-water-section-s-dilute')).toBeInTheDocument();
+    expect(screen.getByText('step 1')).toBeInTheDocument();
+    expect(screen.getByText('step 3')).toBeInTheDocument();
+  });
+
+  it('saves vessel, volume and temp onto the step, not the recipe', async () => {
+    const { repos } = renderEditor({
+      routines: [waterRoutine([routineStep('water', {}, 's-water')])],
+      recipes: [{ id: 'rec-1', name: 'Tea', routineId: 'rt-w', overrides: {} }],
+    });
+    const select = (await screen.findByTestId(
+      'recipe-vessel-select-s-water',
+    )) as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: 'seed-vessel-mug' } });
+    await waitFor(async () => {
+      const r = await repos.recipes.get('rec-1');
+      expect(r?.overrides['s-water']).toMatchObject({ vesselId: 'seed-vessel-mug' });
+    });
+
+    const temp = screen.getByTestId('recipe-water-temp-s-water') as HTMLInputElement;
+    fireEvent.input(temp, { target: { value: '95' } });
+    fireEvent.blur(temp);
+    await waitFor(async () => {
+      const r = await repos.recipes.get('rec-1');
+      expect(r?.overrides['s-water']).toMatchObject({
+        vesselId: 'seed-vessel-mug',
+        tempC: 95,
+      });
+      // Nothing leaked onto the recipe itself.
+      expect((r as unknown as { tempC?: number }).tempC).toBeUndefined();
+    });
+  });
+
+  it('keeps the two water steps independent', async () => {
+    const { repos } = renderEditor({
+      routines: [
+        waterRoutine([
+          routineStep('water', {}, 's-warm'),
+          routineStep('water', {}, 's-dilute'),
+        ]),
+      ],
+      recipes: [{ id: 'rec-1', name: 'Americano', routineId: 'rt-w', overrides: {} }],
+    });
+    const warm = (await screen.findByTestId(
+      'recipe-vessel-select-s-warm',
+    )) as HTMLSelectElement;
+    fireEvent.change(warm, { target: { value: 'seed-vessel-cup' } });
+    const dilute = screen.getByTestId(
+      'recipe-vessel-select-s-dilute',
+    ) as HTMLSelectElement;
+    fireEvent.change(dilute, { target: { value: 'seed-vessel-mug' } });
+
+    await waitFor(async () => {
+      const r = await repos.recipes.get('rec-1');
+      expect(r?.overrides['s-warm']).toMatchObject({ vesselId: 'seed-vessel-cup' });
+      expect(r?.overrides['s-dilute']).toMatchObject({ vesselId: 'seed-vessel-mug' });
+    });
+  });
+
+  it('clamps a volume above the chosen vessel capacity', async () => {
+    const { repos } = renderEditor({
+      routines: [waterRoutine([routineStep('water', {}, 's-water')])],
+      recipes: [
+        {
+          id: 'rec-1',
+          name: 'Tea',
+          routineId: 'rt-w',
+          overrides: { 's-water': { vesselId: 'seed-vessel-cup' } },
+        },
+      ],
+    });
+    const vol = (await screen.findByTestId(
+      'recipe-water-volume-s-water',
+    )) as HTMLInputElement;
+    fireEvent.input(vol, { target: { value: '400' } });
+    fireEvent.blur(vol);
+    await waitFor(async () => {
+      const r = await repos.recipes.get('rec-1');
+      // Cup is 150 mL.
+      expect(r?.overrides['s-water']).toMatchObject({ volumeMl: 150 });
+    });
+  });
+});

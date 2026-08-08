@@ -8,7 +8,19 @@ import {
   type Component,
 } from 'solid-js';
 import { formatStepType } from '../../../../domain';
-import type { Routine, Recipe } from '../../../../domain';
+import {
+  VESSEL_CAPACITY_MAX_ML,
+  type Routine,
+  type Recipe,
+  type RoutineStep,
+  type Vessel,
+  type WaterConfig,
+} from '../../../../domain';
+import { clampVolumeToVessel } from '../../../../hotWater';
+import {
+  HOT_WATER_TEMP_MAX_C,
+  HOT_WATER_TEMP_MIN_C,
+} from '../../../../prefs';
 import { useRepositories } from '../../../../RepositoriesContext';
 import { DebouncedNumberField } from './DebouncedNumberField';
 import { PickerDialog } from '../../../PickerDialog';
@@ -69,6 +81,7 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
   const [routines] = createResource(repos.revision, () =>
     repos.routines.list(),
   );
+  const [vessels] = createResource(repos.revision, () => repos.vessels.list());
   const [pitchers] = createResource(repos.revision, () =>
     repos.pitchers.list(),
   );
@@ -169,6 +182,39 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
     if (r.pitcherId === pitcherId) return;
     void saveRecipe({ ...r, pitcherId });
   };
+
+  // Hot water is the first per-step config: unlike steam (one pitcher per
+  // recipe, hence the flat Recipe.pitcherId), a recipe can pour water twice at
+  // different settings — pre-warm the cup, brew, then dilute — so the vessel,
+  // volume and temperature live on the step, in Recipe.overrides[stepId].
+  const waterSteps = (): RoutineStep[] =>
+    (parentRoutine()?.steps ?? []).filter((s) => s.type === 'water');
+
+  const waterCfg = (stepId: string): WaterConfig =>
+    (recipe()?.overrides?.[stepId] as WaterConfig | undefined) ?? {};
+
+  // Read-modify-write on a shared map, so it needs both care and a queue.
+  // Reading the *persisted* recipe rather than the resource snapshot handles
+  // staleness (the snapshot lags until the post-save refetch lands); chaining
+  // handles overlap, since two edits fired in the same tick would otherwise
+  // both read the pre-change state and the second would clobber the first.
+  let waterWrites: Promise<void> = Promise.resolve();
+  const patchWater = (stepId: string, patch: Partial<WaterConfig>): Promise<void> => {
+    waterWrites = waterWrites.then(async () => {
+      const cur = await repos.recipes.get(p.recipeId);
+      if (!cur) return;
+      const prev = (cur.overrides?.[stepId] as WaterConfig | undefined) ?? {};
+      await saveRecipe({
+        ...cur,
+        overrides: { ...cur.overrides, [stepId]: { ...prev, ...patch } },
+      });
+    });
+    return waterWrites;
+  };
+
+  /** The vessel behind a step's config — supplies the volume ceiling. */
+  const stepVessel = (stepId: string): Vessel | undefined =>
+    (vessels() ?? []).find((v) => v.id === waterCfg(stepId).vesselId);
 
   const handleDoseCommit = (g: number | undefined) => {
     const r = recipe();
@@ -341,6 +387,119 @@ export const RecipeEditor: Component<RecipeEditorProps> = (p) => {
                     </select>
                   </Show>
                 </section>
+              </Show>
+
+              <Show when={waterSteps().length > 0}>
+                <For each={waterSteps()}>
+                  {(step, i) => (
+                    <section
+                      class="settings-section"
+                      data-testid={`recipe-water-section-${step.id}`}
+                    >
+                      <h3>
+                        Hot water
+                        {/* Only label the step when there is more than one to
+                            tell apart — an ordinary recipe should read like a
+                            flat field group, not a step list. */}
+                        <Show when={waterSteps().length > 1}>
+                          <span class="recipe-editor__step-tag">
+                            step {(parentRoutine()?.steps ?? []).indexOf(step) + 1}
+                          </span>
+                        </Show>
+                      </h3>
+                      <Show when={i() === 0}>
+                        <p class="settings-help">
+                          Which vessel this pours into, and how much. Manage
+                          vessels in Library → Hot Water.
+                        </p>
+                      </Show>
+                      <Show
+                        when={!vessels.loading}
+                        fallback={<p class="muted">loading vessels…</p>}
+                      >
+                        <select
+                          class="recipe-editor__routine-select"
+                          aria-label="Vessel"
+                          data-testid={`recipe-vessel-select-${step.id}`}
+                          value={waterCfg(step.id).vesselId ?? ''}
+                          onChange={(e) =>
+                            void patchWater(step.id, {
+                              vesselId: e.currentTarget.value || undefined,
+                            })
+                          }
+                        >
+                          <option value="">No vessel (pick at brew time)</option>
+                          <For each={vessels() ?? []}>
+                            {(v) => (
+                              <option value={v.id}>
+                                {v.name} — {v.capacityMl} mL
+                              </option>
+                            )}
+                          </For>
+                          <Show
+                            when={
+                              waterCfg(step.id).vesselId &&
+                              !(vessels() ?? []).some(
+                                (v) => v.id === waterCfg(step.id).vesselId,
+                              )
+                            }
+                          >
+                            {/* Keep a dangling reference selectable + visible. */}
+                            <option value={waterCfg(step.id).vesselId}>
+                              (missing vessel — {waterCfg(step.id).vesselId})
+                            </option>
+                          </Show>
+                        </select>
+                      </Show>
+                      <div class="recipe-editor__field-row recipe-editor__field-row--stack">
+                        <label class="recipe-editor__field">
+                          <span class="recipe-editor__field-label">Volume</span>
+                          <DebouncedNumberField
+                            value={waterCfg(step.id).volumeMl}
+                            onCommit={(v) =>
+                              void patchWater(step.id, {
+                                volumeMl:
+                                  v === undefined
+                                    ? undefined
+                                    : clampVolumeToVessel(
+                                        v,
+                                        stepVessel(step.id)?.capacityMl,
+                                      ),
+                              })
+                            }
+                            min={10}
+                            max={stepVessel(step.id)?.capacityMl ?? VESSEL_CAPACITY_MAX_ML}
+                            step={10}
+                            steppers
+                            unit="mL"
+                            placeholder="vessel size"
+                            ariaLabel="Hot water volume (millilitres)"
+                            testId={`recipe-water-volume-${step.id}`}
+                            debounceMs={p.debounceMs}
+                            class="step-field__input"
+                          />
+                        </label>
+                        <label class="recipe-editor__field">
+                          <span class="recipe-editor__field-label">Temp</span>
+                          <DebouncedNumberField
+                            value={waterCfg(step.id).tempC}
+                            onCommit={(v) => void patchWater(step.id, { tempC: v })}
+                            min={HOT_WATER_TEMP_MIN_C}
+                            max={HOT_WATER_TEMP_MAX_C}
+                            step={1}
+                            steppers
+                            unit="°C"
+                            placeholder="default"
+                            ariaLabel="Hot water temperature (Celsius)"
+                            testId={`recipe-water-temp-${step.id}`}
+                            debounceMs={p.debounceMs}
+                            class="step-field__input"
+                          />
+                        </label>
+                      </div>
+                    </section>
+                  )}
+                </For>
               </Show>
 
               <section class="settings-section">
