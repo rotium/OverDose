@@ -4,3 +4,8 @@ dist
 *.log
 .vite
 .idea
+
+# Local Claude Code config (settings.local.json, hooks, …). The release skill is
+# deliberately tracked — it belongs with docs/releasing.md.
+.claude/*
+!.claude/skills
