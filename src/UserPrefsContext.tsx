@@ -12,6 +12,8 @@ import {
 import { log, type LogLevel } from './debugLog';
 import {
   DEFAULT_AUTO_STOP_MODE,
+  DEFAULT_HOT_WATER_TEMP_C,
+  DEFAULT_HOT_WATER_AUTO_STOP,
   DEFAULT_CHART_SMOOTHING,
   DEFAULT_HAS_SCALE,
   DEFAULT_LOG_LEVEL,
@@ -116,6 +118,8 @@ interface PersistedPrefs {
   steamPurgeStrategy?: SteamPurgeStrategy;
   steamAutoFlushSec?: number;
   autoStopMode?: AutoStopMode;
+  hotWaterTempC?: number;
+  hotWaterAutoStop?: boolean;
   steamTargetTemp?: number;
   steamMode?: SteamMode;
   steamAutoFlavor?: SteamAutoFlavor;
@@ -187,6 +191,14 @@ export interface UserPrefsContextValue {
   /** Global default auto-stop mode; overridable per shot in the prep card. */
   autoStopMode: Accessor<AutoStopMode>;
   setAutoStopMode: (v: AutoStopMode) => void;
+  /** Default hot-water temperature (°C) — the bottom of the water step's
+   *  resolution chain. Seeds prep; never asserted onto the machine on its own. */
+  hotWaterTempC: Accessor<number>;
+  setHotWaterTempC: (v: number) => void;
+  /** Whether hot water auto-stops at its target by default. A boolean, not a
+   *  mode: 1 mL is 1 g, so there is no weight-vs-volume target to choose. */
+  hotWaterAutoStop: Accessor<boolean>;
+  setHotWaterAutoStop: (v: boolean) => void;
   /**
    * Desired steam-boiler target temp (°C) — the skin owns this. The status
    * steam toggle pushes it to the machine (on) or 0 (off), and the machine is
@@ -301,6 +313,12 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
   const [autoStopMode, setAutoStopMode] = createSignal<AutoStopMode>(
     initial.autoStopMode ?? DEFAULT_AUTO_STOP_MODE,
   );
+  const [hotWaterTempC, setHotWaterTempC] = createSignal<number>(
+    initial.hotWaterTempC ?? DEFAULT_HOT_WATER_TEMP_C,
+  );
+  const [hotWaterAutoStop, setHotWaterAutoStop] = createSignal<boolean>(
+    initial.hotWaterAutoStop ?? DEFAULT_HOT_WATER_AUTO_STOP,
+  );
   const [steamTargetTemp, setSteamTargetTemp] = createSignal<number>(
     initial.steamTargetTemp ?? DEFAULT_STEAM_TARGET_TEMP,
   );
@@ -341,6 +359,8 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
       steamPurgeStrategy: steamPurgeStrategy(),
       steamAutoFlushSec: steamAutoFlushSec(),
       autoStopMode: autoStopMode(),
+      hotWaterTempC: hotWaterTempC(),
+      hotWaterAutoStop: hotWaterAutoStop(),
       steamTargetTemp: steamTargetTemp(),
       steamMode: steamMode(),
       steamAutoFlavor: steamAutoFlavor(),
@@ -523,6 +543,10 @@ export const UserPrefsProvider: Component<UserPrefsProviderProps> = (p) => {
     setSteamAutoFlushSec,
     autoStopMode,
     setAutoStopMode,
+    hotWaterTempC,
+    setHotWaterTempC,
+    hotWaterAutoStop,
+    setHotWaterAutoStop,
     steamTargetTemp,
     setSteamTargetTemp,
     steamMode,

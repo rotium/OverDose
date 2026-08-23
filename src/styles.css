@@ -1197,7 +1197,8 @@ html {
 
 /* Steam duration adjust pair — −5s / +5s buttons sit side-by-side under
    the hero countdown. Row stays centered with consistent gap. */
-.steam-adjust-row {
+.steam-adjust-row,
+.op-adjust-row {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -1206,7 +1207,8 @@ html {
 /* Adjust pill. Two variants:
    - default       : pill, neutral (used outside the hero — no callers today)
    - --hero        : larger, sits under the giant countdown */
-.steam-extend {
+.steam-extend,
+.op-adjust {
   background: rgba(255, 255, 255, 0.06);
   color: var(--fg);
   border: 1px solid var(--border-strong);
@@ -1220,26 +1222,31 @@ html {
   transition: background 120ms ease, transform 80ms ease, opacity 120ms ease;
 }
 
-.steam-extend--hero {
+.steam-extend--hero,
+.op-adjust--hero {
   padding: 0.7rem 1.8rem;
   font-size: 1.05rem;
   letter-spacing: 0.04em;
 }
 
-.steam-extend:hover:not(:disabled) {
+.steam-extend:hover:not(:disabled),
+.op-adjust:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.12);
 }
 
-.steam-extend:active:not(:disabled) {
+.steam-extend:active:not(:disabled),
+.op-adjust:active:not(:disabled) {
   transform: scale(0.97);
 }
 
-.steam-extend:focus-visible {
+.steam-extend:focus-visible,
+.op-adjust:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
-.steam-extend:disabled {
+.steam-extend:disabled,
+.op-adjust:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
@@ -6083,4 +6090,48 @@ input[inputmode='none']:focus {
   background: var(--accent);
   color: #fff;
   font-size: 1rem;
+}
+
+/* Hot-water prep: the line that names which reading will end the pour, shown
+   where there is no sensor choice to make (no scale, or auto-stop off). The
+   switch variant reuses .prep__autostop. */
+.water-stopline {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.6rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* Label for a field group nested inside a settings section — the Profile and
+   Bean rows inside Brewing. Quieter than an <h3> so the section keeps a single
+   heading, with enough room above to read as a break between the two pickers.
+   The first one follows the section's help text, which already spaces it. */
+.recipe-editor__subfield-label {
+  display: block;
+  margin: 1.5rem 0 0.4rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.recipe-editor__subfield-label:first-of-type {
+  margin-top: 0.6rem;
+}
+
+/* Step marker on a repeated per-step field group (hot water). Only rendered
+   when a routine has more than one of that step, so an ordinary recipe still
+   reads as a flat field group rather than a step list. */
+.recipe-editor__step-tag {
+  margin-left: 0.5rem;
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--muted);
+  vertical-align: middle;
 }

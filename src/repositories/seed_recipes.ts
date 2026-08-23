@@ -38,7 +38,16 @@ export const SEED_RECIPES: Recipe[] = [
     routineId: 'seed-routine-brew-water',
     doseGrams: 18,
     targetYieldGrams: 36,
-    overrides: {},
+    // 36 g of espresso plus 100 mL of water sits comfortably in the 150 mL
+    // Cup. 80 °C rather than boiling: the water is going *onto* a finished
+    // shot, and hotter than that scorches it.
+    overrides: {
+      'seed-routine-brew-water-2': {
+        vesselId: 'seed-vessel-cup',
+        volumeMl: 100,
+        tempC: 80,
+      },
+    },
   },
   {
     id: 'seed-rec-ristretto',
@@ -47,6 +56,23 @@ export const SEED_RECIPES: Recipe[] = [
     doseGrams: 18,
     targetYieldGrams: 18,
     overrides: {},
+  },
+  {
+    // No bean, dose or yield — it's hot water in a vessel, and the only
+    // espresso-shaped field a Recipe would otherwise carry is meaningless here.
+    id: 'seed-rec-tea',
+    name: 'Tea',
+    routineId: 'seed-routine-water',
+    // A full Mug at 95 °C — black tea, the safest default. Green-tea drinkers
+    // drop it to ~80 °C, which is exactly the edit the per-step temperature
+    // exists for.
+    overrides: {
+      'seed-routine-water-1': {
+        vesselId: 'seed-vessel-mug',
+        volumeMl: 300,
+        tempC: 95,
+      },
+    },
   },
 ];
 

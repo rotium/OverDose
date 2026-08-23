@@ -56,6 +56,7 @@ interface Rig {
   onUpdateMachineSettings: ReturnType<
     typeof vi.fn<(p: Partial<MachineSettingsSnapshot>) => Promise<void>>
   >;
+  onTareScale: ReturnType<typeof vi.fn<() => Promise<void>>>;
 }
 
 const buildRig = (initial: {
@@ -91,6 +92,7 @@ const buildRig = (initial: {
     onUpdateMachineSettings: vi
       .fn<(p: Partial<MachineSettingsSnapshot>) => Promise<void>>()
       .mockResolvedValue(undefined),
+    onTareScale: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
   };
 };
 
@@ -105,6 +107,7 @@ const mount = (rig: Rig) =>
       onUpdateShotSettings={rig.onUpdateShotSettings}
       onFetchMachineSettings={rig.onFetchMachineSettings}
       onUpdateMachineSettings={rig.onUpdateMachineSettings}
+      onTareScale={rig.onTareScale}
     >
       <Probe />
     </LiveShotProvider>
@@ -894,6 +897,191 @@ describe('LiveShotProvider', () => {
       ).rejects.toThrow();
       // Rollback restores the original value.
       expect(liveCtx().machineSettings()?.steamFlow).toBe(1.0);
+    });
+  });
+
+  describe('hot water stop ownership', () => {
+    // OverDose owns this stop outright: the machine is carrying volume = 0, so
+    // nothing else will end the pour before the firmware duration cap.
+    const T0 = Date.parse('2026-05-22T08:00:00.000Z');
+    const at = (ms: number) => new Date(T0 + ms).toISOString();
+    const water = (ms: number, flow = 6) =>
+      mkSnap({
+        timestamp: at(ms),
+        state: { state: 'hotWater', substate: 'pouring' },
+        flow,
+      });
+    const weigh = (ms: number, weight: number, weightFlow = 6): ScaleMessage => ({
+      timestamp: at(ms),
+      weight,
+      weightFlow,
+      batteryLevel: 90,
+    });
+
+    it('tares on entering hotWater when using the scale', () => {
+      const rig = buildRig();
+      mount(rig);
+      liveCtx().setWaterIntent({ targetMl: 150, flow: 6, useScale: true });
+      rig.setScale(weigh(0, 120));
+      rig.setMachine(water(0));
+      expect(rig.onTareScale).toHaveBeenCalledTimes(1);
+      expect(liveCtx().waterSensor()).toBe('scale');
+      expect(liveCtx().waterTarget()).toBe(150);
+    });
+
+    it('does not tare when counting the water instead', () => {
+      const rig = buildRig();
+      mount(rig);
+      liveCtx().setWaterIntent({ targetMl: 300, flow: 6, useScale: false });
+      rig.setScale(weigh(0, 0));
+      rig.setMachine(water(0));
+      expect(rig.onTareScale).not.toHaveBeenCalled();
+      expect(liveCtx().waterSensor()).toBe('flow');
+    });
+
+    it('falls back to counting when no scale is connected', () => {
+      const rig = buildRig();
+      mount(rig);
+      liveCtx().setWaterIntent({ targetMl: 300, flow: 6, useScale: true });
+      rig.setScale({ status: 'disconnected' });
+      rig.setMachine(water(0));
+      expect(liveCtx().waterSensor()).toBe('flow');
+      expect(rig.onTareScale).not.toHaveBeenCalled();
+    });
+
+    it('will not stop on a pre-tare load that never dropped', () => {
+      // The hardware-earned guard: a cup left on the platter with a lagging
+      // physical tare reads as a finished pour. Weight never goes <= 3g here,
+      // so the stop must never arm no matter how long the pour runs.
+      const rig = buildRig();
+      mount(rig);
+      liveCtx().setWaterIntent({ targetMl: 150, flow: 6, useScale: true });
+      rig.setScale(weigh(0, 220));
+      rig.setMachine(water(0));
+      for (let ms = 100; ms <= 3000; ms += 100) {
+        rig.setScale(weigh(ms, 220));
+        rig.setMachine(water(ms));
+      }
+      expect(rig.onStop).not.toHaveBeenCalled();
+    });
+
+    it('stops at the target once the tare has landed and settled', () => {
+      const rig = buildRig();
+      mount(rig);
+      liveCtx().setWaterIntent({ targetMl: 150, flow: 6, useScale: true });
+      rig.setScale(weigh(0, 0));
+      rig.setMachine(water(0));
+
+      // Inside the settle window the reading is not yet trusted.
+      rig.setScale(weigh(300, 200));
+      rig.setMachine(water(300));
+      expect(rig.onStop).not.toHaveBeenCalled();
+
+      // Past it, and under target, still pouring.
+      rig.setScale(weigh(1000, 100));
+      rig.setMachine(water(1000));
+      expect(rig.onStop).not.toHaveBeenCalled();
+
+      // 149 + 6*0.3 projects past 150.
+      rig.setScale(weigh(1100, 149));
+      rig.setMachine(water(1100));
+      expect(rig.onStop).toHaveBeenCalledTimes(1);
+    });
+
+    it('asks to stop exactly once', () => {
+      const rig = buildRig();
+      mount(rig);
+      liveCtx().setWaterIntent({ targetMl: 150, flow: 6, useScale: true });
+      rig.setScale(weigh(0, 0));
+      rig.setMachine(water(0));
+      for (const ms of [1000, 1100, 1200, 1300]) {
+        rig.setScale(weigh(ms, 200));
+        rig.setMachine(water(ms));
+      }
+      expect(rig.onStop).toHaveBeenCalledTimes(1);
+    });
+
+    it('counts the water and stops on it when there is no scale', () => {
+      // Verified against the gateway: MachineSnapshot.flow reports during
+      // hotWater, so integration is a real reading, not a stub.
+      const rig = buildRig();
+      mount(rig);
+      liveCtx().setWaterIntent({ targetMl: 60, flow: 6, useScale: false });
+      rig.setScale({ status: 'disconnected' });
+      rig.setMachine(water(0, 6));
+      // 6 mL/s for 1s per frame.
+      for (let ms = 1000; ms <= 12000; ms += 1000) rig.setMachine(water(ms, 6));
+      expect(liveCtx().waterPoured()).toBeGreaterThan(50);
+      expect(rig.onStop).toHaveBeenCalledTimes(1);
+    });
+
+    it('honours a mid-pour + adjust', () => {
+      const rig = buildRig();
+      mount(rig);
+      liveCtx().setWaterIntent({ targetMl: 150, flow: 6, useScale: true });
+      rig.setScale(weigh(0, 0));
+      rig.setMachine(water(0));
+      rig.setScale(weigh(1000, 100));
+      rig.setMachine(water(1000));
+
+      liveCtx().adjustWaterVolume(10);
+      expect(liveCtx().waterTarget()).toBe(160);
+
+      // 149 would have stopped at 150; with 160 it keeps pouring.
+      rig.setScale(weigh(1100, 149));
+      rig.setMachine(water(1100));
+      expect(rig.onStop).not.toHaveBeenCalled();
+
+      rig.setScale(weigh(1200, 159));
+      rig.setMachine(water(1200));
+      expect(rig.onStop).toHaveBeenCalledTimes(1);
+    });
+
+    it('stops immediately when a - adjust drops below what is poured', () => {
+      const rig = buildRig();
+      mount(rig);
+      liveCtx().setWaterIntent({ targetMl: 300, flow: 6, useScale: true });
+      rig.setScale(weigh(0, 0));
+      rig.setMachine(water(0));
+      rig.setScale(weigh(1000, 100));
+      rig.setMachine(water(1000));
+      expect(rig.onStop).not.toHaveBeenCalled();
+
+      liveCtx().adjustWaterVolume(-250); // 300 -> 50, already past it
+      rig.setScale(weigh(1100, 100));
+      rig.setMachine(water(1100));
+      expect(rig.onStop).toHaveBeenCalledTimes(1);
+    });
+
+    it('never stops with no target set (manual)', () => {
+      const rig = buildRig();
+      mount(rig);
+      liveCtx().setWaterIntent({ targetMl: 0, flow: 6, useScale: true });
+      rig.setScale(weigh(0, 0));
+      rig.setMachine(water(0));
+      for (let ms = 1000; ms <= 5000; ms += 500) {
+        rig.setScale(weigh(ms, ms));
+        rig.setMachine(water(ms));
+      }
+      expect(rig.onStop).not.toHaveBeenCalled();
+    });
+
+    it('re-arms for the next pour', () => {
+      const rig = buildRig();
+      mount(rig);
+      liveCtx().setWaterIntent({ targetMl: 150, flow: 6, useScale: true });
+      rig.setScale(weigh(0, 0));
+      rig.setMachine(water(0));
+      rig.setScale(weigh(1000, 200));
+      rig.setMachine(water(1000));
+      expect(rig.onStop).toHaveBeenCalledTimes(1);
+
+      rig.setMachine(mkSnap({ timestamp: at(2000) }));
+      rig.onTareScale.mockClear();
+      rig.setScale(weigh(3000, 0));
+      rig.setMachine(water(3000));
+      expect(rig.onTareScale).toHaveBeenCalledTimes(1);
+      expect(liveCtx().waterPoured()).toBe(0);
     });
   });
 });

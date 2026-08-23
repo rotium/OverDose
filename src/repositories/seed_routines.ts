@@ -10,6 +10,8 @@ import type { Routine } from '../domain';
  *   Brew          — brew                (espresso shots)
  *   Brew + Steam  — brew → steam        (milk drinks: cappuccino, latte, …)
  *   Brew + Water  — brew → water        (americano)
+ *   Water         — water               (tea, and anything else that's just
+ *                                        hot water in a vessel)
  *
  * Steps are only the machine actions the gateway runs (brew / steam / water /
  * flush). Bean / Profile / Grinder / Dose are Recipe-level. No step type
@@ -38,5 +40,10 @@ export const SEED_ROUTINES: Routine[] = [
       routineStep('brew', {}, 'seed-routine-brew-water-1'),
       routineStep('water', {}, 'seed-routine-brew-water-2'),
     ],
+  },
+  {
+    id: 'seed-routine-water',
+    name: 'Water',
+    steps: [routineStep('water', {}, 'seed-routine-water-1')],
   },
 ];

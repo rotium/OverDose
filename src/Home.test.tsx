@@ -282,24 +282,20 @@ describe('Home', () => {
     expect(onSelect).toHaveBeenCalledTimes(1);
   });
 
-  it('disables Explore direct-op tiles with a droplet icon at critical water', async () => {
+  it('locks only the Explore flush tile at critical water', async () => {
     render(() =>
       buildHome({ stubs: { water: { currentLevel: 2, refillLevel: 5 } } }),
     );
     await waitFor(() => screen.getByTestId('explore-brew'));
-    // Brew + steam tiles stay navigable — they open a prep screen and gate at
-    // its Start button.
-    expect(screen.getByTestId('explore-brew')).not.toBeDisabled();
-    expect(screen.getByTestId('explore-steam')).not.toBeDisabled();
-    // Water/flush block since their tap IS the action (no prep screen yet).
-    for (const op of ['water', 'flush']) {
-      const tile = screen.getByTestId(`explore-${op}`);
-      expect(tile).toBeDisabled();
-      expect(tile).toHaveAttribute('data-block-reason', 'water-critical');
-      expect(
-        screen.getByTestId(`explore-${op}-reason`),
-      ).toBeInTheDocument();
+    // Everything with a prep screen stays navigable — they gate at Start.
+    for (const op of ['brew', 'steam', 'water']) {
+      expect(screen.getByTestId(`explore-${op}`)).not.toBeDisabled();
     }
+    // Flush blocks: its tap IS the action, no prep screen to gate in.
+    const tile = screen.getByTestId('explore-flush');
+    expect(tile).toBeDisabled();
+    expect(tile).toHaveAttribute('data-block-reason', 'water-critical');
+    expect(screen.getByTestId('explore-flush-reason')).toBeInTheDocument();
   });
 
   it('at warn level: header pill + tinted Water row; no Explore tile lock', async () => {

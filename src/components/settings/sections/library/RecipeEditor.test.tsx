@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createSignal } from 'solid-js';
 import { render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
 import { RecipeEditor } from './RecipeEditor';
 import { WithRepositories } from '../../../../test/repositories';
@@ -665,5 +666,334 @@ describe('RecipeEditor — pitcher picker', () => {
     await waitFor(async () => {
       expect((await repos.recipes.get('rec-1'))?.pitcherId).toBeUndefined();
     });
+  });
+});
+
+describe('RecipeEditor — hot water steps', () => {
+  const waterRoutine = (steps: ReturnType<typeof routineStep>[]): Routine => ({
+    id: 'rt-w',
+    name: 'Water routine',
+    steps,
+  });
+
+  it('shows no hot-water group when the routine never pours water', async () => {
+    renderEditor({
+      routines: [waterRoutine([routineStep('brew', {}, 's-brew')])],
+      recipes: [{ id: 'rec-1', name: 'Espresso', routineId: 'rt-w', overrides: {} }],
+    });
+    await waitFor(() => screen.getByTestId('recipe-editor'));
+    expect(
+      screen.queryByTestId('recipe-water-section-s-brew'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('renders one unlabelled group for a single water step', async () => {
+    renderEditor({
+      routines: [waterRoutine([routineStep('water', {}, 's-water')])],
+      recipes: [{ id: 'rec-1', name: 'Tea', routineId: 'rt-w', overrides: {} }],
+    });
+    // With one water step it should read like any other flat field group.
+    expect(
+      await screen.findByTestId('recipe-water-section-s-water'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/^step \d/)).not.toBeInTheDocument();
+  });
+
+  it('labels each group by step when a recipe pours twice', async () => {
+    // The pre-warm-then-dilute case that put this config on the step.
+    renderEditor({
+      routines: [
+        waterRoutine([
+          routineStep('water', {}, 's-warm'),
+          routineStep('brew', {}, 's-brew'),
+          routineStep('water', {}, 's-dilute'),
+        ]),
+      ],
+      recipes: [{ id: 'rec-1', name: 'Americano', routineId: 'rt-w', overrides: {} }],
+    });
+    expect(await screen.findByTestId('recipe-water-section-s-warm')).toBeInTheDocument();
+    expect(screen.getByTestId('recipe-water-section-s-dilute')).toBeInTheDocument();
+    expect(screen.getByText('step 1')).toBeInTheDocument();
+    expect(screen.getByText('step 3')).toBeInTheDocument();
+  });
+
+  it('saves vessel, volume and temp onto the step, not the recipe', async () => {
+    const { repos } = renderEditor({
+      routines: [waterRoutine([routineStep('water', {}, 's-water')])],
+      recipes: [{ id: 'rec-1', name: 'Tea', routineId: 'rt-w', overrides: {} }],
+    });
+    const select = (await screen.findByTestId(
+      'recipe-vessel-select-s-water',
+    )) as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: 'seed-vessel-mug' } });
+    await waitFor(async () => {
+      const r = await repos.recipes.get('rec-1');
+      expect(r?.overrides['s-water']).toMatchObject({ vesselId: 'seed-vessel-mug' });
+    });
+
+    const temp = screen.getByTestId('recipe-water-temp-s-water') as HTMLInputElement;
+    fireEvent.input(temp, { target: { value: '95' } });
+    fireEvent.blur(temp);
+    await waitFor(async () => {
+      const r = await repos.recipes.get('rec-1');
+      expect(r?.overrides['s-water']).toMatchObject({
+        vesselId: 'seed-vessel-mug',
+        tempC: 95,
+      });
+      // Nothing leaked onto the recipe itself.
+      expect((r as unknown as { tempC?: number }).tempC).toBeUndefined();
+    });
+  });
+
+  it('keeps the two water steps independent', async () => {
+    const { repos } = renderEditor({
+      routines: [
+        waterRoutine([
+          routineStep('water', {}, 's-warm'),
+          routineStep('water', {}, 's-dilute'),
+        ]),
+      ],
+      recipes: [{ id: 'rec-1', name: 'Americano', routineId: 'rt-w', overrides: {} }],
+    });
+    const warm = (await screen.findByTestId(
+      'recipe-vessel-select-s-warm',
+    )) as HTMLSelectElement;
+    fireEvent.change(warm, { target: { value: 'seed-vessel-cup' } });
+    const dilute = screen.getByTestId(
+      'recipe-vessel-select-s-dilute',
+    ) as HTMLSelectElement;
+    fireEvent.change(dilute, { target: { value: 'seed-vessel-mug' } });
+
+    await waitFor(async () => {
+      const r = await repos.recipes.get('rec-1');
+      expect(r?.overrides['s-warm']).toMatchObject({ vesselId: 'seed-vessel-cup' });
+      expect(r?.overrides['s-dilute']).toMatchObject({ vesselId: 'seed-vessel-mug' });
+    });
+  });
+
+  it('clamps a volume above the chosen vessel capacity', async () => {
+    const { repos } = renderEditor({
+      routines: [waterRoutine([routineStep('water', {}, 's-water')])],
+      recipes: [
+        {
+          id: 'rec-1',
+          name: 'Tea',
+          routineId: 'rt-w',
+          overrides: { 's-water': { vesselId: 'seed-vessel-cup' } },
+        },
+      ],
+    });
+    const vol = (await screen.findByTestId(
+      'recipe-water-volume-s-water',
+    )) as HTMLInputElement;
+    fireEvent.input(vol, { target: { value: '400' } });
+    fireEvent.blur(vol);
+    await waitFor(async () => {
+      const r = await repos.recipes.get('rec-1');
+      // Cup is 150 mL.
+      expect(r?.overrides['s-water']).toMatchObject({ volumeMl: 150 });
+    });
+  });
+});
+
+describe('RecipeEditor — section order and grouping', () => {
+  const rt = (id: string, steps: ReturnType<typeof routineStep>[]): Routine => ({
+    id,
+    name: id,
+    steps,
+  });
+
+  /** Step-derived groups in the order they appear in the document. */
+  const groupOrder = (): string[] =>
+    Array.from(
+      document.querySelectorAll<HTMLElement>(
+        '[data-testid="recipe-brewing-section"],[data-testid="recipe-pitcher-section"],[data-testid^="recipe-water-section-"]',
+      ),
+    ).map((el) => el.dataset.testid!);
+
+  it('puts the profile picker inside Brewing, not in its own section', async () => {
+    renderEditor({
+      routines: [rt('rt-b', [routineStep('brew', {}, 's1')])],
+      recipes: [{ id: 'rec-1', name: 'Espresso', routineId: 'rt-b', overrides: {} }],
+    });
+    const brewing = await screen.findByTestId('recipe-brewing-section');
+    expect(
+      brewing.querySelector('[data-testid="recipe-editor-profile-field"]'),
+    ).toBeTruthy();
+    expect(
+      brewing.querySelector('[data-testid="recipe-editor-bean-field"]'),
+    ).toBeTruthy();
+  });
+
+  it('orders the groups the way the routine runs them: brew then water', async () => {
+    renderEditor({
+      routines: [
+        rt('rt-a', [routineStep('brew', {}, 's1'), routineStep('water', {}, 's2')]),
+      ],
+      recipes: [{ id: 'rec-1', name: 'Americano', routineId: 'rt-a', overrides: {} }],
+    });
+    await screen.findByTestId('recipe-brewing-section');
+    expect(groupOrder()).toEqual([
+      'recipe-brewing-section',
+      'recipe-water-section-s2',
+    ]);
+  });
+
+  it('puts water first when the routine pours first', async () => {
+    // Same two step types, opposite order — the editor must follow the routine
+    // rather than a fixed layout.
+    renderEditor({
+      routines: [
+        rt('rt-a', [routineStep('water', {}, 's1'), routineStep('brew', {}, 's2')]),
+      ],
+      recipes: [{ id: 'rec-1', name: 'Long black', routineId: 'rt-a', overrides: {} }],
+    });
+    await screen.findByTestId('recipe-brewing-section');
+    expect(groupOrder()).toEqual([
+      'recipe-water-section-s1',
+      'recipe-brewing-section',
+    ]);
+  });
+
+  it('interleaves a repeated water step around the brew', async () => {
+    renderEditor({
+      routines: [
+        rt('rt-a', [
+          routineStep('water', {}, 's-warm'),
+          routineStep('brew', {}, 's-brew'),
+          routineStep('water', {}, 's-dilute'),
+        ]),
+      ],
+      recipes: [{ id: 'rec-1', name: 'Americano', routineId: 'rt-a', overrides: {} }],
+    });
+    await screen.findByTestId('recipe-brewing-section');
+    expect(groupOrder()).toEqual([
+      'recipe-water-section-s-warm',
+      'recipe-brewing-section',
+      'recipe-water-section-s-dilute',
+    ]);
+  });
+
+  it('places the pitcher group at the steam step', async () => {
+    renderEditor({
+      routines: [
+        rt('rt-a', [routineStep('brew', {}, 's1'), routineStep('steam', {}, 's2')]),
+      ],
+      recipes: [{ id: 'rec-1', name: 'Cappuccino', routineId: 'rt-a', overrides: {} }],
+    });
+    await screen.findByTestId('recipe-pitcher-section');
+    expect(groupOrder()).toEqual([
+      'recipe-brewing-section',
+      'recipe-pitcher-section',
+    ]);
+  });
+
+  it('shows no Brewing group for a routine with no coffee in it', async () => {
+    // Tea: dose, yield and profile are meaningless, so the group is absent
+    // rather than present-and-empty.
+    renderEditor({
+      routines: [rt('rt-w', [routineStep('water', {}, 's1')])],
+      recipes: [{ id: 'rec-1', name: 'Tea', routineId: 'rt-w', overrides: {} }],
+    });
+    await screen.findByTestId('recipe-water-section-s1');
+    expect(
+      screen.queryByTestId('recipe-brewing-section'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId('recipe-editor-profile-field'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('renders the recipe-level groups once even if a step type repeats', async () => {
+    renderEditor({
+      routines: [
+        rt('rt-a', [routineStep('brew', {}, 's1'), routineStep('brew', {}, 's2')]),
+      ],
+      recipes: [{ id: 'rec-1', name: 'Double', routineId: 'rt-a', overrides: {} }],
+    });
+    await screen.findByTestId('recipe-brewing-section');
+    expect(groupOrder()).toEqual(['recipe-brewing-section']);
+  });
+});
+
+describe('RecipeEditor — the form survives its own auto-save', () => {
+  /**
+   * Regression: saving bumps `repos.revision`, which re-sources the routines
+   * resource. While that fetch is in flight `routines()` is undefined, and it
+   * resolves with freshly-parsed (equivalent but new) step objects. A step list
+   * read straight off that would empty and then rebuild on every keystroke's
+   * commit — destroying the input under the cursor and closing the keypad.
+   */
+  const renderLive = (routines: Routine[], recipes: Recipe[]) => {
+    const bStore = new MemoryStorage();
+    bStore.setItem('starter-skin.routines.v1', JSON.stringify(routines));
+    bStore.setItem('starter-skin.routines.seeded.v1', '1');
+    const rStore = new MemoryStorage();
+    rStore.setItem('starter-skin.recipes.v1', JSON.stringify(recipes));
+    rStore.setItem('starter-skin.recipes.seeded.v1', '1');
+
+    const [revision, setRevision] = createSignal(0);
+    const bump = () => setRevision((n) => n + 1);
+    // Same wiring librarySync uses: a repo mutation bumps the revision.
+    const recipeRepo = new LocalRecipeRepository(rStore, bump);
+    const routineRepo = new LocalRoutineRepository(bStore, bump);
+
+    render(() => (
+      <WithPrefs>
+        <WithRepositories
+          routines={routineRepo}
+          recipes={recipeRepo}
+          revision={revision}
+        >
+          <RecipeEditor
+            recipeId="rec-1"
+            onClose={() => {}}
+            debounceMs={0}
+            loadProfiles={() => Promise.resolve([])}
+            loadProfileById={() => Promise.resolve(null)}
+            loadBeans={() => Promise.resolve([])}
+            loadBeanById={() => Promise.resolve(null)}
+          />
+        </WithRepositories>
+      </WithPrefs>
+    ));
+    return { recipeRepo, revision };
+  };
+
+  it('keeps the dose input alive across a save', async () => {
+    const { recipeRepo, revision } = renderLive(
+      [{ id: 'rt-b', name: 'Brew', steps: [routineStep('brew', {}, 's1')] }],
+      [{ id: 'rec-1', name: 'Espresso', routineId: 'rt-b', overrides: {} }],
+    );
+    const before = await screen.findByTestId('recipe-dose-input');
+
+    fireEvent.input(before, { target: { value: '1' } });
+    fireEvent.blur(before);
+    await waitFor(async () =>
+      expect((await recipeRepo.get('rec-1'))?.doseGrams).toBe(1),
+    );
+    // The save really did re-source the resource...
+    expect(revision()).toBeGreaterThan(0);
+    // ...and the very same DOM node is still there. A new node means the
+    // browser dropped focus and the keypad closed.
+    expect(screen.getByTestId('recipe-dose-input')).toBe(before);
+  });
+
+  it('keeps a water step input alive across a save', async () => {
+    const { recipeRepo } = renderLive(
+      [{ id: 'rt-w', name: 'Water', steps: [routineStep('water', {}, 's1')] }],
+      [{ id: 'rec-1', name: 'Tea', routineId: 'rt-w', overrides: {} }],
+    );
+    const before = await screen.findByTestId('recipe-water-temp-s1');
+
+    fireEvent.input(before, { target: { value: '85' } });
+    fireEvent.blur(before);
+    await waitFor(async () => {
+      const cfg = (await recipeRepo.get('rec-1'))?.overrides['s1'] as
+        | { tempC?: number }
+        | undefined;
+      expect(cfg?.tempC).toBe(85);
+    });
+    expect(screen.getByTestId('recipe-water-temp-s1')).toBe(before);
   });
 });

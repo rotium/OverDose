@@ -250,6 +250,21 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(value),
     }),
+  /**
+   * Delete a key from the gateway KV store. A key that was never written is
+   * already in the desired state, so a 404 resolves rather than throwing.
+   * Used by the Developer reset to clear the synced library — without it a
+   * reset only clears the local mirror and the next sync pulls the old library
+   * straight back.
+   */
+  storeDelete: async (key: string): Promise<void> => {
+    const path = `/api/v1/store/${STORE_NAMESPACE}/${encodeURIComponent(key)}`;
+    const res = await fetch(`${gatewayHttpOrigin()}${path}`, { method: 'DELETE' });
+    log.debug('api', `DELETE ${path} → ${res.status}`);
+    if (!res.ok && res.status !== 404) {
+      throw new Error(`DELETE ${path} → ${res.status}`);
+    }
+  },
 
   requestState: (state: MachineState) => {
     // Log every outgoing state command so a steam/purge trace can tell apart
@@ -515,11 +530,33 @@ export interface WorkflowContextUpdate {
   extras?: Record<string, unknown> | null;
 }
 
+/**
+ * Hot-water block of the workflow. Sending it through `PUT /api/v1/workflow`
+ * applies all four params in one call — the gateway diffs against the current
+ * workflow and does both machine writes itself (`targetHotWaterTemp` /
+ * `Volume` / `Duration` ride shotSettings, `flow` rides the hotWaterFlow MMR).
+ * That's the documented preferred path, and it beats the two-endpoint dance
+ * steam has to do — steam only splits because the steam controller owns its
+ * temperature separately.
+ *
+ * Note `volume` is deliberately **0** in everything OverDose sends: that's the
+ * DE1's "no volume stop" convention, which keeps the firmware out of the way
+ * (and makes the gateway's own HotWaterSequencer decline to arm) while
+ * OverDose owns the stop. See `src/hotWater.ts`.
+ */
+export interface HotWaterDataUpdate {
+  targetTemperature: number;
+  duration: number;
+  volume: number;
+  flow: number;
+}
+
 /** Partial workflow body for `PUT /api/v1/workflow`. */
 export interface WorkflowUpdate {
   name?: string;
   profile?: Profile;
   context?: WorkflowContextUpdate;
+  hotWaterData?: HotWaterDataUpdate;
 }
 
 /** Partial body for `PUT /api/v1/shots/{id}` (deep-merged by the gateway). */

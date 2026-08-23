@@ -220,3 +220,30 @@ export const DEFAULT_STEAM_AUTO_FLUSH_SEC = 3;
  */
 export type AutoStopMode = 'auto' | 'weight' | 'volume' | 'off';
 export const DEFAULT_AUTO_STOP_MODE: AutoStopMode = 'auto';
+
+/**
+ * Default hot-water temperature (°C) — the bottom of the water step's
+ * resolution chain (prep edit → recipe step → this). Unlike the steam target
+ * temp, this is never asserted onto the machine on its own: it only seeds the
+ * prep screen, which then pushes the whole `hotWaterData` block. So it stays a
+ * *local* pref — there's no continuous re-assertion for two instances to fight
+ * over (contrast [[overdose-steam-pref-sync]]).
+ */
+export const DEFAULT_HOT_WATER_TEMP_C = 90;
+export const HOT_WATER_TEMP_MIN_C = 50;
+export const HOT_WATER_TEMP_MAX_C = 100;
+
+/**
+ * Whether hot water auto-stops at its target by default.
+ *
+ * Deliberately a boolean, not an {@link AutoStopMode}: water is 1 g per mL, so
+ * "by weight" and "by volume" were never two different targets — they're two
+ * ways of reading the same one. Asking the user to choose between them here
+ * would be asking them to pick a *sensor*, which isn't a preference anyone
+ * holds. That choice lives in prep instead, and only when a scale is connected.
+ *
+ * Separate from {@link DEFAULT_AUTO_STOP_MODE} rather than sharing it: some
+ * people ride the espresso stop by hand, and sharing would silently make every
+ * hot-water pour manual too.
+ */
+export const DEFAULT_HOT_WATER_AUTO_STOP = true;

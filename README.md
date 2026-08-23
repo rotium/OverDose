@@ -3,7 +3,7 @@
   <img src="docs/logo-lockup-light.svg" alt="OverDose" width="280">
 </picture>
 
-A community skin for [Decent.app](https://github.com/tadelv/reaprime) —
+A community skin for [Decaid](https://github.com/decentespresso/decaid) —
 the gateway that drives Decent Espresso machines. OverDose adds a
 recipe-driven brewing UI, designed for the tablet on your espresso bar.
 
@@ -160,28 +160,29 @@ steam → summary flow.
 
 ## Installing OverDose
 
-> **Note:** OverDose is a skin for the new Decent.app gateway
-> ([tadelv/reaprime](https://github.com/tadelv/reaprime)), not the
-> original DE1 tablet app (`de1app`). It won't load on the old app.
+> **Note:** OverDose is a skin for the **Decaid** gateway
+> ([decentespresso/decaid](https://github.com/decentespresso/decaid) — formerly
+> Decent.app, and ReaPrime before that), not the original DE1 tablet app
+> (`de1app`). It won't load on the old app.
 
-From **Decent.app version 0.7.5** onward, OverDose ships with the gateway — no
+From **gateway version 0.7.5** onward, OverDose ships with the gateway — no
 install needed. Just open the **Web Interface** skin selection and pick
 **OverDose**. Upgrades arrive with gateway skins updates.
 
 ### Accessing OverDose from another device
 
 If you want to open the skin from a phone or laptop on the same
-network instead of the Decent.app tablet, ports **8080** (API) and
+network instead of the gateway tablet, ports **8080** (API) and
 **3000** (skin host) need to be reachable. Allow them in any firewall
 running on the gateway machine.
 
 ## For contributors
 
-OverDose is SolidJS + Vite + uPlot. The dev loop runs the Decent.app
+OverDose is SolidJS + Vite + uPlot. The dev loop runs the Decaid
 gateway in simulate mode alongside Vite's dev server.
 
     # terminal 1 — the gateway, with a simulated machine and scale
-    cd ../reaprime
+    cd ../decaid
     flutter run --dart-define=simulate=machine,scale
 
     # terminal 2 — the skin
@@ -204,5 +205,5 @@ GPL-3.0. See [LICENSE](LICENSE).
 
 - The Decent Espresso community for
   [de1app](https://github.com/decentespresso/de1app), the original DE1 client.
-- [reaprime](https://github.com/tadelv/reaprime) — the gateway OverDose
+- [Decaid](https://github.com/decentespresso/decaid) — the gateway OverDose
   runs on.

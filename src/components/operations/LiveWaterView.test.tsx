@@ -35,36 +35,44 @@ const mkSettings = (
 });
 
 describe('computeWaterStopProgress', () => {
-  it('uses weight/target when a scale weight + volume target are present', () => {
-    expect(computeWaterStopProgress(75, 150, 5, 30)).toEqual({
+  it('measures against the live target on the scale path', () => {
+    expect(computeWaterStopProgress(75, 150, 'scale')).toEqual({
       value: 0.5,
-      trigger: 'weight',
+      trigger: 'scale',
     });
   });
 
-  it('reports trigger="weight" from the start (value 0) so the scale icon is stable', () => {
-    expect(computeWaterStopProgress(0, 150, 5, 30)).toEqual({
+  it('reports the sensor from the start (value 0) so the icon is stable', () => {
+    expect(computeWaterStopProgress(0, 150, 'scale')).toEqual({
       value: 0,
-      trigger: 'weight',
+      trigger: 'scale',
     });
   });
 
-  it('falls back to elapsed/duration when there is no scale (weight undefined)', () => {
-    expect(computeWaterStopProgress(undefined, 150, 15, 30)).toEqual({
+  it('uses the same arithmetic on the counting path', () => {
+    // Water is 1 g per mL, so mL-vs-mL is the same computation as g-vs-g.
+    expect(computeWaterStopProgress(75, 150, 'flow')).toEqual({
       value: 0.5,
-      trigger: 'time',
+      trigger: 'flow',
     });
   });
 
-  it('reports trigger="none" with no scale and no duration target', () => {
-    expect(computeWaterStopProgress(undefined, 150, 15, undefined)).toEqual({
+  it('reports trigger="none" with no target (manual)', () => {
+    expect(computeWaterStopProgress(75, 0, 'scale')).toEqual({
+      value: 0,
+      trigger: 'none',
+    });
+  });
+
+  it('reports trigger="none" before any measurement arrives', () => {
+    expect(computeWaterStopProgress(undefined, 150, 'scale')).toEqual({
       value: 0,
       trigger: 'none',
     });
   });
 
   it('caps at 1 after overshoot', () => {
-    expect(computeWaterStopProgress(200, 150, 5, 30).value).toBe(1);
+    expect(computeWaterStopProgress(200, 150, 'scale').value).toBe(1);
   });
 });
 
@@ -74,7 +82,11 @@ describe('LiveWaterView', () => {
     settings?: ShotSettingsSnapshot | null;
     startedAtMs?: number;
     scaleWeight?: number | undefined;
-    scaleConnected?: boolean;
+    poured?: number;
+    sensor?: 'scale' | 'flow';
+    targetAmount?: number;
+    vesselName?: string | null;
+    onAdjust?: ((d: number) => void) | null;
     onStop?: () => void;
     flow?: number | undefined;
     onChangeFlow?: ((v: number) => void) | null;
@@ -94,7 +106,11 @@ describe('LiveWaterView', () => {
         shotSettings={settings}
         startedAtMs={() => over.startedAtMs ?? Date.parse('2026-05-27T08:00:00.000Z')}
         scaleWeight={() => over.scaleWeight}
-        scaleConnected={() => over.scaleConnected ?? false}
+        poured={() => over.poured ?? 0}
+        sensor={() => over.sensor ?? 'scale'}
+        targetAmount={() => over.targetAmount ?? 150}
+        vesselName={() => over.vesselName ?? null}
+        onAdjust={'onAdjust' in over ? (over.onAdjust ?? undefined) : () => {}}
         onStop={over.onStop ?? (() => {})}
         flow={() => over.flow}
         onChangeFlow={onChangeFlowProp}
@@ -103,22 +119,22 @@ describe('LiveWaterView', () => {
     ));
   };
 
-  describe('scale connected (grams hero)', () => {
+  describe('scale sensor (grams hero)', () => {
     it('hero shows measured grams over the target volume', () => {
-      renderView({ scaleConnected: true, scaleWeight: 112 });
+      renderView({ scaleWeight: 112 });
       expect(screen.getByTestId('water-hero')).toHaveAttribute('data-mode', 'scale');
       expect(screen.getByTestId('water-hero-value')).toHaveTextContent('112');
       expect(screen.getByTestId('water-hero-target')).toHaveTextContent('/ 150 g');
     });
 
-    it('hero bar fills to weight/targetVolume', () => {
-      renderView({ scaleConnected: true, scaleWeight: 75 });
+    it('hero bar fills to weight/target', () => {
+      renderView({ scaleWeight: 75 });
       const fill = screen.getByTestId('water-hero-bar-fill') as HTMLElement;
       expect(parseFloat(fill.style.width)).toBeCloseTo(50, 0);
     });
 
     it('STOP shows the weight trigger icon and fills by weight', () => {
-      renderView({ scaleConnected: true, scaleWeight: 75 });
+      renderView({ scaleWeight: 75 });
       expect(
         screen.getByTestId('live-view-stop-trigger-weight'),
       ).toBeInTheDocument();
@@ -127,56 +143,70 @@ describe('LiveWaterView', () => {
     });
 
     it('clamps a negative tare to 0 grams', () => {
-      renderView({ scaleConnected: true, scaleWeight: -1.2 });
+      renderView({ scaleWeight: -1.2 });
       expect(screen.getByTestId('water-hero-value')).toHaveTextContent('0');
     });
 
-    it('drops the bar + target when no volume target is set', () => {
-      renderView({
-        scaleConnected: true,
-        scaleWeight: 40,
-        settings: mkSettings({ targetHotWaterVolume: 0 }),
-      });
+    it('drops the bar + target when there is no target (manual)', () => {
+      renderView({ scaleWeight: 40, targetAmount: 0 });
       expect(screen.queryByTestId('water-hero-bar-fill')).not.toBeInTheDocument();
       expect(screen.queryByTestId('water-hero-target')).not.toBeInTheDocument();
     });
   });
 
-  describe('no scale (time-fallback hero)', () => {
-    it('hero counts up elapsed seconds with the target volume as a sub-line', () => {
-      // snapshot at :05, started at :00 → 5.0 s elapsed.
-      renderView({ scaleConnected: false });
-      expect(screen.getByTestId('water-hero')).toHaveAttribute('data-mode', 'time');
-      expect(screen.getByTestId('water-hero-value')).toHaveTextContent('5.0');
-      expect(screen.getByTestId('water-hero-target')).toHaveTextContent(
-        'target 150 mL',
-      );
+  describe('flow sensor (counted-millilitres hero)', () => {
+    it('hero shows counted millilitres over the target', () => {
+      // No stopwatch fallback any more: OverDose integrates group-head flow,
+      // so there is a real measured quantity without a scale too.
+      renderView({ sensor: 'flow', poured: 96, targetAmount: 300 });
+      expect(screen.getByTestId('water-hero')).toHaveAttribute('data-mode', 'flow');
+      expect(screen.getByTestId('water-hero-value')).toHaveTextContent('96');
+      expect(screen.getByTestId('water-hero-target')).toHaveTextContent('/ 300 mL');
     });
 
-    it('STOP shows the time trigger icon and fills by elapsed/duration', () => {
-      // 15s elapsed, 30s duration → 50%.
-      renderView({
-        scaleConnected: false,
-        snap: mkSnap({ timestamp: '2026-05-27T08:00:15.000Z' }),
-      });
-      expect(screen.getByTestId('live-view-stop-trigger-time')).toBeInTheDocument();
+    it('STOP shows the counted-water trigger icon and fills by volume', () => {
+      renderView({ sensor: 'flow', poured: 150, targetAmount: 300 });
+      expect(screen.getByTestId('live-view-stop-trigger-flow')).toBeInTheDocument();
       const fill = screen.getByTestId('live-view-stop-fill') as HTMLElement;
       expect(parseFloat(fill.style.width)).toBeCloseTo(50, 0);
     });
+  });
 
-    it('falls back to the duration target line when no volume target is set', () => {
-      renderView({
-        scaleConnected: false,
-        settings: mkSettings({ targetHotWaterVolume: 0 }),
-      });
-      expect(screen.getByTestId('water-hero-target')).toHaveTextContent(
-        'target 30 s',
-      );
+  describe('vessel name', () => {
+    it('titles the view with the vessel', () => {
+      renderView({ vesselName: 'Mug' });
+      expect(screen.getByTestId('live-view-profile')).toHaveTextContent('Mug');
+    });
+
+    it('falls back to Hot Water when nothing was picked', () => {
+      renderView({ vesselName: null });
+      expect(screen.getByTestId('live-view-profile')).toHaveTextContent('Hot Water');
+    });
+  });
+
+  describe('mid-pour adjust', () => {
+    it('nudges the target both ways', () => {
+      const onAdjust = vi.fn();
+      renderView({ onAdjust });
+      fireEvent.click(screen.getByTestId('water-adjust-plus'));
+      expect(onAdjust).toHaveBeenCalledWith(10);
+      fireEvent.click(screen.getByTestId('water-adjust-minus'));
+      expect(onAdjust).toHaveBeenCalledWith(-10);
+    });
+
+    it('hides the pair when there is no target to move', () => {
+      renderView({ onAdjust: vi.fn(), targetAmount: 0 });
+      expect(screen.queryByTestId('water-adjust-row')).not.toBeInTheDocument();
+    });
+
+    it('hides the pair when no handler is wired', () => {
+      renderView({ onAdjust: null });
+      expect(screen.queryByTestId('water-adjust-row')).not.toBeInTheDocument();
     });
   });
 
   it('shows readouts: temp, target temp, flow, time', () => {
-    renderView({ scaleConnected: true, scaleWeight: 50, flow: 6 });
+    renderView({ scaleWeight: 50, flow: 6 });
     expect(screen.getByTestId('readout-water-temp')).toHaveTextContent('88.0 °C');
     expect(screen.getByTestId('readout-target-temp')).toHaveTextContent('90 °C');
     expect(screen.getByTestId('readout-flow')).toHaveTextContent('6.0 mL/s');
@@ -191,7 +221,7 @@ describe('LiveWaterView', () => {
   });
 
   it('STOP severity flips to "over" once weight passes the target volume', () => {
-    renderView({ scaleConnected: true, scaleWeight: 160 });
+    renderView({ scaleWeight: 160 });
     expect(screen.getByTestId('live-view-stop')).toHaveAttribute(
       'data-severity',
       'over',
