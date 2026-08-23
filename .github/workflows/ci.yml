@@ -1,0 +1,47 @@
+name: CI
+
+# Validation gate. Runs on every branch push, so a branch is known-good before
+# it reaches main and long before anything is tagged:
+#
+#   push branch  -> CI (this file)        <- validates
+#   merge to main -> CI (this file)       <- validates the merge itself
+#   tag vX        -> Release workflow     <- publishes, last step
+#
+# A `branches` filter already excludes tag pushes, which is what we want:
+# pushing a tag is a publish, not a change to validate, and release.yml re-runs
+# the suite on the exact tagged commit anyway.
+#
+# `dev` is excluded too. It isn't a branch anyone works on — `npm run
+# deploy:tablet` force-pushes the current HEAD there purely to fire the dev
+# build. That commit already got a CI run on the branch it came from, so
+# checking it again would just mean two workflows per deploy, both reinstalling
+# node_modules to reach the same answer.
+
+on:
+  push:
+    branches:
+      - '**'
+      - '!dev'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm test
+
+      # Also the type-check: `npm run build` starts with `tsc --noEmit`. Running
+      # the real production build catches what a type-check alone can't — a
+      # bundler failure, or an import that only resolves in dev.
+      - run: npm run build

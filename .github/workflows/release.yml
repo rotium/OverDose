@@ -1,10 +1,24 @@
 name: Release
 
-# Cut a release by pushing a version tag:
-#   git tag v0.0.2 && git push origin v0.0.2
-# This builds the skin, stamps the tag into dist/manifest.json, zips the
+# Publishing step. The tag comes LAST, after validation has already happened:
+#
+#   1. push your branch      -> CI (ci.yml) runs the suite + build
+#   2. it passes             -> merge to main
+#   3. main goes green       -> CI ran again on the merge itself
+#   4. only then             -> git tag vX && git push origin vX   (this file)
+#
+# So tagging publishes something already known-good rather than being the thing
+# that discovers a problem. This workflow re-runs the suite regardless, because
+# the tagged commit is what ships and a merge can break what neither side broke
+# alone — but by then it should never be the first time anyone finds out.
+#
+# It builds the skin, stamps the tag into dist/manifest.json, zips the
 # *contents* of dist/ (so index.html is at the zip root, as the gateway
 # expects), and publishes a GitHub Release with that zip attached.
+#
+# If the suite does fail here, no release is published — but the tag is already
+# pushed. To retry after fixing:
+#   git push --delete origin vX && git tag -d vX   # then re-tag
 
 on:
   push:
@@ -26,6 +40,11 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      # Last line of defence, not the primary gate — that's ci.yml on the
+      # branch and on main. This re-checks the exact commit being published,
+      # since every step below it ships to gateways that auto-update.
+      - run: npm test
 
       # Stamp the tag (without the leading "v") as the app version baked into
       # the bundle, so the About screen matches the manifest. The display
