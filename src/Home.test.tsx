@@ -22,7 +22,7 @@ import type {
   ShotSettingsSnapshot,
   WaterLevelsSnapshot,
 } from './snapshot';
-import type { WsStream } from './streams';
+import type { WsStatus, WsStream } from './streams';
 import { waterSeverity, type WaterSeverity } from './water';
 
 // Home now receives a committed severity from the app (created hysteretically
@@ -78,6 +78,10 @@ interface Stubs {
 
 const buildHome = (overrides: Partial<{
   stubs: Stubs;
+  /** Device connectedness, which App derives from ws/v1/devices. Default both
+   *  attached; see devices.test.ts for the derivation itself. */
+  machineStatus: WsStatus;
+  scaleStatus: WsStatus;
   onSleep: () => void;
   onWake: () => void;
   onMenu: () => void;
@@ -97,6 +101,8 @@ const buildHome = (overrides: Partial<{
   return (
     <Home
       recipeRepository={fakeRepo}
+      machineStatus={() => overrides.machineStatus ?? 'open'}
+      scaleStatus={() => overrides.scaleStatus ?? 'open'}
       machineStream={() => mkStream<MachineSnapshot>(stubs.machineSnap ?? null)}
       scaleStream={() => mkStream<ScaleMessage>(stubs.scaleMsg ?? null)}
       shotSettingsStream={() => mkStream<ShotSettingsSnapshot>(stubs.settings ?? null)}
@@ -211,47 +217,64 @@ describe('Home', () => {
     expect(onUpdate).not.toHaveBeenCalled();
   });
 
-  describe('scale connection pill (derived from status frames)', () => {
-    // Regression: the scale WS is held open by the gateway whether a scale
-    // is paired or not. Relying on the raw WS status would show "online"
-    // on machines with no scale. The pill has to read the latest
-    // status/data frame to reflect the BLE-level connectedness.
+  describe('connection pills', () => {
+    // The pills render whatever connectedness App hands them; the derivation
+    // itself (devices frame + socket status) is covered in devices.test.ts.
+    // They deliberately do NOT read the telemetry sockets: since gateway
+    // 0.8.2 those stay open across a machine disconnect, so their liveness
+    // would report a machine that is long gone as still present.
 
-    it('shows connecting (…) before any scale frame has arrived', () => {
-      render(() => buildHome({ stubs: { scaleMsg: null } }));
-      expect(screen.getByText(/scale · …/)).toBeInTheDocument();
-    });
-
-    it('shows offline when the latest frame is a disconnected status frame', () => {
-      render(() =>
-        buildHome({ stubs: { scaleMsg: { status: 'disconnected' } } }),
-      );
-      expect(screen.getByText(/scale · offline/)).toBeInTheDocument();
-    });
-
-    it('shows online when the latest frame is a connected status frame', () => {
-      render(() =>
-        buildHome({ stubs: { scaleMsg: { status: 'connected' } } }),
-      );
+    it('shows both online when both devices are attached', () => {
+      render(() => buildHome());
+      expect(screen.getByText(/machine · online/)).toBeInTheDocument();
       expect(screen.getByText(/scale · online/)).toBeInTheDocument();
     });
 
-    it('shows online when the latest frame is a weight data frame', () => {
-      // A data frame implies the scale was connected at that tick — the
-      // gateway only emits weight frames while the scale is paired.
+    it('shows the machine offline while the scale stays online', () => {
+      render(() => buildHome({ machineStatus: 'closed' }));
+      expect(screen.getByText(/machine · offline/)).toBeInTheDocument();
+      expect(screen.getByText(/scale · online/)).toBeInTheDocument();
+    });
+
+    it('shows the scale offline while the machine stays online', () => {
+      render(() => buildHome({ scaleStatus: 'closed' }));
+      expect(screen.getByText(/machine · online/)).toBeInTheDocument();
+      expect(screen.getByText(/scale · offline/)).toBeInTheDocument();
+    });
+
+    it('shows connecting (…) before the first devices frame lands', () => {
+      render(() =>
+        buildHome({ machineStatus: 'connecting', scaleStatus: 'connecting' }),
+      );
+      expect(screen.getByText(/machine · …/)).toBeInTheDocument();
+      expect(screen.getByText(/scale · …/)).toBeInTheDocument();
+    });
+
+    it('does not read the machine pill off a stale telemetry frame', () => {
+      // The regression this whole change exists for: a snapshot is present
+      // (the socket kept its last frame) but the machine is gone.
       render(() =>
         buildHome({
+          machineStatus: 'closed',
           stubs: {
-            scaleMsg: {
-              timestamp: '2026-05-29T00:00:00Z',
-              weight: 12.4,
-              weightFlow: 0,
-              batteryLevel: 80,
+            machineSnap: {
+              timestamp: '2026-08-30T08:00:00Z',
+              state: { state: 'idle', substate: 'idle' },
+              flow: 0,
+              pressure: 0,
+              targetFlow: 0,
+              targetPressure: 0,
+              mixTemperature: 92,
+              groupTemperature: 92,
+              targetMixTemperature: 92,
+              targetGroupTemperature: 92,
+              profileFrame: 0,
+              steamTemperature: 150,
             },
           },
         }),
       );
-      expect(screen.getByText(/scale · online/)).toBeInTheDocument();
+      expect(screen.getByText(/machine · offline/)).toBeInTheDocument();
     });
   });
 
@@ -354,6 +377,8 @@ describe('Home', () => {
     render(() => (
       <Home
         recipeRepository={fakeRepo}
+        machineStatus={() => 'open'}
+        scaleStatus={() => 'open'}
         machineStream={() => machineStream}
         scaleStream={() => ({
           latest: createSignal<ScaleMessage | null>(null)[0],

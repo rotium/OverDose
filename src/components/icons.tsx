@@ -235,3 +235,16 @@ export const PencilIcon: Component<IconProps> = (p) => (
     <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
   </svg>
 );
+
+/** Struck-through signal arcs — the gateway is unreachable. */
+export const NoSignalIcon: Component<IconProps> = (p) => (
+  <svg {...strokedSvgProps(p)}>
+    <path d="M8.5 16.4a5 5 0 0 1 7 0" />
+    <path d="M5 12.9a10 10 0 0 1 4-2.4" />
+    <path d="M19 12.9a10 10 0 0 0-6.5-2.8" />
+    <path d="M2 9.4a15 15 0 0 1 5-3" />
+    <path d="M22 9.4a15 15 0 0 0-9.5-3.3" />
+    <circle cx="12" cy="20" r="0.6" fill="currentColor" />
+    <line x1="3" y1="3" x2="21" y2="21" />
+  </svg>
+);

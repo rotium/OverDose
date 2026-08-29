@@ -6135,3 +6135,105 @@ input[inputmode='none']:focus {
   color: var(--muted);
   vertical-align: middle;
 }
+
+/* ─── Gateway-offline dialog ──────────────────────────────────────────
+   Shown when the gateway itself is unreachable, not when a device
+   detaches. Above the sleep overlay (z-100): if we can't reach the
+   gateway we can't know the machine is asleep either, so this wins. */
+.gw-offline {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.gw-offline__dialog {
+  background: var(--bg-elev);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+  width: 100%;
+  max-width: 26rem;
+  padding: 1.6rem 1.6rem 1.35rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+  text-align: center;
+}
+
+.gw-offline__icon {
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(111, 31, 31, 0.35);
+  border: 1px solid var(--bad);
+  color: var(--bad-fg);
+}
+
+.gw-offline__title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.gw-offline__lede {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+/* The address is the diagnostic — a wrong host or port is visible here and
+   nowhere else, so it gets monospace and its own field. */
+.gw-offline__origin {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 0.4rem 0.7rem;
+  word-break: break-all;
+  max-width: 100%;
+}
+
+.gw-offline__since {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted-2);
+}
+
+.gw-offline__retrying {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.8rem;
+  color: var(--muted-2);
+}
+
+.gw-offline__dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--warn-fg);
+  animation: gw-offline-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes gw-offline-pulse {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gw-offline__dot { animation: none; opacity: 0.8; }
+}
+
+.gw-offline__retry {
+  margin-top: 0.2rem;
+  padding-inline: 1.6rem;
+}

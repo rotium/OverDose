@@ -60,6 +60,15 @@ export interface LiveShotProviderProps {
   onUpdateMachineSettings?: (
     partial: Partial<MachineSettingsSnapshot>,
   ) => Promise<void> | void;
+  /**
+   * Whether a scale is actually attached, derived app-wide from
+   * `ws/v1/devices`. Optional so tests can omit it; App always passes it.
+   *
+   * Without it we fall back to reading the scale stream, which cannot see a
+   * gateway that has gone away — the socket dies but its last weight frame
+   * remains, so the fallback also checks the socket status.
+   */
+  scaleConnected?: Accessor<boolean>;
   /** Zero the scale (PUT /api/v1/scale/tare). Hot water needs its own tare:
    *  we write `volume = 0` to the machine so the gateway's HotWaterSequencer
    *  never arms, which also means it never tares for us. */
@@ -252,9 +261,16 @@ export const LiveShotProvider: Component<LiveShotProviderProps> = (p) => {
     return msg.weight;
   };
 
-  /** A status frame carries connectedness without a weight; a data frame
-   *  implies connected and carries one. Same derivation the header pill uses. */
+  /**
+   * Is a scale attached right now? App passes the app-wide answer (from
+   * `ws/v1/devices`); the fallback reads the stream, and must check the socket
+   * as well as the frame — a dead socket leaves its last weight frame in
+   * place, which on its own reads as a connected scale forever.
+   */
   const scaleConnectedNow = (): boolean => {
+    const injected = p.scaleConnected;
+    if (injected) return injected();
+    if (p.scaleStream.status() !== 'open') return false;
     const msg = p.scaleStream.latest();
     if (!msg) return false;
     return isScaleStatusFrame(msg) ? msg.status === 'connected' : true;

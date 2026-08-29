@@ -9,6 +9,7 @@ import {
   onCleanup,
   onMount,
   untrack,
+  type Accessor,
   type Component,
 } from 'solid-js';
 import {
@@ -49,13 +50,17 @@ import { createWaterSeverity, type WaterSeverity } from './water';
 import type { Recipe, Cleaning } from './domain';
 import { cleaningDue, dueOccurrence, nextOccurrence } from './domain';
 import {
-  isScaleStatusFrame,
   type MachineSnapshot,
   type ScaleMessage,
   type ShotSettingsSnapshot,
   type WaterLevelsSnapshot,
 } from './snapshot';
-import type { WsStream } from './streams';
+import type { WsStatus, WsStream } from './streams';
+import { createWsStream } from './streams';
+import { deviceStatus, type DevicesFrame } from './devices';
+import { createGatewayOutage } from './gatewayOutage';
+import { GatewayOfflineDialog } from './components/GatewayOfflineDialog';
+import { gatewayHttpOrigin } from './gateway';
 import { createSteamController } from './steamController';
 
 // One library sync for the app: owns the local repos (the mirror) and the
@@ -109,6 +114,11 @@ interface AppStreams {
   scale: WsStream<ScaleMessage>;
   shotSettings: WsStream<ShotSettingsSnapshot>;
   waterLevels: WsStream<WaterLevelsSnapshot>;
+  /** Machine connectedness from `ws/v1/devices` — see src/devices.ts. The
+   *  telemetry sockets can no longer answer this. */
+  machineStatus: Accessor<WsStatus>;
+  /** Scale connectedness, from the same frame. */
+  scaleStatus: Accessor<WsStatus>;
 }
 
 const AppBody: Component<{ streams: AppStreams }> = (p) => {
@@ -445,20 +455,18 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
   // `steamPurgeMode` (0 = machine auto-purge, 1 = two-tap so the skin/user
   // drives the purge). Write once per connection and whenever the strategy
   // changes — `connected` is a memo so this doesn't run on every (~10 Hz)
-  // frame, only on connect/disconnect edges.
-  const machineConnected = createMemo(() => p.streams.machine.latest() !== null);
+  // frame, only on connect/disconnect edges. Reading connectedness off the
+  // devices stream is what makes the disconnect edge exist at all: the old
+  // `latest() !== null` test could never go false again once a single frame
+  // had arrived, so a machine that power-cycled (losing the setting) never got
+  // it re-written.
+  const machineConnected = createMemo(() => p.streams.machineStatus() === 'open');
 
   // Live scale-connection state — drives which auto-stop modes the brew prep
-  // offers. The scale WS stays open even with no scale paired, so combine the
-  // socket status with the latest frame (status frame says connected, or a
-  // data frame implies it). Same derivation the header pill uses (Home.tsx).
-  const scaleConnected = createMemo<boolean>(() => {
-    const s = p.streams.scale;
-    if (s.status() !== 'open') return false;
-    const frame = s.latest();
-    if (!frame) return false;
-    return isScaleStatusFrame(frame) ? frame.status === 'connected' : true;
-  });
+  // offers.
+  const scaleConnected = createMemo<boolean>(
+    () => p.streams.scaleStatus() === 'open',
+  );
   let lastWrittenPurgeMode: number | null = null;
   createEffect(() => {
     const strat = prefs.steamPurgeStrategy();
@@ -668,6 +676,8 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
               <Home
                 recipeRepository={recipeRepository}
                 recipeRevision={librarySync.revision}
+                machineStatus={p.streams.machineStatus}
+                scaleStatus={p.streams.scaleStatus}
                 machineStream={() => p.streams.machine}
                 scaleStream={() => p.streams.scale}
                 shotSettingsStream={() => p.streams.shotSettings}
@@ -805,11 +815,62 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
 };
 
 export const App: Component = () => {
+  // Connectivity comes from the devices socket, never from the telemetry
+  // sockets: since gateway 0.8.2 those stay open and go silent when the
+  // machine detaches, so their liveness says nothing about the machine.
+  const devices = createWsStream<DevicesFrame>('/ws/v1/devices', 'devices');
+  const machineStatus = (): WsStatus =>
+    deviceStatus(devices.status(), devices.latest(), 'machine');
+  const scaleStatus = (): WsStatus =>
+    deviceStatus(devices.status(), devices.latest(), 'scale');
+
+  // That socket doubles as the gateway heartbeat — it's the one that has to be
+  // up for anything on screen to mean something.
+  //
+  // "Reachable" means the socket opened *and* the gateway spoke: it replays
+  // current state on connect, so a socket that never delivers a frame hasn't
+  // reached a gateway. The Vite dev proxy makes this concrete — it completes
+  // the client handshake before discovering its target is down, so a dead
+  // gateway would otherwise register as a moment of connection.
+  const gatewayStatus = (): WsStatus =>
+    devices.status() === 'open' && !devices.latest()
+      ? 'connecting'
+      : devices.status();
+  const outage = createGatewayOutage(gatewayStatus);
+
+  const rawMachine = defaultStreams.machine();
+  const rawScale = defaultStreams.scale();
+  const rawShotSettings = defaultStreams.shotSettings();
+  const rawWaterLevels = defaultStreams.waterLevels();
+
+  /**
+   * Gate a telemetry stream on its device being attached.
+   *
+   * The socket holds its last frame forever, so without this a detached
+   * machine keeps rendering its final temperatures, water level and state as
+   * though they were live — and every readiness gate downstream keeps
+   * computing from them. Gating at the stream means one change covers every
+   * consumer: `latest()` simply returns null, which each of them already
+   * handles as "no data yet".
+   */
+  const gated = <T,>(
+    stream: WsStream<T>,
+    connected: Accessor<boolean>,
+  ): WsStream<T> => ({
+    latest: () => (connected() ? stream.latest() : null),
+    status: stream.status,
+  });
+
+  const machineOnline = () => machineStatus() === 'open';
+  const scaleOnline = () => scaleStatus() === 'open';
+
   const streams: AppStreams = {
-    machine: defaultStreams.machine(),
-    scale: defaultStreams.scale(),
-    shotSettings: defaultStreams.shotSettings(),
-    waterLevels: defaultStreams.waterLevels(),
+    machine: gated(rawMachine, machineOnline),
+    scale: gated(rawScale, scaleOnline),
+    shotSettings: gated(rawShotSettings, machineOnline),
+    waterLevels: gated(rawWaterLevels, machineOnline),
+    machineStatus,
+    scaleStatus,
   };
 
   onMount(() => {
@@ -869,8 +930,21 @@ export const App: Component = () => {
           }
           onUpdateMachineSettings={api.updateMachineSettings}
           onTareScale={api.tareScale}
+          scaleConnected={scaleOnline}
         >
           <AppBody streams={streams} />
+          {/* Only reachable from a browser: in the app the skin is served by
+              the gateway, so if the gateway is gone the page is gone too.
+              Auto-dismisses when the socket recovers — the button is a
+              shortcut, never the only way back. */}
+          <Show when={outage.lost()}>
+            <GatewayOfflineDialog
+              origin={gatewayHttpOrigin() || window.location.origin}
+              proxied={!gatewayHttpOrigin()}
+              lastConnected={outage.lastConnected}
+              onRetry={() => window.location.reload()}
+            />
+          </Show>
         </LiveShotProvider>
       </RepositoriesProvider>
     </UserPrefsProvider>

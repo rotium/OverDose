@@ -19,7 +19,6 @@ import type { Cleaning, Recipe } from './domain';
 import type { RecipeRepository } from './repositories';
 import {
   isHeaterOff,
-  isScaleStatusFrame,
   isWarmingUp,
   type MachineSnapshot,
   type ScaleMessage,
@@ -48,6 +47,15 @@ export interface HomeProps {
   /** Library revision — passed to the recipe picker so it re-runs on a gateway
    *  sync pull. Optional (tests omit it). See docs/storage-sync.md. */
   recipeRevision?: Accessor<number>;
+  /**
+   * Connectedness of the machine and the scale, derived app-wide from
+   * `ws/v1/devices` (see src/devices.ts). Passed in rather than derived here:
+   * the telemetry sockets stay open across a machine disconnect since gateway
+   * 0.8.2, so socket liveness no longer answers this question, and there must
+   * be exactly one place that does.
+   */
+  machineStatus: Accessor<WsStatus>;
+  scaleStatus: Accessor<WsStatus>;
   /** Stream factories — defaulted to the real reaprime WS endpoints in App.tsx. */
   machineStream: () => WsStream<MachineSnapshot>;
   scaleStream: () => WsStream<ScaleMessage>;
@@ -140,23 +148,6 @@ export const Home: Component<HomeProps> = (p) => {
   const isWarming = (): boolean => isWarmingUp(machine.latest() ?? null);
   const heaterOff = (): boolean => isHeaterOff(machine.latest() ?? null);
 
-  // The scale WS is held open by the gateway regardless of whether a scale
-  // is actually paired — the BLE-level state is signalled via status frames
-  // (`{status:'connected'|'disconnected'}`) interleaved with the weight
-  // data frames. So `scale.status` alone reports "online" any time the
-  // WebSocket is up, even on a machine with no scale. Combine both signals
-  // so the header pill reflects the real connectedness.
-  const scalePillStatus = (): WsStatus => {
-    const ws = scale.status();
-    if (ws !== 'open') return ws;
-    const frame = scale.latest();
-    if (!frame) return 'connecting'; // open WS but no status frame yet
-    if (isScaleStatusFrame(frame)) {
-      return frame.status === 'connected' ? 'open' : 'closed';
-    }
-    return 'open'; // a data frame implies the scale was connected at that tick
-  };
-
   const handleToggleSleep = () => {
     if (isSleeping()) p.onWake();
     else p.onSleep();
@@ -208,8 +199,8 @@ export const Home: Component<HomeProps> = (p) => {
   return (
     <div class="home">
       <Header
-        machineStatus={machine.status}
-        scaleStatus={scalePillStatus}
+        machineStatus={p.machineStatus}
+        scaleStatus={p.scaleStatus}
         showScale={prefs.hasScale}
         waterSeverity={severity}
         isSleeping={isSleeping}
