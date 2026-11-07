@@ -93,10 +93,14 @@ export const shotYieldG = (
 ): number | null =>
   num(summary?.annotations?.actualYield) ?? shotLastScaleWeight(full);
 
-/** Configured stop-at-weight target (g). */
+/** Configured stop-at-weight target (g). Null when none was set: Decaid treats
+ *  a stored null and 0 alike as "stop-at-weight off", and OverDose sends 0. */
 export const shotTargetYieldG = (
   summary: GatewayShotSummary | null,
-): number | null => num(summary?.workflow?.context?.targetYield);
+): number | null => {
+  const t = num(summary?.workflow?.context?.targetYield);
+  return t != null && t > 0 ? t : null;
+};
 
 /** Shot duration (s) from first→last measurement. */
 export const shotDurationSec = (

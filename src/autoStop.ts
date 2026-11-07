@@ -69,8 +69,9 @@ export const autoStopUnavailableReason = (
 };
 
 export interface StopTargets {
-  /** `workflow.context.targetYield` — null clears it (no weight stop). */
-  targetYield: number | null;
+  /** `workflow.context.targetYield` — 0 = no weight stop. Never null: Decaid
+   *  (>=0.8.6) rejects an explicit null here with 400. */
+  targetYield: number;
   /** `profile.target_volume` — always set explicitly (0 = no volume stop). */
   targetVolume: number;
 }
@@ -79,7 +80,7 @@ export interface StopTargets {
  * Resolve the stop targets to push for a mode, given the draft's per-shot
  * yield/volume and the profile's own built-in volume. The volume value falls
  * back draft → profile → 0. `weight`/`off` force volume to 0 (suppressing the
- * profile's built-in); `volume`/`off` clear the yield.
+ * profile's built-in); `volume`/`off` clear the yield (send 0).
  */
 export const computeStopTargets = (
   mode: AutoStopMode,
@@ -89,15 +90,15 @@ export const computeStopTargets = (
     profileVolumeMl?: number;
   },
 ): StopTargets => {
-  const yieldG = opts.draftYieldG ?? null;
+  const yieldG = opts.draftYieldG ?? 0;
   const vol = opts.draftVolumeMl ?? opts.profileVolumeMl ?? 0;
   switch (mode) {
     case 'weight':
       return { targetYield: yieldG, targetVolume: 0 };
     case 'volume':
-      return { targetYield: null, targetVolume: vol };
+      return { targetYield: 0, targetVolume: vol };
     case 'off':
-      return { targetYield: null, targetVolume: 0 };
+      return { targetYield: 0, targetVolume: 0 };
     case 'auto':
     default:
       return { targetYield: yieldG, targetVolume: vol };

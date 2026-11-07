@@ -448,7 +448,7 @@ export const RecipeBrewScreen: Component<RecipeBrewScreenProps> = (p) => {
     // the raw draft/profile inputs they were derived from.
     log.debug(
       'workflow',
-      `apply "${rec.name}": mode=${mode} → yield=${targetYield ?? '–'}g ` +
+      `apply "${rec.name}": mode=${mode} → yield=${targetYield}g ` +
         `sentVol=${targetVolume}ml ` +
         `(draft y=${d.targetYieldGrams ?? '–'} v=${d.targetVolumeMl ?? '–'}, ` +
         `profileVol=${prof.profile.target_volume ?? '–'}) ` +
