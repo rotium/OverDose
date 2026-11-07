@@ -6,8 +6,8 @@ const served = { protocol: 'http:', hostname: '192.168.3.95' };
 
 describe('resolveGatewayOriginFrom', () => {
   it('addresses the API on :8080 when the page is served by the gateway', () => {
-    // Decaid >=0.8.2 serves the skin from a fresh ephemeral port, so the API
-    // is never same-origin. The page's own port is not an input here at all.
+    // Decaid >=0.8.2 serves the skin from its own port (stable per skin since
+    // 0.8.6), so the API is never same-origin. The page's own port is not an input here at all.
     expect(resolveGatewayOriginFrom(served, false)).toBe('http://192.168.3.95:8080');
   });
 

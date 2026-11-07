@@ -26,10 +26,11 @@ const GATEWAY_PORT = 8080;
  *
  * Everywhere else the page is served by something that is *not* the API, so we
  * address the API explicitly on its own port. Note the page's own port is
- * deliberately not consulted: Decaid >=0.8.2 serves each skin from a fresh
- * ephemeral port (which changes on every restart) and leaves :3000 as a
- * redirect to it, so the port we happen to be served from says nothing about
- * where the API is. Keying off `port === '3000'` is what broke this before —
+ * deliberately not consulted: Decaid serves each skin from its own port and
+ * leaves :3000 as a redirect to it (0.8.2–0.8.5: a fresh port on every
+ * restart; >=0.8.6: a stable per-skin port from 24800 up, or a temporary one
+ * when that can't be bound), so the port we happen to be served from says
+ * nothing about where the API is. Keying off `port === '3000'` is what broke this before —
  * it left every request pointed at the static file server, which 404s.
  */
 export function resolveGatewayOriginFrom(

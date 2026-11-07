@@ -171,10 +171,21 @@ install needed. Just open the **Web Interface** skin selection and pick
 
 ### Accessing OverDose from another device
 
-If you want to open the skin from a phone or laptop on the same
-network instead of the gateway tablet, ports **8080** (API) and
-**3000** (skin host) need to be reachable. Allow them in any firewall
-running on the gateway machine.
+To open the skin from a phone or laptop on the same network instead of
+the gateway tablet, go to `http://<gateway-ip>:3000`. Port 3000 is only an
+entry point: it redirects to the port OverDose itself is served from.
+
+Since **gateway version 0.8.6**, each skin gets its own fixed port,
+assigned from **24800** upward and kept across restarts. Allow these in
+any firewall running on the gateway machine:
+
+- **3000**: the entry point that redirects to the skin
+- **8080**: the API OverDose talks to
+- **OverDose's own port**: shown in the address bar after the redirect
+
+Bookmark `:3000`, not the address it redirects to. If the gateway ever
+can't use OverDose's usual port, it serves it from a temporary one for that
+run, and the `:3000` bookmark still finds it.
 
 ## For contributors
 
