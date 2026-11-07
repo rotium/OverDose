@@ -2,8 +2,9 @@ import { For, Show, type Accessor, type Component, type JSX } from 'solid-js';
 import { ShotRatingFace } from './ShotRatingFace';
 
 /**
- * Enjoyment rating control. Stores a 0–100 value (de1app's `espresso_enjoyment`
- * scale) but presents it as five tier presets on a continuous bar:
+ * Enjoyment rating control. Works on a 0–100 value (de1app's `espresso_enjoyment`
+ * scale; Decaid stores 0–10 and `api.ts` converts at the boundary) but presents
+ * it as five tier presets on a continuous bar:
  *
  *     [ 34px morphing face ]
  *          75 · Good

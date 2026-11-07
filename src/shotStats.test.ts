@@ -128,6 +128,10 @@ describe('dose / yield / targets', () => {
     expect(shotTargetYieldG(summary())).toBeNull();
     expect(shotTargetVolumeMl(summary())).toBeNull();
   });
+
+  it('a 0 target yield means stop-at-weight was off, not a 0 g target', () => {
+    expect(shotTargetYieldG(summary({ context: { targetYield: 0 } }))).toBeNull();
+  });
 });
 
 describe('measurement-derived stats', () => {

@@ -55,7 +55,8 @@ export interface GatewayShotSummary {
   annotations?: {
     actualDoseWeight?: number | null;
     actualYield?: number | null;
-    /** 0–100 enjoyment rating (de1app's `espresso_enjoyment` scale). */
+    /** 0–100 enjoyment rating — the UI's scale. Decaid stores 0–10; the shot
+     *  readers below convert (see `enjoymentFromGateway`). */
     enjoyment?: number | null;
     espressoNotes?: string | null;
   };
@@ -67,6 +68,7 @@ export interface GatewayShotSummary {
  * only the included fields change — omit a field to leave it untouched.
  */
 export interface ShotAnnotationsPatch {
+  /** 0–100 (UI scale); converted to Decaid's 0–10 on the way out. */
   enjoyment?: number;
   espressoNotes?: string;
   actualDoseWeight?: number;
@@ -183,6 +185,40 @@ export interface WorkflowSnapshot {
   context?: WorkflowContextSnapshot;
   profile?: ProfileSnapshot;
 }
+
+/**
+ * Enjoyment rating scale conversion. The rating UI works on 0–100 (de1app's
+ * `espresso_enjoyment` scale, five presets at 0/25/50/75/100). Decaid's
+ * canonical scale is 0–10: since v0.8.7 `PUT /api/v1/shots/{id}` rejects an
+ * `annotations.enjoyment` above 10 with 400, and its schema-6 migration
+ * rescaled stored ratings above 10 down to 0–10. So every shot read and write
+ * in this module converts at the boundary and nothing above it changes.
+ *
+ * A stored value above 10 can only be a 0–100 rating a pre-0.8.7 gateway still
+ * holds (no migration ran), so it is taken as-is rather than multiplied.
+ */
+export const enjoymentFromGateway = (v: number): number =>
+  v > 10 ? Math.min(v, 100) : v * 10;
+
+/** 0–100 UI rating → Decaid's 0–10, one decimal (75 → 7.5). */
+export const enjoymentToGateway = (v: number): number =>
+  Math.round(Math.min(Math.max(v, 0), 100)) / 10;
+
+const withUiEnjoyment = <T extends GatewayShotSummary | null>(shot: T): T => {
+  const e = shot?.annotations?.enjoyment;
+  if (!shot || typeof e !== 'number') return shot;
+  return {
+    ...shot,
+    annotations: { ...shot.annotations, enjoyment: enjoymentFromGateway(e) },
+  };
+};
+
+const withGatewayEnjoyment = (
+  annotations: ShotAnnotationsPatch,
+): ShotAnnotationsPatch =>
+  typeof annotations.enjoyment === 'number'
+    ? { ...annotations, enjoyment: enjoymentToGateway(annotations.enjoyment) }
+    : annotations;
 
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   const method = init?.method ?? 'GET';
@@ -324,7 +360,8 @@ export const api = {
     }),
 
   /** Latest shot summary (no measurements — fast). */
-  shotsLatest: () => fetchJson<GatewayShotSummary>('/api/v1/shots/latest'),
+  shotsLatest: () =>
+    fetchJson<GatewayShotSummary>('/api/v1/shots/latest').then(withUiEnjoyment),
 
   /**
    * Paginated shot history (`GET /api/v1/shots`). Summaries only (no
@@ -341,7 +378,9 @@ export const api = {
     if (params.coffeeRoaster) q.set('coffeeRoaster', params.coffeeRoaster);
     if (params.profileTitle) q.set('profileTitle', params.profileTitle);
     if (params.grinderModel) q.set('grinderModel', params.grinderModel);
-    return fetchJson<GatewayShotsPage>(`/api/v1/shots?${q.toString()}`);
+    return fetchJson<GatewayShotsPage>(`/api/v1/shots?${q.toString()}`).then(
+      (page) => ({ ...page, items: page.items.map(withUiEnjoyment) }),
+    );
   },
 
   /** Distinct drinker names from recent shots — for the "For" field's
@@ -366,7 +405,9 @@ export const api = {
 
   /** Full shot record including measurements (for the mini chart). */
   shotById: (id: string) =>
-    fetchJson<GatewayShotRecord>(`/api/v1/shots/${encodeURIComponent(id)}`),
+    fetchJson<GatewayShotRecord>(`/api/v1/shots/${encodeURIComponent(id)}`).then(
+      withUiEnjoyment,
+    ),
 
   /**
    * Write post-shot annotations (rating, notes, corrected dose) back to a
@@ -377,7 +418,7 @@ export const api = {
     fetchEmpty(`/api/v1/shots/${encodeURIComponent(id)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ annotations }),
+      body: JSON.stringify({ annotations: withGatewayEnjoyment(annotations) }),
     }),
 
   /**
@@ -390,7 +431,11 @@ export const api = {
     fetchEmpty(`/api/v1/shots/${encodeURIComponent(id)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(patch),
+      body: JSON.stringify(
+        patch.annotations
+          ? { ...patch, annotations: withGatewayEnjoyment(patch.annotations) }
+          : patch,
+      ),
     }),
 
   /**
@@ -515,7 +560,10 @@ export const api = {
  */
 export interface WorkflowContextUpdate {
   targetDoseWeight?: number | null;
-  targetYield?: number | null;
+  /** Stop-at-weight target (g). `0` turns it off. Not nullable: Decaid
+   *  (>=0.8.6) rejects an explicit `null` on this one field with 400, because
+   *  null and 0 both mean "off". Omit it to keep the current value. */
+  targetYield?: number;
   grinderSetting?: string | null;
   /** Denormalized coffee display strings stamped onto the shot. Write the
    *  whole coffee trio (name + roaster + extras.beanId) together from one

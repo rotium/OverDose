@@ -921,7 +921,7 @@ describe('RecipeBrewScreen', () => {
       const { onApplyWorkflow } = renderAs('off', true);
       await waitFor(() => expect(onApplyWorkflow).toHaveBeenCalled());
       const body = onApplyWorkflow.mock.calls.at(-1)![0];
-      expect(body.context?.targetYield).toBeNull();
+      expect(body.context?.targetYield).toBe(0);
       expect(body.profile?.target_volume).toBe(0);
     });
 
@@ -934,7 +934,7 @@ describe('RecipeBrewScreen', () => {
       fireEvent.click(check);
       await waitFor(() => {
         const body = onApplyWorkflow.mock.calls.at(-1)![0];
-        expect(body.context?.targetYield).toBeNull();
+        expect(body.context?.targetYield).toBe(0);
         expect(body.profile?.target_volume).toBe(0);
       });
     });
