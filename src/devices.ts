@@ -15,7 +15,9 @@ import type { WsStatus } from './streams';
  * because each carries exactly one payload type.
  */
 
-export type DeviceKind = 'machine' | 'scale' | 'sensor';
+/** `grinder` arrived in Decaid v0.8.7. OverDose doesn't use grinders yet; the
+ *  kind is listed so the inventory type matches what the gateway sends. */
+export type DeviceKind = 'machine' | 'scale' | 'sensor' | 'grinder';
 
 export type DeviceState =
   | 'discovered'
@@ -32,6 +34,11 @@ export interface DeviceEntry {
   /** Present in discovery or actively connected. Not a claim about ownership —
    *  controller-owned devices (Bengle's integrated scale) are inventory-only. */
   available?: boolean;
+  /** Connected scales only (Decaid >=0.8.7). An `auxiliary` scale is an extra
+   *  one some client asked for explicitly. Decaid's shot logic and
+   *  `ws/v1/scale/snapshot` use only the primary scale. Absent on older
+   *  gateways, where every connected scale is the primary. */
+  connectionRole?: 'primary' | 'auxiliary';
 }
 
 export interface DevicesFrame {
@@ -52,6 +59,10 @@ export interface DevicesFrame {
  *
  * A device absent from the list is not connected: the gateway drops devices it
  * has never seen, and reports remembered-but-absent ones as `disconnected`.
+ *
+ * An auxiliary scale doesn't count as "the scale": stop-by-weight and the live
+ * weight follow the primary scale only, so treating an auxiliary-only setup as
+ * connected would pick a weight stop that can never fire.
  */
 export function deviceStatus(
   socket: WsStatus,
@@ -64,7 +75,10 @@ export function deviceStatus(
   // than "offline" keeps the pill from flashing red on every page load.
   if (!frame) return 'connecting';
   const connected = frame.devices.some(
-    (d) => d.type === kind && d.state === 'connected',
+    (d) =>
+      d.type === kind &&
+      d.state === 'connected' &&
+      d.connectionRole !== 'auxiliary',
   );
   return connected ? 'open' : 'closed';
 }
