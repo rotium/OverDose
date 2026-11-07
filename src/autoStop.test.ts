@@ -52,7 +52,7 @@ describe('computeStopTargets', () => {
       computeStopTargets('auto', { draftYieldG: 36, profileVolumeMl: 50 }),
     ).toEqual({ targetYield: 36, targetVolume: 50 });
     expect(computeStopTargets('auto', {})).toEqual({
-      targetYield: null,
+      targetYield: 0,
       targetVolume: 0,
     });
   });
@@ -66,14 +66,14 @@ describe('computeStopTargets', () => {
 
   it('volume clears yield, keeps volume', () => {
     expect(computeStopTargets('volume', opts)).toEqual({
-      targetYield: null,
+      targetYield: 0,
       targetVolume: 45,
     });
   });
 
   it('off clears yield and forces volume to 0', () => {
     expect(computeStopTargets('off', opts)).toEqual({
-      targetYield: null,
+      targetYield: 0,
       targetVolume: 0,
     });
   });

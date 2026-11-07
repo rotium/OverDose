@@ -515,7 +515,10 @@ export const api = {
  */
 export interface WorkflowContextUpdate {
   targetDoseWeight?: number | null;
-  targetYield?: number | null;
+  /** Stop-at-weight target (g). `0` turns it off. Not nullable: Decaid
+   *  (>=0.8.6) rejects an explicit `null` on this one field with 400, because
+   *  null and 0 both mean "off". Omit it to keep the current value. */
+  targetYield?: number;
   grinderSetting?: string | null;
   /** Denormalized coffee display strings stamped onto the shot. Write the
    *  whole coffee trio (name + roaster + extras.beanId) together from one

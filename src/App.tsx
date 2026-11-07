@@ -296,7 +296,7 @@ const AppBody: Component<{ streams: AppStreams }> = (p) => {
       profile,
       context: {
         targetDoseWeight: null,
-        targetYield: null,
+        targetYield: 0, // 0 = off; Decaid rejects null here
         grinderSetting: null,
         coffeeName: null,
         coffeeRoaster: null,
