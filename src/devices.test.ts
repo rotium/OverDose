@@ -38,6 +38,23 @@ describe('deviceStatus', () => {
       expect(deviceStatus('open', frame(stale, scale), 'scale')).toBe('open');
     });
 
+    it('ignores an auxiliary scale: only the primary drives weight', () => {
+      const aux = { ...scale, id: 'Aux', connectionRole: 'auxiliary' as const };
+      expect(deviceStatus('open', frame(de1, aux), 'scale')).toBe('closed');
+      const primary = { ...scale, connectionRole: 'primary' as const };
+      expect(deviceStatus('open', frame(de1, aux, primary), 'scale')).toBe('open');
+    });
+
+    it('counts a scale with no connectionRole (pre-0.8.7 gateway) as primary', () => {
+      expect(deviceStatus('open', frame(de1, scale), 'scale')).toBe('open');
+    });
+
+    it('does not mistake a grinder for a scale', () => {
+      const grinder = { id: 'G1', name: 'Grinder', type: 'grinder' as const, state: 'connected' as const };
+      expect(deviceStatus('open', frame(de1, grinder), 'scale')).toBe('closed');
+      expect(deviceStatus('open', frame(de1, grinder), 'grinder')).toBe('open');
+    });
+
     it('waits rather than reporting offline before the first frame lands', () => {
       // The gateway replays state on connect, so this window is brief; showing
       // "offline" here would flash a red pill on every page load.
